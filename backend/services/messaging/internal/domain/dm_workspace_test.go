@@ -16,17 +16,14 @@ import (
 
 // A direct message belongs to exactly one workspace. These tests keep the
 // caller's DM in the workspace they are signed in to and hold every list and
-// every door to it: the same DM is invisible from another workspace, and a DM
-// with no workspace at all is visible from none.
+// every door to it: the same DM is invisible from another workspace.
 
-// dmScope is a caller with a DM in each of two workspaces and one with none.
+// dmScope is a caller with a DM in each of two workspaces.
 type dmScope struct {
 	f          *fixture
 	wsA, wsB   string // the fixture's workspace, and another
 	inA, inB   string // the DM channels
-	inNone     string // a DM with no workspace
 	oaA, oaB   string
-	oaNone     string
 	peerA      string
 	peerUser   string // a user who sends the messages that mention the caller
 	msgA, msgB string
@@ -36,7 +33,7 @@ func (f *fixture) dmRow(t *testing.T, name, workspaceID string) (chID, oaID, pee
 	t.Helper()
 	ctx := context.Background()
 	chID, oaID = f.insertChannel(t, name)
-	_, err := f.pool.Exec(ctx, `UPDATE channels SET channel_type = 'dm', workspace_id = NULLIF($2, '') WHERE id = $1`, chID, workspaceID)
+	_, err := f.pool.Exec(ctx, `UPDATE channels SET channel_type = 'dm', workspace_id = $2 WHERE id = $1`, chID, workspaceID)
 	require.NoError(t, err)
 	_, peer = testutil.CreateUser(t, f.pool)
 	addDMMember(t, f, chID, userNode)
@@ -74,10 +71,8 @@ func newDMScope(t *testing.T) *dmScope {
 	w.inA, w.oaA, w.peerA = f.dmRow(t, "dm-a", w.wsA)
 	f.read.addMember(w.wsA, userNode, w.peerA)
 	w.inB, w.oaB, _ = f.dmRow(t, "dm-b", w.wsB)
-	w.inNone, w.oaNone, _ = f.dmRow(t, "dm-none", "")
 	w.msgA = f.dmMessage(t, w.inA, "alpha secretword", f.userID)
 	w.msgB = f.dmMessage(t, w.inB, "beta secretword", f.userID)
-	f.dmMessage(t, w.inNone, "orphan secretword", f.userID)
 	return w
 }
 
@@ -126,7 +121,6 @@ func TestDMFeeds_AreScopedToTheWorkspace(t *testing.T) {
 		}
 		assert.True(t, got[w.inA])
 		assert.False(t, got[w.inB], "the other workspace's DM")
-		assert.False(t, got[w.inNone], "a DM with no workspace")
 	})
 
 	t.Run("activity previews", func(t *testing.T) {
@@ -150,8 +144,8 @@ func TestDMFeeds_AreScopedToTheWorkspace(t *testing.T) {
 
 	t.Run("mentions", func(t *testing.T) {
 		// Mentions of the caller are by others; make the senders someone else.
-		_, err := f.pool.Exec(ctx, `UPDATE messages SET sender_id = $1 WHERE channel_id IN ($2, $3, $4)`,
-			w.peerUser, w.inA, w.inB, w.inNone)
+		_, err := f.pool.Exec(ctx, `UPDATE messages SET sender_id = $1 WHERE channel_id IN ($2, $3)`,
+			w.peerUser, w.inA, w.inB)
 		require.NoError(t, err)
 		list, err := svc.Mentions(ctx, f.userID, userNode, w.wsA, "", "", 10)
 		require.NoError(t, err)
@@ -232,12 +226,6 @@ func TestDM_ByIdIsNotFoundFromAnotherWorkspace(t *testing.T) {
 	for name, door := range doors {
 		assert.ErrorIs(t, door(away), domain.ErrNotFound, name+": from another workspace")
 		assert.ErrorIs(t, door(context.Background()), domain.ErrNotFound, name+": with no workspace on the caller")
-	}
-
-	// A DM with no workspace is in none, its own people's included.
-	for _, ws := range []string{w.wsA, w.wsB} {
-		_, err = svc.GetMessages(f.inWorkspace(ws), w.inNone, f.userID, userNode, "", 20)
-		assert.ErrorIs(t, err, domain.ErrNotFound, "a DM with no workspace, from "+ws)
 	}
 
 	// A group is not held to it: it is workspace-scoped by the graph already.

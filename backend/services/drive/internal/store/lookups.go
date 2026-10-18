@@ -69,7 +69,7 @@ func (s *Store) GetWorkspaceDocumentsOAID(ctx context.Context, workspaceID strin
 func (s *Store) GetChannelWorkspaceID(ctx context.Context, channelID string) (string, error) {
 	var wsID string
 	err := s.db.QueryRow(ctx,
-		`SELECT COALESCE(workspace_id, '') FROM channels WHERE id = $1`, channelID).Scan(&wsID)
+		`SELECT workspace_id FROM channels WHERE id = $1`, channelID).Scan(&wsID)
 	if err == pgx.ErrNoRows {
 		return "", nil
 	}

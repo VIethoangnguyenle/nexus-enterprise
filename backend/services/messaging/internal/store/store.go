@@ -35,7 +35,7 @@ func (s *Store) InsertChannelWithMembers(ctx context.Context, ch *Channel, membe
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx,
 			`INSERT INTO channels (id, name, channel_type, workspace_id, ngac_oa_id, ngac_ua_id, created_by)
-			 VALUES ($1, $2, $3, NULLIF($4, ''), $5, $6, $7)`,
+			 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 			ch.ID, ch.Name, ch.ChannelType, ch.WorkspaceID,
 			ch.NGACOaID, ch.NGACUaID, ch.CreatedBy); err != nil {
 			return fmt.Errorf("insert channel: %w", err)
@@ -78,7 +78,7 @@ func scanChannel(row pgx.Row) (*Channel, error) {
 	return ch, nil
 }
 
-const channelCols = `c.id, c.name, c.channel_type, COALESCE(c.workspace_id,''),
+const channelCols = `c.id, c.name, c.channel_type, c.workspace_id,
 	COALESCE(c.ngac_oa_id,''), COALESCE(c.ngac_ua_id,''), COALESCE(c.created_by,''), c.created_at,
 	COALESCE((SELECT COUNT(*)::int FROM channel_members cm WHERE cm.channel_id = c.id), 0),
 	c.avatar_url`
@@ -107,9 +107,8 @@ func (s *Store) ListChannelsByWorkspace(ctx context.Context, workspaceID string)
 }
 
 // ListDMsOf returns the DM channels of the workspace that the node is recorded
-// in. A DM belongs to exactly one workspace: one with no workspace (written
-// before they did, and not placed by migration) is in no list, and an empty
-// workspaceID names no workspace. The member cache only narrows the candidates
+// in. A DM belongs to exactly one workspace (the schema requires it), and an
+// empty workspaceID names no workspace. The member cache only narrows the candidates
 // a caller puts to the policy service: the access decision itself stays with
 // NGAC.
 func (s *Store) ListDMsOf(ctx context.Context, workspaceID, userNodeID string) ([]*Channel, error) {

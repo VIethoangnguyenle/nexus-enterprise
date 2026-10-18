@@ -117,7 +117,7 @@ type Channel struct {
 func (s *Store) Channel(ctx context.Context, id string) (*Channel, error) {
 	c := &Channel{}
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, COALESCE(workspace_id, ''), channel_type, name, COALESCE(ngac_oa_id, '')
+		`SELECT id, workspace_id, channel_type, name, COALESCE(ngac_oa_id, '')
 		   FROM channels WHERE id = $1`, id,
 	).Scan(&c.ID, &c.WorkspaceID, &c.Type, &c.Name, &c.ContentOAID)
 	if errors.Is(err, pgx.ErrNoRows) {

@@ -86,17 +86,3 @@ func TestSendMessage_ApprovalCardInDMFollowsItsWorkspace(t *testing.T) {
 	k.setWorkspaceType(t, "organization")
 	require.NoError(t, k.sendApprovalCard(inWorkspace))
 }
-
-// A direct message with no workspace to judge by sends nothing at all.
-func TestSendMessage_ADMWithNoWorkspaceSendsNothing(t *testing.T) {
-	k := newTalk(t, "approval-card-dm-none")
-	_, err := k.f.pool.Exec(context.Background(), `UPDATE channels SET workspace_id = NULL WHERE id = $1`, k.chID)
-	require.NoError(t, err)
-	k.f.withDMPeer(t, k.chID)
-	inWorkspace := grpcauth.WithCaller(context.Background(), grpcauth.Caller{UserID: k.f.userID, NGACNodeID: userNode, TenantID: k.f.wsID})
-	before := k.messageCount(t)
-
-	require.ErrorIs(t, k.sendApprovalCard(inWorkspace), domain.ErrNotFound)
-	require.ErrorIs(t, k.sendApprovalCard(context.Background()), domain.ErrNotFound)
-	assert.Equal(t, before, k.messageCount(t))
-}

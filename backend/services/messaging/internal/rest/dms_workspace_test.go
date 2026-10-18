@@ -34,7 +34,7 @@ func TestDMRoutes_AreScopedToTheSessionsWorkspace(t *testing.T) {
 		id, oa := fmt.Sprintf("rest-dm-%d", n), fmt.Sprintf("rest-dm-oa-%d", n)
 		_, err := c.pool.Exec(ctx, `INSERT INTO ngac_nodes (id, name, node_type) VALUES ($1, $1, $2)`, oa, ngac.TypeOA)
 		require.NoError(t, err)
-		_, err = c.pool.Exec(ctx, `INSERT INTO channels (id, name, channel_type, workspace_id, ngac_oa_id, created_at) VALUES ($1, 'dm', 'dm', NULLIF($2, ''), $3, now())`, id, ws, oa)
+		_, err = c.pool.Exec(ctx, `INSERT INTO channels (id, name, channel_type, workspace_id, ngac_oa_id, created_at) VALUES ($1, 'dm', 'dm', $2, $3, now())`, id, ws, oa)
 		require.NoError(t, err)
 		for _, node := range []string{c.node, peerNode} {
 			_, err = c.pool.Exec(ctx, `INSERT INTO channel_members (channel_id, ngac_node_id) VALUES ($1, $2)`, id, node)
@@ -47,7 +47,7 @@ func TestDMRoutes_AreScopedToTheSessionsWorkspace(t *testing.T) {
 		})
 		return id
 	}
-	inA, inB, orphan := makeDM(c.ws), makeDM(wsB), makeDM("")
+	inA, inB := makeDM(c.ws), makeDM(wsB)
 
 	serve := func(tenant, method, path string) *httptest.ResponseRecorder {
 		svc := domain.NewService(store.NewStore(c.pool), answerPolicy{allow: true}, nil, namedUser{}, nil)
@@ -84,10 +84,8 @@ func TestDMRoutes_AreScopedToTheSessionsWorkspace(t *testing.T) {
 
 	assert.Equal(t, []string{inA}, listed(c.ws), "signed in to A: A's DM only")
 	assert.Equal(t, []string{inB}, listed(wsB), "signed in to B: B's DM only")
-	assert.NotContains(t, append(listed(c.ws), listed(wsB)...), orphan, "a DM with no workspace is in no list")
 
 	assert.Equal(t, http.StatusOK, serve(c.ws, http.MethodGet, "/api/channels/"+inA+"/messages").Code, "allow: A's DM from A")
 	assert.Equal(t, http.StatusNotFound, serve(wsB, http.MethodGet, "/api/channels/"+inA+"/messages").Code, "deny: A's DM from B")
 	assert.Equal(t, http.StatusNotFound, serve(wsB, http.MethodGet, "/api/channels/"+inA).Code, "deny: A's DM opened from B")
-	assert.Equal(t, http.StatusNotFound, serve(c.ws, http.MethodGet, "/api/channels/"+orphan+"/messages").Code, "deny: a DM with no workspace")
 }

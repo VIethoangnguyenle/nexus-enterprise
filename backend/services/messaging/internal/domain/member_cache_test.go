@@ -111,7 +111,8 @@ func seedChannelOfType(t *testing.T, channelType string) (*store.Store, *store.C
 		require.NoError(t, err)
 	}
 	user, _ := testutil.CreateUser(t, pool)
-	ch := &store.Channel{ID: "ch-" + uuid.NewString(), Name: "general", ChannelType: channelType, NGACOaID: oa, NGACUaID: ua, CreatedBy: user}
+	ws, _ := testutil.CreateWorkspace(t, pool, user)
+	ch := &store.Channel{ID: "ch-" + uuid.NewString(), Name: "general", ChannelType: channelType, WorkspaceID: ws, NGACOaID: oa, NGACUaID: ua, CreatedBy: user}
 	require.NoError(t, st.InsertChannelWithMembers(context.Background(), ch, "creator-node"))
 	t.Cleanup(func() {
 		pool.Exec(context.Background(), `DELETE FROM channels WHERE id = $1`, ch.ID)

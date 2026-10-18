@@ -333,39 +333,6 @@ func TestRealPolicy_NoListOfBShowsADMOfA(t *testing.T) {
 	}
 }
 
-// A DM from before DMs had a workspace, and which no migration could place, is in
-// no list and behind no door.
-func TestRealPolicy_ALegacyDMWithNoWorkspaceAppearsNowhere(t *testing.T) {
-	m := newDMMatrix(t)
-	ctx := context.Background()
-	ch := m.mustDM(m.creator, m.both)
-	legacy := m.mustDM(m.creator, m.latecomer)
-	_ = ch
-	_, err := m.pool.Exec(ctx, `UPDATE channels SET workspace_id = NULL WHERE id = $1`, legacy.Id)
-	require.NoError(t, err)
-	_, err = m.pool.Exec(ctx, `INSERT INTO messages (id, channel_id, sender_id, content, message_type, created_at) VALUES ($1, $2, $3, 'needle cũ', 'user', now())`,
-		"legacy-"+legacy.Id, legacy.Id, m.creator.id)
-	require.NoError(t, err)
-	t.Cleanup(func() { m.pool.Exec(ctx, `DELETE FROM messages WHERE channel_id = $1`, legacy.Id) })
-
-	for _, ws := range []string{m.wsA, m.wsB, ""} {
-		list, err := m.svc.ListDMs(m.in(m.creator, ws), ws, m.creator.node)
-		require.NoError(t, err)
-		assert.NotContains(t, channelIDsOf(list), legacy.Id, "listed in %q", ws)
-		found, err := m.svc.SearchAll(m.in(m.creator, ws), m.creator.id, m.creator.node, ws, domain.SearchQuery{Text: "needle"})
-		require.NoError(t, err)
-		assert.Empty(t, found.Messages, "searched in %q", ws)
-		_, err = m.svc.GetMessages(m.in(m.creator, ws), legacy.Id, m.creator.id, m.creator.node, "", 20)
-		assert.ErrorIs(t, err, domain.ErrNotFound, "opened in %q", ws)
-		_, err = m.svc.SendMessage(m.in(m.creator, ws), domain.SendMessageInput{ChannelID: legacy.Id, SenderID: m.creator.id, SenderNodeID: m.creator.node, Content: "x"})
-		assert.ErrorIs(t, err, domain.ErrNotFound, "written in %q", ws)
-	}
-	// A new DM for the same pair is a fresh one in the workspace.
-	fresh, err := m.openDMIn(m.wsA, m.creator, m.latecomer)
-	require.NoError(t, err)
-	assert.NotEqual(t, legacy.Id, fresh)
-}
-
 // A new DM is announced in its own workspace and a DM's two people are both
 // people of it, so a name list of that workspace names them both.
 func TestRealPolicy_ADMIsAnnouncedInItsWorkspaceAndItsPeopleBelongToIt(t *testing.T) {

@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS channels (
     id              TEXT PRIMARY KEY,
     name            TEXT NOT NULL,
     channel_type    TEXT NOT NULL CHECK (channel_type IN ('workspace', 'private', 'dm')),
-    workspace_id    TEXT REFERENCES workspaces(id),
+    workspace_id    TEXT NOT NULL REFERENCES workspaces(id),
     ngac_oa_id      TEXT REFERENCES ngac_nodes(id),
     ngac_ua_id      TEXT REFERENCES ngac_nodes(id),
     created_by      TEXT REFERENCES users(id),

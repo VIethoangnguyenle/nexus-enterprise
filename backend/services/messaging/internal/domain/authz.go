@@ -47,8 +47,7 @@ func (s *Service) loadChannel(ctx context.Context, channelID string) (*store.Cha
 
 // loadChannelFor is loadChannel for a request made by a person: a direct message
 // belongs to one workspace and is answered as not found to anyone signed in to
-// another (or to none), the way a conversation the caller is not in is. A DM with
-// no workspace is in none. Work the service starts on its own (a push, a call
+// another (or to none), the way a conversation the caller is not in is. Work the service starts on its own (a push, a call
 // hang-up timer) has no signed-in workspace and uses loadChannel.
 func (s *Service) loadChannelFor(ctx context.Context, channelID string) (*store.Channel, error) {
 	ch, err := s.loadChannel(ctx, channelID)
@@ -134,8 +133,8 @@ func (s *Service) authorizeChannelOp(ctx context.Context, ch *store.Channel, use
 var dmRelationshipOps = map[string]bool{ngac.OpWrite: true, ngac.OpInvite: true, ngac.OpManage: true}
 
 // requireDMRelationship refuses unless the user and the DM's other member are
-// both in the DM's own workspace. It fails closed: a DM with no workspace or no
-// other member recorded, or a policy service that cannot answer, is a refusal.
+// both in the DM's own workspace. It fails closed: a DM with no other member
+// recorded, or a policy service that cannot answer, is a refusal.
 func (s *Service) requireDMRelationship(ctx context.Context, ch *store.Channel, userNodeID string) error {
 	denied := fmt.Errorf("%w: a direct message needs both people in its workspace", ErrAccessDenied)
 	if ch.WorkspaceID == "" {

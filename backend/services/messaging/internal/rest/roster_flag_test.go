@@ -51,7 +51,8 @@ func TestListChannelMembers_TellsWhoMayRemove(t *testing.T) {
 	}
 	chID := "ch-" + uuid.NewString()
 	st := store.NewStore(pool)
-	require.NoError(t, st.InsertChannelWithMembers(ctx, &store.Channel{ID: chID, Name: "roster-flag", ChannelType: "private", NGACOaID: oa, NGACUaID: ua, CreatedBy: creator}, "creator-node"))
+	ws, _ := testutil.CreateWorkspace(t, pool, creator)
+	require.NoError(t, st.InsertChannelWithMembers(ctx, &store.Channel{ID: chID, Name: "roster-flag", ChannelType: "private", WorkspaceID: ws, NGACOaID: oa, NGACUaID: ua, CreatedBy: creator}, "creator-node"))
 	t.Cleanup(func() {
 		pool.Exec(ctx, `DELETE FROM channels WHERE id = $1`, chID)
 		pool.Exec(ctx, `DELETE FROM ngac_nodes WHERE id IN ($1, $2)`, oa, ua)
