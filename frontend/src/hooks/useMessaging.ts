@@ -35,7 +35,7 @@ export const directMessagesQueryOptions = () =>
     queryFn: () => startupPart(keys.messaging.dms(), undefined, (s) => ({ channels: s.dms }), () => messagingApi.listDMs()),
   })
 
-/** DM channels the user can read. Not workspace-scoped on the backend. */
+/** DM channels of the signed-in workspace the user can read; a DM belongs to one workspace. */
 export function useDirectMessages() { return useQuery(directMessagesQueryOptions()) }
 
 /** Opens (finds or creates) the DM with a person. */

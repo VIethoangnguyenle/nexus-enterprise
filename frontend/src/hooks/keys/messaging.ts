@@ -11,7 +11,7 @@ export const messagingKeys = {
   chatState: (wsId: string) => ['chat-state', wsId] as const,
   /** The user's personal navigator sections in one workspace. */
   sections: (wsId: string) => ['chat-sections', wsId] as const,
-  /** Direct messages are not workspace-scoped on the backend. */
+  /** Direct messages belong to one workspace: the list is the signed-in workspace's, and a workspace switch drops the whole cache. */
   dms: () => ['dms'] as const,
   /** Prefix of every channel's message list. */
   messagesAll: () => ['messages'] as const,
