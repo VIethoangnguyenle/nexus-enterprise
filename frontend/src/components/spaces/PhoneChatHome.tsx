@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { CircleAlert } from 'lucide-react'
 import type { Arrival } from '../../hooks/useArrivals'
@@ -17,7 +18,8 @@ import { PhoneMoreList } from './PhoneMoreList'
 import { PhoneSectionsList } from './PhoneSectionsList'
 import { PhoneThreadsScreen } from './PhoneThreadsScreen'
 import { ChatSearchScreen } from './ChatSearchScreen'
-import { useSectionOverlays } from './SectionOverlays'
+import { useSectionOverlays, type RowTarget } from './SectionOverlays'
+import { LeaveGroupDialog } from './LeaveGroupDialog'
 
 /** Everything the conversation lists show, asked for again: the pull-down reload. */
 function reloadLists(workspaceId: string): Promise<unknown> {
@@ -46,7 +48,8 @@ export function PhoneChatHome({ nav, workspaceId, fresh }: {
   const navigate = useNavigate()
   const people = usePeople(workspaceId)
   const setCollapsed = useNavCollapseStore((s) => s.setCollapsed)
-  const overlays = useSectionOverlays(nav.sectionsApi, true, (id) => setCollapsed(collapseKey(workspaceId, id), false))
+  const [leaveTarget, setLeaveTarget] = useState<RowTarget | null>(null)
+  const overlays = useSectionOverlays(nav.sectionsApi, true, (id) => setCollapsed(collapseKey(workspaceId, id), false), (c) => setLeaveTarget(c))
   const { overlay, openThreads, close } = useChatOverlay()
   const threadsWithNews = useUnreadThreads().data?.length ?? 0
   const { bind, pull, refreshing } = usePullToRefresh(() => reloadLists(workspaceId))
@@ -122,6 +125,15 @@ export function PhoneChatHome({ nav, workspaceId, fresh }: {
         />
       )}
       {overlays.node}
+      {leaveTarget && (
+        <LeaveGroupDialog
+          open
+          channelId={leaveTarget.id}
+          workspaceId={workspaceId}
+          groupName={leaveTarget.title}
+          onClose={() => setLeaveTarget(null)}
+        />
+      )}
     </div>
   )
 }

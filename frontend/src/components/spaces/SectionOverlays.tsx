@@ -1,5 +1,5 @@
 import { useRef, useState, type ComponentType, type ReactNode } from 'react'
-import { ArrowDown, ArrowUp, Bell, BellOff, Check, CheckCheck, Folder, FolderPlus, Pencil, Star, Trash2, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Bell, BellOff, Check, CheckCheck, Folder, FolderPlus, LogOut, Pencil, Star, Trash2, X } from 'lucide-react'
 import type { ChatSectionsApi, ConversationRef } from '../../hooks/useChatSections'
 import { useMarkConversationRead } from '../../hooks/useMessaging'
 import { useStarConversation } from '../../hooks/useShortcuts'
@@ -22,6 +22,8 @@ export interface RowTarget extends ConversationRef {
    * one. Left out where the list cannot say (the desktop navigator).
    */
   markRead?: string
+  /** Offers "Rời nhóm": a private group the user can leave (never DM, never #general). */
+  canLeave?: boolean
 }
 
 /** The row menu's target for a conversation of the phone lists. */
@@ -33,6 +35,7 @@ export function rowTargetOf(c: Conversation): RowTarget {
     starred: c.starred,
     muted: c.level === 'off',
     markRead: unread > 0 ? c.main?.id || undefined : undefined,
+    canLeave: c.kind === 'space' && !c.isWorkspaceWide,
   }
 }
 
@@ -115,7 +118,7 @@ const ICON_SHEET = { size: 18, strokeWidth: 1.75 } as const
  * `onReveal` is told the section a conversation was just moved into, so the
  * view can open it if it was folded.
  */
-export function useSectionOverlays(api: ChatSectionsApi, phone: boolean, onReveal?: (sectionId: string) => void) {
+export function useSectionOverlays(api: ChatSectionsApi, phone: boolean, onReveal?: (sectionId: string) => void, onLeave?: (conversation: RowTarget) => void) {
   const [open, setOpen] = useState<Overlay | null>(null)
   const [announcement, setAnnouncement] = useState('')
   const anchor = useRef<HTMLElement | null>(null)
@@ -221,6 +224,21 @@ export function useSectionOverlays(api: ChatSectionsApi, phone: boolean, onRevea
           >
             Đánh dấu đã đọc
           </Item>
+        )}
+        {c.canLeave && onLeave && (
+          <>
+            <Separator />
+            <Item
+              icon={<LogOut {...icon} />}
+              tone="danger"
+              onClick={() => {
+                close()
+                onLeave?.(c)
+              }}
+            >
+              Rời nhóm
+            </Item>
+          </>
         )}
       </>,
     )

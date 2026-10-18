@@ -64,6 +64,8 @@ export interface Conversation {
   starred?: boolean
   /** When it was starred, in ms: the order of "Đã gắn sao". */
   starredAt?: number
+  /** True for the workspace-wide channel (#general); set so leave-group knows not to offer. */
+  isWorkspaceWide?: boolean
 }
 
 /** What the unread list says about one conversation besides how many messages are unread. */
@@ -266,7 +268,7 @@ export function buildConversations({ spaces, dms, unread, meta = {}, activity = 
       const { title, partner } = dmPartner(ch, me, dir, dmMembers?.[ch.id])
       out.push({ ...base, title, partner, hueKey: partner?.userId || ch.id })
     } else {
-      out.push({ ...base, title: ch.name, hueKey: ch.id, avatarUrl: ch.avatar_url || undefined })
+      out.push({ ...base, title: ch.name, hueKey: ch.id, avatarUrl: ch.avatar_url || undefined, isWorkspaceWide: ch.channel_type === 'workspace' })
     }
   }
   // A DM can only be a DM; a space list that ever includes one still files it correctly.
