@@ -37,9 +37,9 @@ func TestCallPush_RingsTheCalleeThenMissedReplacesIt(t *testing.T) {
 	assert.Equal(t, []string{w.peer}, ring.ExternalIDs, "the callee, never the caller")
 	assert.Equal(t, "testuser", ring.Title, "titled by the caller")
 	assert.Equal(t, "đang gọi video cho bạn", ring.Body)
-	assert.Equal(t, "/calls/"+id+"?answer=video", ring.URL, "answering opens the call")
+	assert.Equal(t, "/calls/"+id+"?ws="+w.f.wsID+"&answer=video", ring.URL, "answering opens the call")
 	assert.Equal(t, "call-"+id, ring.CollapseID)
-	assert.Equal(t, []push.Button{{ID: "answer", Text: "Trả lời", URL: "/calls/" + id + "?answer=video"}}, ring.Buttons,
+	assert.Equal(t, []push.Button{{ID: "answer", Text: "Trả lời", URL: "/calls/" + id + "?ws=" + w.f.wsID + "&answer=video"}}, ring.Buttons,
 		"the notification answers from its own button")
 
 	_, err := w.f.svc.ExpireRingingCalls(w.f.callerCtx(), time.Now().Add(time.Minute))
@@ -50,7 +50,7 @@ func TestCallPush_RingsTheCalleeThenMissedReplacesIt(t *testing.T) {
 	assert.Equal(t, []string{w.peer}, missed.ExternalIDs)
 	assert.Equal(t, "📹 Cuộc gọi nhỡ", missed.Body)
 	assert.Equal(t, "call-"+id, missed.CollapseID, "it replaces the ringing notification")
-	assert.Equal(t, "/channels/"+w.chID, missed.URL, "a missed call opens the conversation to call back")
+	assert.Equal(t, "/channels/"+w.chID+"?ws="+w.f.wsID, missed.URL, "a missed call opens the conversation to call back")
 	assert.Empty(t, missed.Buttons, "nothing left to answer")
 }
 
@@ -127,8 +127,8 @@ func TestInviteToCall_PushesWritersOnly(t *testing.T) {
 	require.Len(t, sent, 1, "the reader cannot join, an unknown id is nobody")
 	assert.Equal(t, []string{w.peer}, sent[0].ExternalIDs)
 	assert.Equal(t, "testuser mời bạn vào cuộc gọi", sent[0].Body)
-	assert.Equal(t, "/calls/"+id, sent[0].URL)
-	assert.Equal(t, []push.Button{{ID: "join", Text: "Tham gia", URL: "/calls/" + id}}, sent[0].Buttons)
+	assert.Equal(t, "/calls/"+id+"?ws="+w.f.wsID, sent[0].URL)
+	assert.Equal(t, []push.Button{{ID: "join", Text: "Tham gia", URL: "/calls/" + id + "?ws=" + w.f.wsID}}, sent[0].Buttons)
 
 	var invite *domain.CallChange
 	for i := range w.calls.changes {
@@ -157,7 +157,7 @@ func TestCallPush_AMentionEarlyInAGroupCallInvites(t *testing.T) {
 	sent := w.pushed(sender)
 	require.Len(t, sent, 1)
 	assert.Equal(t, "testuser mời bạn vào cuộc gọi", sent[0].Body)
-	assert.Equal(t, "/calls/"+id, sent[0].URL)
+	assert.Equal(t, "/calls/"+id+"?ws="+w.f.wsID, sent[0].URL)
 
 	_, err = w.f.pool.Exec(ctx, `UPDATE calls SET created_at = NOW() - INTERVAL '3 minutes' WHERE id = $1`, id)
 	require.NoError(t, err)

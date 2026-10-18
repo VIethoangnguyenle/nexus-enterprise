@@ -87,7 +87,7 @@ func TestPush_DirectMessageReachesTheOtherSideOnly(t *testing.T) {
 	assert.Equal(t, []string{w.other}, sent[0].ExternalIDs, "never the sender")
 	assert.Equal(t, "testuser", sent[0].Title, "a direct message is titled by its sender")
 	assert.Equal(t, "chào bạn", sent[0].Body)
-	assert.Equal(t, "/channels/"+w.chID, sent[0].URL)
+	assert.Equal(t, "/channels/"+w.chID+"?ws="+w.f.wsID, sent[0].URL)
 }
 
 func TestPush_MentionAndTheDenyCases(t *testing.T) {
@@ -96,7 +96,7 @@ func TestPush_MentionAndTheDenyCases(t *testing.T) {
 
 	id := w.send(t, "hello", w.other)
 	require.Len(t, w.sender.all(), 1, "a mention in a group is pushed")
-	assert.Equal(t, "/channels/"+w.chID+"?message="+id, w.sender.all()[0].URL, "a mention in the stream lights the message")
+	assert.Equal(t, "/channels/"+w.chID+"?ws="+w.f.wsID+"&message="+id, w.sender.all()[0].URL, "a mention in the stream lights the message")
 
 	// Deny: mentioned but cannot read the channel (removed, or never a member).
 	stranger, _ := testutil.CreateUser(t, w.f.pool)
@@ -171,7 +171,7 @@ func TestPush_AReplyReachesTheThreadsFollowers(t *testing.T) {
 	sent := sender.all()
 	require.Len(t, sent, 1)
 	assert.Equal(t, []string{k.f.userID}, sent[0].ExternalIDs, "the starter follows the thread")
-	assert.Equal(t, "/channels/"+k.chID+"?thread="+k.rootID+"&message="+reply.Id, sent[0].URL, "a reply opens its thread and lights itself")
+	assert.Equal(t, "/channels/"+k.chID+"?ws="+k.f.wsID+"&thread="+k.rootID+"&message="+reply.Id, sent[0].URL, "a reply opens its thread and lights itself")
 
 	_, err = k.f.svc.UnfollowThread(ctx, k.rootID, k.f.userID, userNode)
 	require.NoError(t, err)
@@ -271,7 +271,7 @@ func TestPush_FollowsTheNotificationLevel(t *testing.T) {
 		sent := w.sender.all()
 		require.Len(t, sent, 1, "not the sender, the muted, the removed nor the one looking at it")
 		assert.Equal(t, []string{w.other}, sent[0].ExternalIDs)
-		assert.Equal(t, "/channels/"+w.chID, sent[0].URL)
+		assert.Equal(t, "/channels/"+w.chID+"?ws="+w.f.wsID, sent[0].URL)
 
 		// A reply in a thread the member does not follow is not pushed by default...
 		_, err := w.f.svc.SendMessage(ctx, domain.SendMessageInput{

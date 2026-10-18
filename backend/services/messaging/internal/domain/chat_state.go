@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/httputil"
 	pb "ngac-platform/proto/messaging"
 	"ngac-platform/services/messaging/internal/store"
@@ -152,17 +151,14 @@ func (s *Service) BumpChat(tenantID string, userIDs ...string) {
 }
 
 // bumpChannel records a change to a conversation's content (a message sent,
-// edited, deleted, a call card rewritten). A direct message belongs to no
-// workspace and its people may read it from any of theirs, so each of them is
-// bumped as well as the tenant the change was made in.
+// edited, deleted, a call card rewritten). The workspace's version
+// moves; for a direct message so does each of its people's own, which the chat
+// state of that workspace also depends on.
 func (s *Service) bumpChannel(ctx context.Context, ch *store.Channel) {
 	if s.versions == nil || ch == nil {
 		return
 	}
 	tenant := ch.WorkspaceID
-	if tenant == "" {
-		tenant = grpcauth.CallerFrom(ctx).TenantID
-	}
 	var users []string
 	if ch.ChannelType == "dm" {
 		var err error

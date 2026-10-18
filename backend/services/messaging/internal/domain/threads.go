@@ -152,12 +152,12 @@ func (s *Service) ThreadReplyFanout(ctx context.Context, reply *pb.Message, call
 	if summary.LastReplyAt != nil {
 		ev.LastReplyAt = timestamppb.New(*summary.LastReplyAt)
 	}
-	// A workspace channel's events stay in its workspace; a DM has none, and
-	// goes to the tenant the reply was sent from.
-	fan := &ThreadFanout{Reply: ev, TenantID: ch.WorkspaceID, States: map[string]*pb.ThreadStateEvent{}}
-	if fan.TenantID == "" {
-		fan.TenantID = callerTenantID
+	// A conversation's events stay in its workspace, a DM's included. A DM with no
+	// workspace (never placed) is in none, so nothing is announced.
+	if ch.WorkspaceID == "" {
+		return nil, nil
 	}
+	fan := &ThreadFanout{Reply: ev, TenantID: ch.WorkspaceID, States: map[string]*pb.ThreadStateEvent{}}
 
 	// Stamped before the read: a frame stamped later saw no older data.
 	asOf := timestamppb.Now()

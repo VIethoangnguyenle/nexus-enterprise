@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -382,12 +383,14 @@ func notificationFor(ch *store.Channel, sender string, msg *pb.Message, kind Pus
 	if utf8.RuneCountInString(text) > previewChars {
 		text = string([]rune(text)[:previewChars-1]) + "…"
 	}
-	m := push.Message{CollapseID: "ch-" + ch.ID, URL: "/channels/" + ch.ID}
+	m := push.Message{CollapseID: "ch-" + ch.ID}
 	switch {
 	case msg.ParentMessageId != "":
-		m.URL += "?thread=" + msg.ParentMessageId + "&message=" + msg.Id
+		m.URL = appLink("/channels/"+ch.ID, ch.WorkspaceID, "thread="+msg.ParentMessageId, "message="+msg.Id)
 	case kind == PushMention:
-		m.URL += "?message=" + msg.Id
+		m.URL = appLink("/channels/"+ch.ID, ch.WorkspaceID, "message="+msg.Id)
+	default:
+		m.URL = appLink("/channels/"+ch.ID, ch.WorkspaceID)
 	}
 	if ch.ChannelType == "dm" {
 		m.Title, m.Body = sender, text
@@ -464,4 +467,21 @@ func (s *Service) SavePushPreferences(ctx context.Context, userID string, p stor
 		return fmt.Errorf("%w: unknown time zone", ErrInvalidInput)
 	}
 	return s.store.SavePushPreferences(ctx, userID, p)
+}
+
+// appLink is a path of the app for a conversation, named with its workspace
+// (`?ws=`) ahead of any further parameters. A notification is opened from
+// wherever the person is signed in; the workspace in the address makes the app
+// re-scope the session to the conversation's, so a link to a DM (which exists in
+// one workspace only) is not "not found" from another.
+func appLink(path, workspaceID string, params ...string) string {
+	var q []string
+	if workspaceID != "" {
+		q = append(q, "ws="+url.QueryEscape(workspaceID))
+	}
+	q = append(q, params...)
+	if len(q) == 0 {
+		return path
+	}
+	return path + "?" + strings.Join(q, "&")
 }

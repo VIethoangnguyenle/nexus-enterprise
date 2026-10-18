@@ -3,6 +3,7 @@ package domain_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -271,4 +272,62 @@ func TestSections_ADMOfAnotherWorkspaceCannotBePlaced(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, f.svc.PlaceChannel(ctx, w.wsA, me, sec.ID, w.inA), "allow: the workspace's own DM")
 	assert.Error(t, f.svc.PlaceChannel(f.inWorkspace(w.wsA), w.wsA, me, sec.ID, w.inB), "deny: a DM of the other workspace")
+}
+
+// moveChannel puts a channel in another workspace for the length of a test and
+// back before the fixtures are removed.
+func moveChannel(t *testing.T, f *fixture, chID, workspaceID string) {
+	t.Helper()
+	was := f.wsID
+	_, err := f.pool.Exec(context.Background(), `UPDATE channels SET workspace_id = $2 WHERE id = $1`, chID, workspaceID)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		f.pool.Exec(context.Background(), `UPDATE channels SET workspace_id = $2 WHERE id = $1`, chID, was)
+	})
+}
+
+// A push or a call ring for a DM names the DM's own workspace, whichever
+// workspace the sender was in when it went out: the callee may be signed in to
+// another one and the link must take them to the DM's.
+func TestPush_ADMLinkNamesTheDMsWorkspace(t *testing.T) {
+	w := newPushWorld(t, true)
+	msg, err := w.f.svc.SendMessage(w.f.callerCtx(), domain.SendMessageInput{
+		ChannelID: w.chID, SenderID: w.f.userID, SenderNodeID: userNode, Content: "chào", Mentions: []string{w.other},
+	})
+	require.NoError(t, err)
+	other, _ := testutil.CreateWorkspace(t, w.f.pool, w.f.userID)
+	moveChannel(t, w.f, w.chID, other)
+
+	w.f.svc.PushForMessage(w.f.callerCtx(), msg)
+
+	sent := w.sender.all()
+	require.Len(t, sent, 1)
+	assert.Equal(t, "/channels/"+w.chID+"?ws="+other+"&message="+msg.Id, sent[0].URL)
+	assert.NotContains(t, sent[0].URL, w.f.wsID, "not the workspace the sender happened to be in")
+}
+
+func TestCallPush_ADMRingAndMissedLinksNameTheDMsWorkspace(t *testing.T) {
+	w := newCallWorld(t)
+	w.asDM(t)
+	other, _ := testutil.CreateWorkspace(t, w.f.pool, w.f.userID)
+	moveChannel(t, w.f, w.chID, other)
+	var callerNode string
+	require.NoError(t, w.f.pool.QueryRow(context.Background(), `SELECT ngac_node FROM users WHERE id = $1`, w.f.userID).Scan(&callerNode))
+	w.f.read.addMember(other, userNode, callerNode, w.peerNode, "tn-"+w.peer)
+	sender, _ := w.withPush()
+	// The caller acts from the DM's workspace; the callee may be anywhere.
+	ctx := grpcauth.WithCaller(context.Background(), grpcauth.Caller{UserID: w.f.userID, NGACNodeID: userNode, TenantID: other})
+	join, _, err := w.f.svc.StartCall(ctx, domain.StartCallInput{ChannelID: w.chID, UserID: w.f.userID, UserNodeID: userNode, Kind: "audio"})
+	require.NoError(t, err)
+
+	sent := w.pushed(sender)
+	require.Len(t, sent, 1)
+	assert.Equal(t, "/calls/"+join.Call.Id+"?ws="+other+"&answer=audio", sent[0].URL)
+	assert.Equal(t, "/calls/"+join.Call.Id+"?ws="+other+"&answer=audio", sent[0].Buttons[0].URL)
+
+	_, err = w.f.svc.ExpireRingingCalls(ctx, time.Now().Add(time.Minute))
+	require.NoError(t, err)
+	sent = w.pushed(sender)
+	require.Len(t, sent, 2)
+	assert.Equal(t, "/channels/"+w.chID+"?ws="+other, sent[1].URL)
 }
