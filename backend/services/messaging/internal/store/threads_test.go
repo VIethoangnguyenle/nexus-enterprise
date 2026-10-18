@@ -37,7 +37,8 @@ func newThreadWorld(t *testing.T, users int) *threadWorld {
 		_, err := pool.Exec(ctx, `INSERT INTO ngac_nodes (id, name, node_type) VALUES ($1, $1, $2)`, n[0], n[1])
 		require.NoError(t, err)
 	}
-	ch := &store.Channel{ID: "ch-" + uuid.NewString(), Name: "threads", ChannelType: "workspace", NGACOaID: oa, NGACUaID: ua, CreatedBy: w.users[0]}
+	ws, _ := testutil.CreateWorkspace(t, pool, w.users[0])
+	ch := &store.Channel{ID: "ch-" + uuid.NewString(), Name: "threads", ChannelType: "workspace", WorkspaceID: ws, NGACOaID: oa, NGACUaID: ua, CreatedBy: w.users[0]}
 	require.NoError(t, w.st.InsertChannelWithMembers(ctx, ch))
 	w.chID = ch.ID
 	t.Cleanup(func() {

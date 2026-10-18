@@ -22,6 +22,8 @@ psql_ -d postgres -c "DROP DATABASE IF EXISTS $SCRATCH" -c "CREATE DATABASE $SCR
 trap 'psql_ -d postgres -c "DROP DATABASE IF EXISTS $SCRATCH" >/dev/null' EXIT
 # The source may already have had 066 applied: start from a database that has not.
 psql_ -d "$SCRATCH" -c "DROP TABLE IF EXISTS _reconcile_066_dms"
+# ...and from before 067, which forbids the NULL-workspace DMs this migration places.
+psql_ -d "$SCRATCH" -c "ALTER TABLE channels ALTER COLUMN workspace_id DROP NOT NULL"
 # ...and with no DMs of its own, so the counts below are the fixture's alone.
 psql_ -d "$SCRATCH" -c "DELETE FROM channel_members WHERE channel_id IN (SELECT id FROM channels WHERE channel_type = 'dm')" -c "DELETE FROM channels WHERE channel_type = 'dm'"
 

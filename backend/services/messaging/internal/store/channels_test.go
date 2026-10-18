@@ -24,7 +24,8 @@ func TestInsertChannelWithMembers_WritesTheRowAndItsMembersTogether(t *testing.T
 		_, err := pool.Exec(ctx, `INSERT INTO ngac_nodes (id, name, node_type) VALUES ($1, $1, $2)`, n[0], n[1])
 		require.NoError(t, err)
 	}
-	ch := &store.Channel{ID: "ch-" + uuid.NewString(), Name: "dm", ChannelType: "dm", NGACOaID: oa, NGACUaID: ua, CreatedBy: user}
+	ws, _ := testutil.CreateWorkspace(t, pool, user)
+	ch := &store.Channel{ID: "ch-" + uuid.NewString(), Name: "dm", ChannelType: "dm", WorkspaceID: ws, NGACOaID: oa, NGACUaID: ua, CreatedBy: user}
 	t.Cleanup(func() {
 		pool.Exec(ctx, `DELETE FROM channels WHERE id = $1`, ch.ID)
 		pool.Exec(ctx, `DELETE FROM ngac_nodes WHERE id IN ($1, $2)`, oa, ua)
@@ -53,7 +54,8 @@ func TestInsertMessage_AReplyIsCountedAndSubscribesItsSender(t *testing.T) {
 		_, err := pool.Exec(ctx, `INSERT INTO ngac_nodes (id, name, node_type) VALUES ($1, $1, $2)`, n[0], n[1])
 		require.NoError(t, err)
 	}
-	ch := &store.Channel{ID: "ch-" + uuid.NewString(), Name: "general", ChannelType: "workspace", NGACOaID: oa, NGACUaID: ua, CreatedBy: user}
+	ws, _ := testutil.CreateWorkspace(t, pool, user)
+	ch := &store.Channel{ID: "ch-" + uuid.NewString(), Name: "general", ChannelType: "workspace", WorkspaceID: ws, NGACOaID: oa, NGACUaID: ua, CreatedBy: user}
 	require.NoError(t, st.InsertChannelWithMembers(ctx, ch, "n"))
 	t.Cleanup(func() {
 		pool.Exec(ctx, `DELETE FROM channels WHERE id = $1`, ch.ID)
@@ -92,7 +94,8 @@ func channelFixture(t *testing.T) (*store.Store, *store.Channel, string) {
 		_, err := pool.Exec(ctx, `INSERT INTO ngac_nodes (id, name, node_type) VALUES ($1, $1, $2)`, n[0], n[1])
 		require.NoError(t, err)
 	}
-	ch := &store.Channel{ID: "ch-" + uuid.NewString(), Name: "general", ChannelType: "workspace", NGACOaID: oa, NGACUaID: ua, CreatedBy: user}
+	ws, _ := testutil.CreateWorkspace(t, pool, user)
+	ch := &store.Channel{ID: "ch-" + uuid.NewString(), Name: "general", ChannelType: "workspace", WorkspaceID: ws, NGACOaID: oa, NGACUaID: ua, CreatedBy: user}
 	require.NoError(t, st.InsertChannelWithMembers(ctx, ch, "n"))
 	t.Cleanup(func() {
 		pool.Exec(ctx, `DELETE FROM channels WHERE id = $1`, ch.ID)
@@ -249,22 +252,29 @@ func TestListDMsOf_ListsOnlyTheDMsTheNodeIsInWithinTheWorkspace(t *testing.T) {
 	assert.Empty(t, none)
 }
 
-// A DM with no workspace (one written before DMs belonged to a workspace and
-// that no migration could place) is in no list, and asking for "no workspace"
-// does not find it either.
-func TestListDMsOf_ADMWithNoWorkspaceIsInNoList(t *testing.T) {
+// The schema requires a workspace for every channel: the database refuses one
+// without it (or with a workspace that does not exist), whatever its type, and
+// leaves no row and no member behind.
+func TestInsertChannelWithMembers_TheDatabaseRefusesAChannelWithoutAWorkspace(t *testing.T) {
 	d := newDMFixture(t)
 	ctx := context.Background()
-	ws := d.workspace()
-	me := "node-" + uuid.NewString()
-	d.channel("dm", "", me, "node-"+uuid.NewString())
+	for _, kind := range []string{"dm", "private", "workspace"} {
+		for name, ws := range map[string]string{"no workspace": "", "unknown workspace": "ws-" + uuid.NewString()} {
+			ch := &store.Channel{ID: "ch-" + uuid.NewString(), Name: kind, ChannelType: kind, WorkspaceID: ws, CreatedBy: d.user}
+			require.Error(t, d.st.InsertChannelWithMembers(ctx, ch, "node-"+uuid.NewString()), "%s, %s", kind, name)
+			var rows, members int
+			require.NoError(t, d.pool.QueryRow(ctx, `SELECT count(*) FROM channels WHERE id = $1`, ch.ID).Scan(&rows))
+			require.NoError(t, d.pool.QueryRow(ctx, `SELECT count(*) FROM channel_members WHERE channel_id = $1`, ch.ID).Scan(&members))
+			assert.Zero(t, rows+members, "%s, %s: nothing is left behind", kind, name)
+		}
+	}
+	var nullable string
+	require.NoError(t, d.pool.QueryRow(ctx, `SELECT is_nullable FROM information_schema.columns WHERE table_name = 'channels' AND column_name = 'workspace_id'`).Scan(&nullable))
+	assert.Equal(t, "NO", nullable)
 
-	got, err := d.st.ListDMsOf(ctx, ws, me)
-	require.NoError(t, err)
-	assert.Empty(t, got)
-	got, err = d.st.ListDMsOf(ctx, "", me)
-	require.NoError(t, err)
-	assert.Empty(t, got, "an empty workspace id names no workspace")
+	// A raw insert is refused the same way: the rule is the table's, not the store's.
+	_, err := d.pool.Exec(ctx, `INSERT INTO channels (id, name, channel_type, workspace_id) VALUES ($1, 'dm', 'dm', NULL)`, "ch-"+uuid.NewString())
+	require.Error(t, err)
 }
 
 func TestFindDMByMembers_FindsThePairsDMInThatWorkspaceOnly(t *testing.T) {
@@ -275,7 +285,6 @@ func TestFindDMByMembers_FindsThePairsDMInThatWorkspaceOnly(t *testing.T) {
 	inA := d.channel("dm", wsA, a, b)
 	inB := d.channel("dm", wsB, a, b)
 	d.channel("dm", wsA, a, c)
-	d.channel("dm", "", a, c)
 
 	got, err := d.st.FindDMByMembers(ctx, wsA, a, b)
 	require.NoError(t, err)
@@ -295,7 +304,7 @@ func TestFindDMByMembers_FindsThePairsDMInThatWorkspaceOnly(t *testing.T) {
 	got, err = d.st.FindDMByMembers(ctx, wsA, a, c)
 	require.NoError(t, err)
 	require.NotNil(t, got)
-	assert.NotEmpty(t, got.WorkspaceID, "the DM with no workspace is not the one found")
+	assert.Equal(t, wsA, got.WorkspaceID)
 
 	got, err = d.st.FindDMByMembers(ctx, "", a, c)
 	require.NoError(t, err)

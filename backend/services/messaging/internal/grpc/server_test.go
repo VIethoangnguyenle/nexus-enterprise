@@ -252,18 +252,13 @@ func getTwoTestUserIDs(t *testing.T, pool *pgxpool.Pool) (string, string) {
 	return a, b
 }
 
-// insertTestChannel creates a channel directly in DB.
-// Pass empty workspaceID for NULL (DM scenario).
+// insertTestChannel creates a channel directly in DB; every channel has a workspace.
 func insertTestChannel(t *testing.T, pool *pgxpool.Pool, name, chType, workspaceID string) string {
 	t.Helper()
 	id := fmt.Sprintf("test-%s-%d", name, time.Now().UnixNano())
-	var wsID interface{} = workspaceID
-	if workspaceID == "" {
-		wsID = nil
-	}
 	_, err := pool.Exec(context.Background(),
 		"INSERT INTO channels (id, name, channel_type, workspace_id, created_at) VALUES ($1, $2, $3, $4, $5)",
-		id, name, chType, wsID, time.Now(),
+		id, name, chType, workspaceID, time.Now(),
 	)
 	require.NoError(t, err)
 	return id
@@ -301,26 +296,6 @@ func TestCreateChannel_RequestedTypeIsIgnored(t *testing.T) {
 	})
 
 	assert.Equal(t, "private", ch.ChannelType)
-}
-
-// ---------------------------------------------------------------------------
-// 3.2: TestListChannels — NULL workspace_id rows
-// ---------------------------------------------------------------------------
-
-func TestListChannels_WithNullWorkspaceID(t *testing.T) {
-	srv, pool := setupTestServer(t)
-	chID := insertTestChannel(t, pool, "test_null_ch", "dm", "")
-	t.Cleanup(func() { cleanTestData(t, pool, chID) })
-
-	result, err := srv.ListChannels(asCaller("", "ngac-user-1"), &pb.ListChannelsRequest{
-		WorkspaceId: "some-ws-id",
-	})
-
-	require.NoError(t, err, "ListChannels must not crash on NULL workspace_id")
-	assert.NotNil(t, result)
-	for _, ch := range result.Channels {
-		assert.NotEqual(t, chID, ch.Id, "NULL workspace_id row should not match")
-	}
 }
 
 func TestListChannels_ReturnsMatchingChannels(t *testing.T) {
@@ -374,7 +349,8 @@ func TestGetChannel_NotFound(t *testing.T) {
 
 func TestGetChannel_WithNullColumns(t *testing.T) {
 	srv, pool := setupTestServer(t)
-	chID := insertTestChannel(t, pool, "test_null_cols", "private", "")
+	wsID := getTestWorkspaceID(t, pool)
+	chID := insertTestChannel(t, pool, "test_null_cols", "private", wsID)
 	t.Cleanup(func() { cleanTestData(t, pool, chID) })
 
 	ch, err := srv.GetChannel(context.Background(), &pb.GetChannelRequest{ChannelId: chID})
@@ -382,7 +358,7 @@ func TestGetChannel_WithNullColumns(t *testing.T) {
 	require.NoError(t, err, "GetChannel must not crash on NULL columns")
 	assert.Equal(t, chID, ch.Id)
 	assert.Equal(t, "private", ch.ChannelType)
-	assert.Equal(t, "", ch.WorkspaceId, "NULL should scan as empty string")
+	assert.Equal(t, wsID, ch.WorkspaceId)
 	assert.Equal(t, "", ch.NgacOaId, "NULL should scan as empty string")
 	assert.Equal(t, "", ch.NgacUaId, "NULL should scan as empty string")
 	assert.Equal(t, "", ch.CreatedBy, "NULL should scan as empty string")
@@ -524,10 +500,10 @@ func (w sameWorkspaceWriter) IsAssigned(context.Context, *policypb.IsAssignedReq
 	return &policypb.BoolResponse{Value: true}, nil
 }
 
-// A DM with no workspace is in no workspace: it is not found, whoever asks.
-func TestGetChannel_ADMWithNoWorkspaceIsNotFound(t *testing.T) {
+// A DM belongs to one workspace: from any other it is not found.
+func TestGetChannel_ADMOfAnotherWorkspaceIsNotFound(t *testing.T) {
 	srv, pool := setupTestServer(t)
-	chID := insertTestChannel(t, pool, "test_dm_no_ws", "dm", "")
+	chID := insertTestChannel(t, pool, "test_dm_other_ws", "dm", getTestWorkspaceID(t, pool))
 	t.Cleanup(func() { cleanTestData(t, pool, chID) })
 
 	_, err := srv.GetChannel(asCallerIn("user-1", "ngac-user-1", "any-workspace"), &pb.GetChannelRequest{ChannelId: chID})
@@ -681,7 +657,7 @@ func TestChannelReads_DeniedWhenPolicyUnavailable(t *testing.T) {
 // participant.
 func TestAddMember_RejectedOnDirectMessage(t *testing.T) {
 	srv, pool := setupTestServer(t) // policy ALLOWs; the DM guard must still bite
-	dmID := insertTestChannel(t, pool, "dmguard", "dm", "")
+	dmID := insertTestChannel(t, pool, "dmguard", "dm", getTestWorkspaceID(t, pool))
 	t.Cleanup(func() { cleanTestData(t, pool, dmID) })
 
 	_, err := srv.AddChannelMember(asCaller("", "ngac-user-1"), &pb.AddChannelMemberRequest{
