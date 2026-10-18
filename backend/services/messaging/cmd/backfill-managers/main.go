@@ -1,9 +1,16 @@
 // Command backfill-managers gives every existing group an owner and a Managers
 // UA: the creator stays owner while still assigned to the group's Members UA,
 // otherwise the earliest current member takes over; the owner is put in the
-// Managers UA, created beside Members when missing. Graph writes go through the
-// policy writer. Failed groups are listed and make the command exit non-zero;
-// rerunning is safe.
+// Managers UA, created beside Members when missing. Every run writes the UA's
+// PC edge, the managers' invite grant and the members' grant (from the group's
+// "Ai được thêm người" rule) again, so a run that failed part-way is finished by
+// the next. Graph writes go through the policy writer. Failed groups are listed
+// and make the command exit non-zero; rerunning is safe.
+//
+// It is a one-off deploy step (docs/deployment.md). It dials the policy as the
+// service identity "backfill-managers", with no user: the policy admits that
+// identity on the writer's FindNodeByName, CreateNode, CreateAssignment and
+// CreateAssociation only.
 //
 // Usage:
 //
@@ -13,7 +20,7 @@
 // Environment:
 //
 //	DATABASE_URL   — Postgres DSN (default: dev)
-//	POLICY_SERVICE_ADDR — policy gRPC address (default: localhost:50055)
+//	POLICY_SERVICE_ADDR — policy (writer) gRPC address (default: localhost:50051)
 //	INTERNAL_IDENTITY_SECRET — for gRPC auth
 package main
 

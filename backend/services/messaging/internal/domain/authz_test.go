@@ -50,6 +50,9 @@ type scriptedPolicyRead struct {
 	getNodeErr  error                      // GetNode fails
 	edges       map[[2]string]bool         // child, parent: assignments IsAssigned reports (besides a Members UA under its PC)
 	ancErr      error                      // GetAncestors fails
+	parentsErr  error                      // GetParents fails
+	assignedAsk [][2]string                // every IsAssigned asked: child, parent
+	parentsAsk  []string                   // every GetParents asked
 }
 
 // addMember scripts a user node who belongs to the workspace: it is a U node, and
@@ -135,8 +138,29 @@ func (p *scriptedPolicyRead) BatchCheckAccess(_ context.Context, req *policypb.B
 func (p *scriptedPolicyRead) IsAssigned(_ context.Context, req *policypb.IsAssignedRequest, _ ...grpc.CallOption) (*policypb.BoolResponse, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	p.assignedAsk = append(p.assignedAsk, [2]string{req.ChildId, req.ParentId})
 	return &policypb.BoolResponse{Value: p.edges[[2]string{req.ChildId, req.ParentId}] ||
 		strings.HasPrefix(req.ChildId, "ua-") && strings.HasPrefix(req.ParentId, "pc-")}, nil
+}
+
+// GetParents answers a node's direct parents from the scripted edges.
+func (p *scriptedPolicyRead) GetParents(_ context.Context, req *policypb.GetParentsRequest, _ ...grpc.CallOption) (*policypb.NodeList, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.parentsAsk = append(p.parentsAsk, req.NodeId)
+	if p.parentsErr != nil {
+		return nil, p.parentsErr
+	}
+	if p.err != nil {
+		return nil, p.err
+	}
+	out := &policypb.NodeList{}
+	for e, ok := range p.edges {
+		if ok && e[0] == req.NodeId {
+			out.Nodes = append(out.Nodes, &policypb.NGACNode{Id: e[1], Name: e[1], NodeType: ngac.TypeUA})
+		}
+	}
+	return out, nil
 }
 
 func (p *scriptedPolicyRead) GetChildren(_ context.Context, req *policypb.GetChildrenRequest, _ ...grpc.CallOption) (*policypb.NodeList, error) {
@@ -185,6 +209,11 @@ type recordingPolicyWrite struct {
 	assigned [][2]string // child, parent of every CreateAssignment
 	removed  [][2]string // child, parent of every RemoveAssignment
 	deleted  []string    // every DeleteNode
+	// grants is the graph's associations, keyed by UA and OA: every
+	// CreateAssociation writes one, and a test may seed one. GetAssociations
+	// answers from it.
+	grants      map[[2]string][]string
+	grantWrites [][2]string // UA, OA of every CreateAssociation
 }
 
 func (w *recordingPolicyWrite) CreateNode(ctx context.Context, req *policypb.CreateNodeRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
@@ -210,11 +239,40 @@ func (w *recordingPolicyWrite) CreateAssignment(_ context.Context, req *policypb
 	return &policypb.Assignment{Id: "assign"}, nil
 }
 
-func (w *recordingPolicyWrite) CreateAssociation(_ context.Context, _ *policypb.CreateAssociationRequest, _ ...grpc.CallOption) (*policypb.Association, error) {
+func (w *recordingPolicyWrite) CreateAssociation(_ context.Context, req *policypb.CreateAssociationRequest, _ ...grpc.CallOption) (*policypb.Association, error) {
 	w.mu.Lock()
+	defer w.mu.Unlock()
 	w.writes++
-	w.mu.Unlock()
+	if w.grants == nil {
+		w.grants = map[[2]string][]string{}
+	}
+	key := [2]string{req.UaId, req.OaId}
+	w.grants[key] = append([]string(nil), req.Operations...)
+	w.grantWrites = append(w.grantWrites, key)
 	return &policypb.Association{Id: "assoc"}, nil
+}
+
+// GetAssociations lists what the UA is granted in this writer's graph.
+func (w *recordingPolicyWrite) GetAssociations(_ context.Context, req *policypb.GetAssociationsRequest, _ ...grpc.CallOption) (*policypb.AssociationList, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	out := &policypb.AssociationList{}
+	for k, ops := range w.grants {
+		if k[0] == req.UaId {
+			out.Associations = append(out.Associations, &policypb.Association{UaId: k[0], OaId: k[1], Operations: append([]string(nil), ops...)})
+		}
+	}
+	return out, nil
+}
+
+// seedGrant puts an association into the writer's graph without counting a write.
+func (w *recordingPolicyWrite) seedGrant(ua, oa string, ops []string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.grants == nil {
+		w.grants = map[[2]string][]string{}
+	}
+	w.grants[[2]string{ua, oa}] = append([]string(nil), ops...)
 }
 
 func (w *recordingPolicyWrite) RemoveAssignment(_ context.Context, req *policypb.RemoveAssignmentRequest, _ ...grpc.CallOption) (*policypb.Empty, error) {

@@ -3,6 +3,7 @@ import { useNavigate, useSearch } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
 import { ArrowLeft, Check, CircleAlert, ClipboardCheck, FileText, History, MoreHorizontal, Plus, SearchX, Settings2, Undo2 } from 'lucide-react'
 import { useRegisterCreateAction } from '../../hooks/useModuleCreateAction'
+import { useModuleSettings } from '../../hooks/useModuleSettings'
 import type { ApprovalRequest, ApprovalTemplate } from '../../api/approval'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import {
@@ -127,9 +128,19 @@ export function ApprovalScreen() {
   useRegisterCreateAction('approval', createAction)
 
   // ---- the list of the open tab ----
+  // Below 1024px Chờ tôi duyệt follows Cài đặt Phê duyệt → Sắp xếp (newest first by default); a wide screen keeps
+  // the server's order, oldest first. The other tabs load page by page, newest first, so they keep that order.
+  const orderPending = useBottomBarLayout()
+  const { sort: pendingSort } = useModuleSettings('approval', orderPending ? wsId : '')
+  const pendingRows = useMemo(() => {
+    const list = pending.data?.rows
+    if (!list || !orderPending) return list
+    const dir = pendingSort === 'oldest' ? 1 : -1
+    return [...list].sort((a, b) => dir * (Date.parse(a.request.created_at) - Date.parse(b.request.created_at)))
+  }, [pending.data, orderPending, pendingSort])
   const view = (() => {
     switch (tab) {
-      case 'pending': return { q: pending, rows: pending.data?.rows }
+      case 'pending': return { q: pending, rows: pendingRows }
       case 'mine': return { q: mine, rows: mine.data }
       case 'history': return { q: history, rows: history.data }
       case 'department': return { q: department, rows: department.data }

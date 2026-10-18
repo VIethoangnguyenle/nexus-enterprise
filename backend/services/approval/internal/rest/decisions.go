@@ -176,6 +176,10 @@ func (h *Handler) publishEvent(ctx context.Context, claims *httputil.Claims, req
 		evt.CreatedBy = aud.Request.CreatedBy
 		evt.ScopeOaID = aud.Request.ScopeOAID
 		evt.AssigneeNodeIDs = aud.AssigneeNodeIDs
+		if action == "approved" {
+			advanced := aud.StepAdvancedBy(claims.NGACNodeID)
+			evt.StepAdvanced = &advanced
+		}
 
 		// Each person's own switch decides their notification. Settings that
 		// cannot be read leave everyone notified, as before the switches existed.

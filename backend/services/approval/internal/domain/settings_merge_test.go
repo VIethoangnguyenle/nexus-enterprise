@@ -22,8 +22,6 @@ func (s *settingsMemStore) WorkspaceType(context.Context, string) (string, error
 	return s.kind, nil
 }
 
-func (s *settingsMemStore) EnsureSettingsTable(context.Context) error { return nil }
-
 func (s *settingsMemStore) GetApprovalUserSettings(_ context.Context, userID string) (*SettingsRow, error) {
 	row, ok := s.rows[userID]
 	if !ok {

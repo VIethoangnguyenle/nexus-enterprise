@@ -3,7 +3,13 @@ package store
 import (
 	"context"
 	"fmt"
+
+	"ngac-platform/pkg/httputil"
 )
+
+// errChannelGone is a write to a channel row that no longer exists (a second
+// disband, a transfer just after one): not found, which the caller may hear.
+var errChannelGone = fmt.Errorf("channel %w", httputil.ErrNotFound)
 
 // UpdateChannelSettings updates the group management policies of a channel.
 // Only the provided non-empty fields are changed.
@@ -19,7 +25,7 @@ func (s *Store) UpdateChannelSettings(ctx context.Context, channelID, postPolicy
 		return fmt.Errorf("update channel settings: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("channel not found")
+		return errChannelGone
 	}
 	return nil
 }
@@ -32,7 +38,7 @@ func (s *Store) TransferChannelOwnership(ctx context.Context, channelID, newOwne
 		return fmt.Errorf("transfer channel ownership: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("channel not found")
+		return errChannelGone
 	}
 	return nil
 }
@@ -44,7 +50,7 @@ func (s *Store) DeleteChannel(ctx context.Context, channelID string) error {
 		return fmt.Errorf("delete channel: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("channel not found")
+		return errChannelGone
 	}
 	return nil
 }

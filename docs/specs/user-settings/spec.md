@@ -19,10 +19,22 @@ Built (2026-10-19, plan `plans/261018-1742-mobile-ux-overhaul`, phases 04 and 05
 - Drive (`drive_user_settings`, `GET`/`PUT /api/drive/settings?workspace_id=`), asset (`asset_user_settings`,
   `GET`/`PUT /api/workspaces/:id/asset-settings`) and approval (in the organization's tenant schema, `GET`/`PUT
   /api/approval/settings`, refused in a personal workspace); approval's pending and result notices read its switches.
-  Drive's `notify_shared` and the asset switches are stored and shown; neither service sends a notification yet, so
-  nothing reads them.
-- Auth: language on `PATCH /api/me/profile`; the person's sessions at `GET /api/auth/sessions` and
-  `DELETE /api/auth/sessions/:id`.
+  Approval's table `approval_user_settings` lives in each tenant schema and is made by tenant provisioning
+  (`store.EnsureSchema` and `ProvisionSchema` create it with the schema; `EnsureTenantTables`, run when the approval
+  service starts, adds it to any active schema made before it existed), never by a settings request.
+  Drive's `notify_shared` and the asset switches are stored but their rows are hidden: neither service sends a
+  notification yet, so nothing reads them.
+- Screens read the module options through `useModuleSettings` (service defaults while loading): Chat's
+  `enter_to_send`, `open_at` and `sort`; Drive's `view`, `sort`, `folders_first` and `cellular_previews`; Tài sản's
+  `default_tab`; Phê duyệt's `sort` (Chờ tôi duyệt only); Lịch's `week_start`, `visible_calendars`, `default_view`
+  and `default_duration`. Phone-only options (`enter_to_send`, Phê duyệt's sort, Lịch's default duration) apply below
+  1024px and Lịch's opening view below 768px; wider screens behave as before whatever the value, and the settings pages
+  hide those rows there. Rows hidden until their backend exists: Chat "Xem trước liên kết" (no link previews),
+  Tài sản "Sắp xếp" (the list route now takes `sort`, the screen does not send it yet), Phê duyệt "Tab mở đầu" (stored
+  values pending/approved/rejected are not the screen's tabs), and the three notification switches above.
+- Auth: language on `PATCH /api/me/profile`; saving only the language is a preference and does not complete the
+  profile (`profile_completed_at` is set only when a name, title or location is saved); the person's sessions at
+  `GET /api/auth/sessions` and `DELETE /api/auth/sessions/:id`.
 - Screens: Tôi, the module settings pages and Cài đặt workspace at `/settings/<section>` (below), opened from Tôi, from
   each module's ⋯, from the ⚙ of the workspace block in Thêm, from the ⋯ of the open workspace in the workspace picker and
   from the search action Cài đặt <phân hệ>. The phone's bottom bar is hidden on `/settings/*` and `/admin/*`; Quản trị

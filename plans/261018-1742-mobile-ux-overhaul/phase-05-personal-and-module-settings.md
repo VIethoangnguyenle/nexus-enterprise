@@ -1,7 +1,7 @@
 ---
 phase: 5
 title: "Tôi, workspace and module settings"
-status: pending
+status: completed
 priority: P1
 effort: "3.5d"
 dependencies: [2, 4, 8]

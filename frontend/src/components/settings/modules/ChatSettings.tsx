@@ -2,20 +2,19 @@ import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import type { ChatSettings as ChatOptions } from '../../../api/settings'
 import { useActiveWorkspace } from '../../../hooks/useActiveWorkspace'
+import { useBottomBarLayout } from '../../../hooks/usePhone'
 import { usePushPreferences } from '../../../hooks/usePushPreferences'
 import { useServerSettings } from '../../../hooks/useServerSettings'
 import { useWorkspaceLocks } from '../../../hooks/useWorkspaces'
 import { useWorkspaceType } from '../../../hooks/useWorkspaceType'
 import { levelOptions } from '../../../lib/notification-level-copy'
+import { CHAT_DEFAULTS } from '../../../lib/settings-defaults'
 import type { PushPreferences } from '../../../lib/push'
 import { ChoicePage, SettingsGroup, SettingsPage, SettingsRow, SettingsSwitch, choiceLabel, type Choice } from '../SettingsGroup'
 import { useSettingsNav } from '../settings-nav'
 import { GroupCreationRow } from '../GroupCreationRow'
 
-/** What a person who never opened the page has (messaging's column defaults). */
-export const CHAT_DEFAULTS: ChatOptions = {
-  enter_to_send: false, link_preview: true, open_at: 'all', sort: 'activity', double_tap: '👍', default_level: null,
-}
+export { CHAT_DEFAULTS }
 
 type LevelChoice = 'all' | 'main' | 'off'
 
@@ -51,12 +50,17 @@ const KINDS: { kind: Kind; label: string; hint?: string }[] = [
  * Chat's ⋯. Notifications are the account's push switches (messaging) plus the level a new group starts at; the
  * rest are this person's options in this workspace. Every switch and choice saves at once and is put back with a
  * toast when the server refuses.
+ *
+ * Enter để gửi, Mở Chat ở and Sắp xếp change the composer and the chip list below 1024px only (a wide screen keeps
+ * Enter sends and its own list), so a wide screen does not offer them. Xem trước liên kết is not offered: messages
+ * have no link previews yet, so the switch would change nothing.
  */
 export function ChatSettings() {
   const { back } = useSettingsNav()
   const navigate = useNavigate()
   const { workspaceId } = useActiveWorkspace()
   const { isPersonal } = useWorkspaceType()
+  const compact = useBottomBarLayout()
   const { settings, save } = useServerSettings('chat', workspaceId, CHAT_DEFAULTS)
   const push = usePushPreferences()
   const locks = useWorkspaceLocks(isPersonal ? '' : workspaceId)
@@ -115,17 +119,14 @@ export function ChatSettings() {
       </SettingsGroup>
 
       <SettingsGroup title="Soạn và đọc">
-        <SettingsSwitch
-          label="Enter để gửi"
-          hint="Tắt: Enter xuống dòng, chạm nút Gửi để gửi"
-          checked={!!settings.enter_to_send}
-          onChange={(enter_to_send) => void save({ enter_to_send })}
-        />
-        <SettingsSwitch
-          label="Xem trước liên kết"
-          checked={settings.link_preview !== false}
-          onChange={(link_preview) => void save({ link_preview })}
-        />
+        {compact && (
+          <SettingsSwitch
+            label="Enter để gửi"
+            hint="Tắt: Enter xuống dòng, chạm nút Gửi để gửi"
+            checked={!!settings.enter_to_send}
+            onChange={(enter_to_send) => void save({ enter_to_send })}
+          />
+        )}
         <SettingsRow
           label="Cảm xúc khi chạm đúp"
           value={settings.double_tap ? settings.double_tap : 'Tắt'}
@@ -134,13 +135,17 @@ export function ChatSettings() {
       </SettingsGroup>
 
       <SettingsGroup title="Danh sách">
-        <SettingsRow
-          label="Mở Chat ở"
-          hint="Tất cả: theo hoạt động mới nhất · Mục: theo mục của bạn"
-          value={choiceLabel(OPEN_AT, settings.open_at)}
-          onPress={() => setChoosing('openAt')}
-        />
-        <SettingsRow label="Sắp xếp" value={choiceLabel(SORT, settings.sort)} onPress={() => setChoosing('sort')} />
+        {compact && (
+          <>
+            <SettingsRow
+              label="Mở Chat ở"
+              hint="Tất cả: theo hoạt động mới nhất · Mục: theo mục của bạn"
+              value={choiceLabel(OPEN_AT, settings.open_at)}
+              onPress={() => setChoosing('openAt')}
+            />
+            <SettingsRow label="Sắp xếp" value={choiceLabel(SORT, settings.sort)} onPress={() => setChoosing('sort')} />
+          </>
+        )}
         <SettingsRow
           label="Quản lý mục"
           hint="Đổi tên, sắp thứ tự, xoá mục"

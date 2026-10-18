@@ -25,6 +25,23 @@ workspace is a member there and has no group owner or managers.
 - **WHEN** a member sends a message with `@Tất cả` in a group of 7
 - **THEN** the 6 other members are notified as mentioned
 
+### Requirement: The marker survives the HTML filter
+In formatted (HTML) content the mention is a span `<span data-mention="@Tất cả">@Tất cả</span>`. The server's HTML
+allowlist (`domain/richtext.go`) SHALL keep `data-mention` when it is a user ID (`[\w.:-]{1,128}`) or exactly the
+`MentionAll` string (the pattern is built from that constant with `regexp.QuoteMeta`), and drop it otherwise; every
+other attribute on the span (`onclick`, `style`, …) is dropped as before. The stored HTML therefore keeps the marker, an
+edit reads it back, and the message stays in everyone's "Được nhắc". Messages stored before this rule lost the marker
+and stay as they are.
+
+#### Scenario: Marker kept, companions dropped
+- **WHEN** a message's HTML carries `<span data-mention="@Tất cả" onclick="…">@Tất cả</span>`
+- **THEN** the stored HTML keeps `data-mention="@Tất cả"` and has no `onclick`; a `data-mention` that is the marker
+  with anything added (`@Tất cả x`) is dropped
+
+#### Scenario: Edit keeps the mention
+- **WHEN** a member sends a message mentioning everyone and edits it
+- **THEN** the stored HTML and the stored mentions still carry `@Tất cả`
+
 ### Requirement: The group decides who may mention everyone
 When the group's setting "Ai được nhắc @Tất cả" is "Chỉ chủ nhóm và quản trị nhóm" (see `chat-group-management`), the
 messaging service SHALL refuse `@Tất cả` from a non-manager on **send, reply and edit**, so an edit cannot add it to a

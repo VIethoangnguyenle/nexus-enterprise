@@ -52,7 +52,8 @@ func DefaultAssetSettings() *AssetSettings {
 }
 
 var validAssetTabs = []string{"overview", "inventory", "requests"}
-var validAssetSorts = []string{"name", "created", "updated", "status"}
+var ValidAssetSorts = []string{"name", "created", "updated", "status"}
+var validAssetSorts = ValidAssetSorts
 
 // ValidateAssetSettings checks that every field is one of the allowed values.
 func ValidateAssetSettings(s *AssetSettings) error {

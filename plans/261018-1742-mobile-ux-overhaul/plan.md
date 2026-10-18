@@ -1,7 +1,7 @@
 ---
 title: "Mobile UX: thanh đáy kiểu Lark, cài đặt ba cấp, tìm và vuốt"
 description: "Phone shell with a Lark-content / Google-Chat-form bottom bar, one search for every task, settings in three scopes (Tôi, module, conversation), group management rights, swipe gestures (app-wide and in Chat), and a phone-first Tài liệu."
-status: pending
+status: in-progress
 priority: P1
 effort: "~26d"
 branch: feat/mobile-ux-overhaul
@@ -65,19 +65,19 @@ route.
 
 | # | Phase | Effort | Depends on | Status |
 |---|-------|--------|------------|--------|
-| 01 | [Design and specs](./phase-01-design-and-specs.md) | 2d | — | Pending |
-| 02 | [Bottom bar and shell](./phase-02-bottom-bar-shell.md) | 2.5d | 01, 04 | Pending |
-| 03 | [Module headers and one search entry](./phase-03-module-headers.md) | 1d | 02 | Pending |
-| 04 | [Settings backend](./phase-04-settings-backend.md) | 4d | 01 | Pending |
-| 05 | [Tôi, workspace and module settings](./phase-05-personal-and-module-settings.md) | 3.5d | 02, 04, 08 | Pending |
-| 06 | [Conversation settings](./phase-06-conversation-settings.md) | 1.5d | 02 | Pending |
-| 07 | [Group management](./phase-07-group-management-ngac.md) | 3.5d | 06 | Pending |
-| 08 | [Unified search](./phase-08-unified-search.md) | 2d | 03 | Pending |
-| 09 | [Gestures foundation](./phase-09-gestures-foundation.md) | 2d | 03 | Pending |
-| 10 | [Chat gestures](./phase-10-chat-gestures.md) | 1.5d | 09, 04 | Pending |
-| 11 | [Tài liệu on the phone](./phase-11-drive-mobile.md) | 2.5d | 08, 09, prerequisite | Pending |
+| 01 | [Design and specs](./phase-01-design-and-specs.md) | 2d | — | Done (12a8bec) |
+| 02 | [Bottom bar and shell](./phase-02-bottom-bar-shell.md) | 2.5d | 01, 04 | Done (built, awaiting device check) |
+| 03 | [Module headers and one search entry](./phase-03-module-headers.md) | 1d | 02 | Done (built, awaiting device check) |
+| 04 | [Settings backend](./phase-04-settings-backend.md) | 4d | 01 | Done (built, awaiting device check) |
+| 05 | [Tôi, workspace and module settings](./phase-05-personal-and-module-settings.md) | 3.5d | 02, 04, 08 | Done (built, awaiting device check) |
+| 06 | [Conversation settings](./phase-06-conversation-settings.md) | 1.5d | 02 | Done (built, awaiting device check) |
+| 07 | [Group management](./phase-07-group-management-ngac.md) | 3.5d | 06 | Done (built, awaiting device check) |
+| 08 | [Unified search](./phase-08-unified-search.md) | 2d | 03 | Done (built, awaiting device check) |
+| 09 | [Gestures foundation](./phase-09-gestures-foundation.md) | 2d | 03 | Done (built, awaiting device check) |
+| 10 | [Chat gestures](./phase-10-chat-gestures.md) | 1.5d | 09, 04 | Done (built, awaiting device check) |
+| 11 | [Tài liệu on the phone](./phase-11-drive-mobile.md) | 2.5d | 08, 09, prerequisite | Done (built, awaiting device check) |
 | 12 | [Verify on a real iPhone](./phase-12-verify-iphone.md) | 0.5d | all | Pending |
-| 13 | [Danh bạ on the phone](./phase-13-contacts-mobile.md) | 2d | 08, 09 | Pending |
+| 13 | [Danh bạ on the phone](./phase-13-contacts-mobile.md) | 2d | 08, 09 | Done (built, awaiting device check) |
 
 Order: 01 → 04 → 02 → 03 → {08 → 05}, {06 → 07}, {09 → 10, 09 + 08 → 11, 09 + 08 → 13} → 12. Phases that edit `PhoneSearchBar`,
 `MobileNav`/`ModuleBar` or `nav-destinations.ts` (02, 03, 05, 08, 09) run one after another, never in parallel.
@@ -136,3 +136,14 @@ Done after applying: removed every mention of `owner_id`, a prohibition-based lo
 manager test, `replies_open`, `/api/workspaces/:id/approvals|assets|drive/...` routes, new copy route,
 `usePreferences(scope)`, read-receipt lock, `0NN_` migration placeholders, Chat-route redirects and keyboard-drag
 dismissal; dependencies table matches phase frontmatter. Zero unresolved contradictions.
+
+## Deferred to a later phase (2026-10-19, Zane: ship the bug fixes first)
+- Thông báo: Xoá and Chưa đọc (backend routes + row swipe).
+- Tài sản: row swipe (Giao/Thu hồi when allowed, Thêm); wire the "Sắp xếp" row to the list's new `sort` param.
+- Approval `default_tab` accepting the screen's tabs (pending|mine|history|department); link previews; drive and asset
+  notification producers for the hidden switches.
+- Trashed group drives after disband still count against quota (operator purge only); requester told "approved" on a
+  partial approval; thread edge-back peek is blank; image viewer swipe is not 1:1.
+- Danh bạ: search opens its own screen, "Mời vào cuộc họp" does not add the guest, "Mời thành viên" opens Cài đặt
+  workspace.
+- One-off after deploy: run the group managers backfill (docs/deployment.md).

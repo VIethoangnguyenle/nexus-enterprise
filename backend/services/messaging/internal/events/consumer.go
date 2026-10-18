@@ -106,7 +106,10 @@ type ApprovalEvent struct {
 	NotifyResult *bool `json:"notify_result,omitempty"`
 	// PendingNotifyOff lists the approvers who turned "đề nghị chờ bạn" off.
 	PendingNotifyOff []string `json:"pending_notify_off,omitempty"`
-	Timestamp        int64    `json:"timestamp"`
+	// StepAdvanced says, on an approval, whether it moved the request on to
+	// its next step; absent (an older producer) means it did.
+	StepAdvanced *bool `json:"step_advanced,omitempty"`
+	Timestamp    int64 `json:"timestamp"`
 }
 
 // Consumer listens to Kafka topics and creates notifications from asset and approval events.
@@ -343,9 +346,14 @@ func (c *Consumer) handleApprovalEvent(ctx context.Context, data []byte) {
 // notifyPendingApprovers tells the approvers a request now waits on — after it
 // is created, or after an approval moved it to the next step — that it is
 // their turn. The actor is not told of their own doing, and an approver who
-// turned "đề nghị chờ bạn" off is not told at all.
+// turned "đề nghị chờ bạn" off is not told at all. An approval that left the
+// step where it was (a co-approver of a step that needs everyone) tells
+// nobody: the approvers still pending were told when the step began.
 func (c *Consumer) notifyPendingApprovers(ctx context.Context, evt ApprovalEvent) {
 	if evt.Action != "created" && evt.Action != "approved" {
+		return
+	}
+	if evt.Action == "approved" && evt.StepAdvanced != nil && !*evt.StepAdvanced {
 		return
 	}
 	off := make(map[string]bool, len(evt.PendingNotifyOff))

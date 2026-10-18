@@ -303,3 +303,62 @@ func TestRejectOverREST_RefusesAnEmptyReason(t *testing.T) {
 	st, _ := f.requestState(t)
 	assert.Equal(t, "pending", st)
 }
+
+func TestListAssetsOverREST_SortWithUnreadableTypeSkipped(t *testing.T) {
+	f := newFlowFixture(t)
+	ctx := context.Background()
+
+	// Create an unreadable second type and asset
+	var unreadableOA string
+	err := f.pool.QueryRow(ctx, "SELECT id FROM ngac_nodes WHERE node_type = 'OA' AND id != $1 ORDER BY id LIMIT 1", f.oaID).Scan(&unreadableOA)
+	if err != nil {
+		t.Skipf("need a second OA node: %v", err)
+	}
+	unreadableType := "flow-type-unreadable-" + uuid.New().String()[:8]
+	unreadableAsset := "flow-asset-unreadable-" + uuid.New().String()[:8]
+	lifecycle, err := json.Marshal(domain.DefaultLifecycle())
+	require.NoError(t, err)
+
+	_, err = f.pool.Exec(ctx, `INSERT INTO asset_types (id, name, category, workspace_id, ngac_oa_id, lifecycle)
+	      VALUES ($1, $1, 'hardware', $2, $3, $4)`, unreadableType, f.wsID, unreadableOA, lifecycle)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		f.pool.Exec(context.Background(), `DELETE FROM assets WHERE id = $1`, unreadableAsset)
+		f.pool.Exec(context.Background(), `DELETE FROM asset_types WHERE id = $1`, unreadableType)
+	})
+
+	// Make unreadable asset sort BEFORE readable asset by name: "0-hidden" < "z-readable"
+	_, err = f.pool.Exec(ctx, `INSERT INTO assets (id, name, type_id, workspace_id, state, created_by)
+	      VALUES ($1, '0-hidden', $2, $3, 'available', $4)`, unreadableAsset, unreadableType, f.wsID, f.approver)
+	require.NoError(t, err)
+	_, err = f.pool.Exec(ctx, `UPDATE assets SET name = 'z-readable' WHERE id = $1`, f.assetID)
+	require.NoError(t, err)
+
+	// Grant read ONLY on f.oaID, NOT on unreadableOA
+	f.policy.grants[[3]string{nodeOf(f.requester), f.oaID, ngac.OpRead}] = true
+
+	// Call GET /api/workspaces/:id/assets?sort=name via echo
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/?sort=name", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(f.wsID)
+	httputil.SetClaims(c, &httputil.Claims{UserID: f.requester, NGACNodeID: nodeOf(f.requester)})
+
+	require.NoError(t, f.h.ListAssets(c))
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var resp struct {
+		Assets []struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		} `json:"assets"`
+		Total int `json:"total"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, 1, resp.Total, "hidden asset must not be counted in total")
+	require.Len(t, resp.Assets, 1)
+	assert.Equal(t, f.assetID, resp.Assets[0].ID)
+	assert.Equal(t, "z-readable", resp.Assets[0].Name)
+}

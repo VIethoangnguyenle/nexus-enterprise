@@ -1,7 +1,7 @@
 ---
 phase: 9
 title: "Gestures foundation"
-status: pending
+status: completed
 priority: P2
 effort: "2d"
 dependencies: [3]

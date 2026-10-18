@@ -361,6 +361,34 @@ func TestApprove_EventNamesRequesterAndNextApprover(t *testing.T) {
 	}
 }
 
+// The approved event says whether the approval moved the request to its next
+// step, so the people a step waits on are told once, when it begins.
+func TestApprove_EventSaysWhetherTheStepAdvanced(t *testing.T) {
+	l := newLifecycle(t)
+	id := l.create(t)
+	if err := l.call(t, l.h.ApproveAction, "n-ap1", "tenant-a", body(map[string]any{"request_id": id})); err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+	if evt := l.last(t); evt.StepAdvanced == nil || !*evt.StepAdvanced {
+		t.Errorf("step_advanced = %v after the step's only approval, want true", evt.StepAdvanced)
+	}
+
+	// A step that needs two approvals stays where it is after the first.
+	l = newLifecycle(t)
+	l.store.templates[0].Steps[0].RequiredCount = 2
+	id = l.create(t)
+	if err := l.call(t, l.h.ApproveAction, "n-ap1", "tenant-a", body(map[string]any{"request_id": id})); err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+	evt := l.last(t)
+	if evt.StepAdvanced == nil || *evt.StepAdvanced {
+		t.Errorf("step_advanced = %v while the step still waits, want false", evt.StepAdvanced)
+	}
+	if evt.Status != "pending" {
+		t.Errorf("status = %q, want pending", evt.Status)
+	}
+}
+
 func TestReject_EventNamesRequesterAndNoApprover(t *testing.T) {
 	l := newLifecycle(t)
 	id := l.create(t)

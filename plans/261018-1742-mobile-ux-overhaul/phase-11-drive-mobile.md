@@ -1,7 +1,7 @@
 ---
 phase: 11
 title: "Tài liệu on the phone"
-status: pending
+status: completed
 priority: P2
 effort: "2.5d"
 dependencies: [8, 9]

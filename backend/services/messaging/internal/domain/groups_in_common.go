@@ -23,6 +23,11 @@ import (
 // assignment under the channel's members UA, as ListMembers reads it), not the
 // member cache. A policy answer that cannot be had fails the whole request
 // rather than shortening the list.
+//
+// The policy is asked a fixed number of questions whatever the number of
+// groups: one batch read check for the caller over every candidate, and one
+// direct-parents lookup per person, intersected with the groups' members UAs
+// in memory.
 func (s *Service) GroupsInCommon(ctx context.Context, workspaceID, callerNodeID, otherNodeID string) ([]*pb.Channel, error) {
 	if callerNodeID == "" {
 		return nil, fmt.Errorf("%w: no caller", ErrAccessDenied)
@@ -65,34 +70,35 @@ func (s *Service) GroupsInCommon(ctx context.Context, workspaceID, callerNodeID,
 		return nil, fmt.Errorf("batch access check: %w", err)
 	}
 
-	assigned := func(node, ua string) (bool, error) {
-		res, err := s.policyRead.IsAssigned(ctx, &policypb.IsAssignedRequest{ChildId: node, ParentId: ua})
-		if err != nil {
-			return false, fmt.Errorf("check channel membership: %w", err)
-		}
-		return res.GetValue(), nil
+	mine, err := s.directParents(ctx, callerNodeID)
+	if err != nil {
+		return nil, err
+	}
+	theirs, err := s.directParents(ctx, otherNodeID)
+	if err != nil {
+		return nil, err
 	}
 
 	out := make([]*pb.Channel, 0, len(candidates))
 	for _, ch := range candidates {
-		if !batch.Has(ch.NGACOaID, ngac.OpRead) {
-			continue
-		}
-		mine, err := assigned(callerNodeID, ch.NGACUaID)
-		if err != nil {
-			return nil, err
-		}
-		if !mine {
-			continue
-		}
-		theirs, err := assigned(otherNodeID, ch.NGACUaID)
-		if err != nil {
-			return nil, err
-		}
-		if theirs {
+		if batch.Has(ch.NGACOaID, ngac.OpRead) && mine[ch.NGACUaID] && theirs[ch.NGACUaID] {
 			out = append(out, channelToProto(ch))
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name) })
+	return out, nil
+}
+
+// directParents is the set of nodes the user is directly assigned to: a
+// channel's members are the direct children of its members UA.
+func (s *Service) directParents(ctx context.Context, nodeID string) (map[string]bool, error) {
+	res, err := s.policyRead.GetParents(ctx, &policypb.GetParentsRequest{NodeId: nodeID})
+	if err != nil {
+		return nil, fmt.Errorf("check channel membership: %w", err)
+	}
+	out := make(map[string]bool, len(res.GetNodes()))
+	for _, n := range res.GetNodes() {
+		out[n.GetId()] = true
+	}
 	return out, nil
 }

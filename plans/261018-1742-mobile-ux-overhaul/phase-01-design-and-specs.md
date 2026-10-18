@@ -1,7 +1,7 @@
 ---
 phase: 1
 title: "Design and specs"
-status: pending
+status: completed
 priority: P1
 effort: "2d"
 dependencies: []
@@ -37,11 +37,11 @@ trò chuyện", "Quản lý nhóm", "Tìm cho mọi tác vụ", "Vuốt", and th
 5. Remove variant B from the mockup, add "duyệt 2026-10-19" to its header; `scripts/check-docs-drift.sh` passes.
 
 ## Success Criteria
-- [ ] DESIGN.md has no reference to the ☰ drawer as phone navigation, nor to convert-to-organization
-- [ ] Seven new specs exist and are indexed in `docs/specs/README.md`
-- [ ] `chat-group-management` spec lists every decision (top-level post, reply, invite, mention all on send/reply/edit, appoint/remove manager, transfer owner, disband) with allow + deny cases, says which are PDP decisions and which messaging enforces, and lists every existing `manage` check with who it is for
-- [ ] `chat-mention-all` spec defines @Tất cả as a new capability
-- [ ] Zane approves the DESIGN.md diff before phase 02 starts
+- [x] DESIGN.md has no reference to the ☰ drawer as phone navigation, nor to convert-to-organization
+- [x] Seven new specs exist and are indexed in `docs/specs/README.md`
+- [x] `chat-group-management` spec lists every decision (top-level post, reply, invite, mention all on send/reply/edit, appoint/remove manager, transfer owner, disband) with allow + deny cases, says which are PDP decisions and which messaging enforces, and lists every existing `manage` check with who it is for
+- [x] `chat-mention-all` spec defines @Tất cả as a new capability
+- [x] Zane approves the DESIGN.md diff before phase 02 starts
 
 ## Risk Assessment
 Design text drifts from the mockup → each DESIGN.md paragraph cites its mockup §; review compares side by side.

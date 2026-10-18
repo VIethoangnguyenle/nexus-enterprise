@@ -149,3 +149,66 @@ func TestPolicyAdmitsOnlyThePolicyCtlToolToInvalidateTheCache(t *testing.T) {
 		wantCode(t, "InvalidateCache from "+svc, err, codes.Unauthenticated)
 	}
 }
+
+// The one-off managers backfill dials as backfill-managers with no user. It may
+// look a group's Managers UA up on the writer and create it, its PC edge, its
+// grant and the owner's edge; nothing else, and no other service gets those.
+func TestPolicyAdmitsTheManagersBackfillOnlyOnWhatItWrites(t *testing.T) {
+	ctx := context.Background()
+
+	w, r := servePolicyAs(t, "backfill-managers")
+	_, err := w.FindNodeByName(ctx, &pb.FindNodeByNameRequest{})
+	wantCode(t, "writer FindNodeByName from backfill-managers", err, codes.Unimplemented)
+	_, err = w.CreateNode(ctx, &pb.CreateNodeRequest{})
+	wantCode(t, "CreateNode from backfill-managers", err, codes.Unimplemented)
+	_, err = w.CreateAssignment(ctx, &pb.CreateAssignmentRequest{})
+	wantCode(t, "CreateAssignment from backfill-managers", err, codes.Unimplemented)
+	_, err = w.CreateAssociation(ctx, &pb.CreateAssociationRequest{})
+	wantCode(t, "CreateAssociation from backfill-managers", err, codes.Unimplemented)
+
+	// Deny: everything else it could ask stays refused.
+	for name, call := range map[string]func() error{
+		"DeleteNode":       func() error { _, err := w.DeleteNode(ctx, &pb.DeleteNodeRequest{NodeId: "n"}); return err },
+		"RemoveAssignment": func() error { _, err := w.RemoveAssignment(ctx, &pb.RemoveAssignmentRequest{}); return err },
+		"RemoveAssociation": func() error {
+			_, err := w.RemoveAssociation(ctx, &pb.RemoveAssociationRequest{})
+			return err
+		},
+		"CreateProhibition": func() error {
+			_, err := w.CreateProhibition(ctx, &pb.CreateProhibitionRequest{})
+			return err
+		},
+		"InvalidateCache": func() error { _, err := w.InvalidateCache(ctx, &pb.InvalidateCacheRequest{}); return err },
+		"writer IsAssigned": func() error {
+			_, err := w.IsAssigned(ctx, &pb.IsAssignedRequest{})
+			return err
+		},
+		"writer GetChildren": func() error { _, err := w.GetChildren(ctx, &pb.GetChildrenRequest{}); return err },
+		"reader FindNodeByName": func() error {
+			_, err := r.FindNodeByName(ctx, &pb.FindNodeByNameRequest{})
+			return err
+		},
+		"CheckAccess": func() error { _, err := r.CheckAccess(ctx, &pb.CheckAccessRequest{}); return err },
+	} {
+		wantCode(t, name+" from backfill-managers", call(), codes.Unauthenticated)
+	}
+
+	// Deny: another unknown service gets none of the backfill's methods, and auth
+	// gains neither the writer's lookup nor the grant.
+	for _, svc := range []string{"backfill-other", "messaging"} {
+		w, _ := servePolicyAs(t, svc)
+		_, err := w.FindNodeByName(ctx, &pb.FindNodeByNameRequest{})
+		wantCode(t, "writer FindNodeByName from "+svc, err, codes.Unauthenticated)
+		_, err = w.CreateNode(ctx, &pb.CreateNodeRequest{})
+		wantCode(t, "CreateNode from "+svc, err, codes.Unauthenticated)
+		_, err = w.CreateAssignment(ctx, &pb.CreateAssignmentRequest{})
+		wantCode(t, "CreateAssignment from "+svc, err, codes.Unauthenticated)
+		_, err = w.CreateAssociation(ctx, &pb.CreateAssociationRequest{})
+		wantCode(t, "CreateAssociation from "+svc, err, codes.Unauthenticated)
+	}
+	wa, _ := servePolicyAs(t, "auth")
+	_, err = wa.FindNodeByName(ctx, &pb.FindNodeByNameRequest{})
+	wantCode(t, "writer FindNodeByName from auth", err, codes.Unauthenticated)
+	_, err = wa.CreateAssociation(ctx, &pb.CreateAssociationRequest{})
+	wantCode(t, "CreateAssociation from auth", err, codes.Unauthenticated)
+}

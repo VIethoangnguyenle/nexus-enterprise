@@ -110,6 +110,34 @@ func TestUpdateProfile_MarksTheProfileDoneOnce(t *testing.T) {
 	assert.True(t, first.Equal(second), "the first completion is kept")
 }
 
+// Choosing a language is not telling who you are: a save of the language alone
+// (onboarding's language picker, the settings page) leaves a new account still
+// owing its profile, and keeps an earlier completion as it was.
+func TestUpdateProfile_LanguageAloneDoesNotCompleteTheProfile(t *testing.T) {
+	f := newProfileFixture(t)
+	id := f.user(t, "lang", "")
+
+	require.NoError(t, f.st.UpdateProfile(f.ctx, id, store.ProfileChanges{Language: str("en")}))
+	u, err := f.st.GetUserByID(f.ctx, id)
+	require.NoError(t, err)
+	assert.False(t, u.ProfileCompleted, "a language alone completes nothing")
+	var lang string
+	require.NoError(t, f.pool.QueryRow(f.ctx, `SELECT COALESCE(language, '') FROM users WHERE id = $1`, id).Scan(&lang))
+	assert.Equal(t, "en", lang, "the language is still saved")
+
+	require.NoError(t, f.st.UpdateProfile(f.ctx, id, store.ProfileChanges{DisplayName: str("An"), Language: str("vi")}))
+	u, err = f.st.GetUserByID(f.ctx, id)
+	require.NoError(t, err)
+	assert.True(t, u.ProfileCompleted, "a profile field with it does")
+
+	var first, second time.Time
+	require.NoError(t, f.pool.QueryRow(f.ctx, `SELECT profile_completed_at FROM users WHERE id = $1`, id).Scan(&first))
+	time.Sleep(5 * time.Millisecond)
+	require.NoError(t, f.st.UpdateProfile(f.ctx, id, store.ProfileChanges{Language: str("en")}))
+	require.NoError(t, f.pool.QueryRow(f.ctx, `SELECT profile_completed_at FROM users WHERE id = $1`, id).Scan(&second))
+	assert.True(t, first.Equal(second), "a later language change keeps the completion")
+}
+
 func TestUpdateProfile_UnknownUserIsNotFound(t *testing.T) {
 	f := newProfileFixture(t)
 	err := f.st.UpdateProfile(f.ctx, "no-such-user", store.ProfileChanges{DisplayName: str("x")})

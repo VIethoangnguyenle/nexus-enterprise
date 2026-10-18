@@ -188,7 +188,8 @@ describe('Danh bạ on a phone: a level', () => {
     expect(within(az).getAllByRole('button').map((b) => b.textContent)).toEqual(['A', 'B', 'C', 'D', 'Đ', 'G', 'H', 'K'])
     await user.click(within(az).getByRole('button', { name: 'Nhảy tới Đ' }))
     expect(into).toHaveBeenCalled()
-    const target = into.mock.contexts.at(-1) as HTMLElement
+    const contexts = into.mock.contexts
+    const target = contexts[contexts.length - 1] as HTMLElement
     expect(target.getAttribute('data-az')).toBe('Đ')
     expect(target).toHaveTextContent(/Nguyễn Văn Đạt/)
   })

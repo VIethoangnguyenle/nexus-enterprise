@@ -6,6 +6,7 @@ import type { Arrival } from '../../hooks/useArrivals'
 import type { ChatNavigation } from '../../hooks/useChatNavigation'
 import { useChatChip } from '../../hooks/useChatChip'
 import { useChatOverlay } from '../../hooks/useChatOverlay'
+import { useModuleSettings } from '../../hooks/useModuleSettings'
 import { usePeople } from '../../hooks/usePeople'
 import { useShortcutScreen } from '../../hooks/useShortcutScreen'
 import { useMentionsUnreadCount } from '../../hooks/useShortcuts'
@@ -61,6 +62,7 @@ export function PhoneChatHome({ nav, workspaceId, fresh }: {
   const { overlay, openThreads, close } = useChatOverlay()
   const threadsWithNews = useUnreadThreads().data?.length ?? 0
   const mentionsUnread = useMentionsUnreadCount(workspaceId).data ?? 0
+  const { sort } = useModuleSettings('chat', workspaceId)
 
   return (
     <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-base">
@@ -98,7 +100,7 @@ export function PhoneChatHome({ nav, workspaceId, fresh }: {
         ) : tab === 'mentions' ? (
           <ChipMentions onAll={() => select('all')} />
         ) : (
-          <PhoneHomeFeed key={tab} scope={tab} conversations={nav.conversations} fresh={fresh} overlays={overlays} />
+          <PhoneHomeFeed key={tab} scope={tab} sort={sort} conversations={nav.conversations} fresh={fresh} overlays={overlays} />
         )}
       </PullToRefresh>
 

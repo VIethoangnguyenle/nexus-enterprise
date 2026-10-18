@@ -1,7 +1,7 @@
 ---
 phase: 10
 title: "Chat gestures"
-status: pending
+status: completed
 priority: P2
 effort: "1.5d"
 dependencies: [9, 4]

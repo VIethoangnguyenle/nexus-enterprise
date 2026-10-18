@@ -1,7 +1,7 @@
 ---
 phase: 13
 title: "Danh bạ on the phone"
-status: pending
+status: completed
 priority: P2
 effort: "2d"
 dependencies: [8, 9]

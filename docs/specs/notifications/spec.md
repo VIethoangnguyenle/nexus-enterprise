@@ -104,6 +104,9 @@ to the next step (`action = "approved"`), each approver in `AssigneeNodeIDs` who
 in `PendingNotifyOff` SHALL receive an `approval_pending` notification (title "Approval request: \<template_name\>",
 body "An approval request is waiting for you", entity_type `approval`, entity_id the request ID). Duplicates within one
 event are suppressed. An approver who turned "đề nghị chờ bạn" off (listed in `pending_notify_off`) is not notified.
+The approval service sets `step_advanced` on every approved event: false when the approval left the request on the step
+the actor decided (a co-approver of a step that needs several approvals). Such an event SHALL notify no approver: those
+still pending were told when the step began. An event without the field (an older producer) notifies as before.
 
 **Result notification (`approval_approved` / `approval_rejected`):** the requester (`CreatedBy`) SHALL be notified when
 someone else approves or rejects their request, unless the requester's `notify_result` switch is off. When `NotifyResult`
@@ -118,6 +121,10 @@ assignees, deduplicated — so real-time cache invalidation reaches only the peo
 - **WHEN** an approver approves a request with two assignees on the next step, one of whom turned pending notifications off
 - **THEN** one `approval_pending` notification is created for the assignee who did not turn it off; none for the one who
   did; and the requester gets an `approval_approved` notification (unless `notify_result` is off)
+
+#### Scenario: A co-approver approves a step that needs everyone
+- **WHEN** one of three approvers of a step that needs all three approves
+- **THEN** the event carries `step_advanced: false` and the other two get no second `approval_pending`
 
 #### Scenario: Requester opts out of result notifications
 - **WHEN** a request whose `notify_result` is false is approved

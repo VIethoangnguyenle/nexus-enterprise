@@ -1,7 +1,7 @@
 ---
 phase: 3
 title: "Module headers and one search entry"
-status: pending
+status: completed
 priority: P2
 effort: "1d"
 dependencies: [2]

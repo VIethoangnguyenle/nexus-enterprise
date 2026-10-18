@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"strconv"
 
 	"github.com/labstack/echo/v4"
@@ -20,7 +21,7 @@ import (
 type AssetService interface {
 	CreateAsset(ctx context.Context, req *pb.CreateAssetRequest) (*pb.Asset, error)
 	GetAsset(ctx context.Context, req *pb.GetAssetRequest) (*pb.Asset, error)
-	ListAssets(ctx context.Context, req *pb.ListAssetsRequest) (*pb.AssetList, error)
+	ListAssets(ctx context.Context, req *pb.ListAssetsRequest, sort ...string) (*pb.AssetList, error)
 	UpdateAsset(ctx context.Context, req *pb.UpdateAssetRequest) (*pb.Asset, error)
 	DeleteAsset(ctx context.Context, req *pb.DeleteAssetRequest) (*pb.Empty, error)
 	TransitionAsset(ctx context.Context, req *pb.TransitionRequest) (*pb.Asset, error)
@@ -202,6 +203,10 @@ func (h *Handler) CreateAsset(c echo.Context) error {
 }
 
 func (h *Handler) ListAssets(c echo.Context) error {
+	sort := c.QueryParam("sort")
+	if sort != "" && !slices.Contains(domain.ValidAssetSorts, sort) {
+		return echo.NewHTTPError(http.StatusBadRequest, "sort must be one of: name, created, updated, status")
+	}
 	limit, err := intQuery(c, "limit")
 	if err != nil {
 		return err
@@ -218,7 +223,7 @@ func (h *Handler) ListAssets(c echo.Context) error {
 		Search:      c.QueryParam("search"),
 		Limit:       limit,
 		Offset:      offset,
-	})
+	}, sort)
 	if err != nil {
 		return mapError(err)
 	}

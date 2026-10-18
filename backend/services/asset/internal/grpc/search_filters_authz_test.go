@@ -3,6 +3,7 @@ package grpc_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -10,6 +11,7 @@ import (
 
 	"ngac-platform/ngac"
 	pb "ngac-platform/proto/asset"
+	"ngac-platform/services/asset/internal/domain"
 	agrpc "ngac-platform/services/asset/internal/grpc"
 )
 
@@ -108,4 +110,41 @@ func TestListAssets_SearchInPersonalWorkspaceIsRefused(t *testing.T) {
 	})
 	asserted(t, err, codes.PermissionDenied)
 	assert.Empty(t, list.GetAssets())
+}
+
+// Sorting never widens what the caller may read: an asset of an unreadable type
+// is neither returned nor counted, even when it would sort first.
+func TestListAssets_SortSkipsMatchesOfUnreadableType(t *testing.T) {
+	f := newFixture(t)
+	p := f.policy()
+	// Reader may only read type A, not type B.
+	p.grant("n-reader", f.oaA, ngac.OpRead)
+
+	// Make assetB sort BEFORE assetA across every sort key:
+	// name: "0-unreadable" < "z-readable"
+	// created: assetB newer than assetA
+	// updated: assetB newer than assetA
+	// state: "assigned" < "maintenance"
+	now := time.Now()
+	_, err := f.pool.Exec(context.Background(),
+		`UPDATE assets SET name = '0-unreadable', state = 'assigned', created_at = $1, updated_at = $1 WHERE id = $2`,
+		now, f.assetB)
+	require.NoError(t, err)
+	_, err = f.pool.Exec(context.Background(),
+		`UPDATE assets SET name = 'z-readable', state = 'maintenance', created_at = $1, updated_at = $1 WHERE id = $2`,
+		now.Add(-1*time.Hour), f.assetA)
+	require.NoError(t, err)
+
+	svc := domain.NewAssetService(f.st, p, nil)
+
+	for _, sort := range []string{"name", "created", "updated", "status", ""} {
+		t.Run("sort="+sort, func(t *testing.T) {
+			list, err := svc.ListAssets(asCaller("", "n-reader"), &pb.ListAssetsRequest{
+				WorkspaceId: f.wsID,
+			}, sort)
+			require.NoError(t, err)
+			assert.Equal(t, []string{f.assetA}, assetIDs(list), "unreadable asset must never be returned")
+			assert.Equal(t, int32(1), list.Total, "unreadable asset must never be counted")
+		})
+	}
 }

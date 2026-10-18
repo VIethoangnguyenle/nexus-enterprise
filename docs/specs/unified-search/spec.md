@@ -38,8 +38,11 @@ SHALL never be returned, nor one from another workspace.
 
 ### Requirement: Approval search contract
 `GET /api/approval/search` SHALL accept query parameters: `q` (text query, required), `limit` (page size), `status`
-(filter by request status), `template_id` (filter by template), `created_by` (filter by requester), `from` and `to`
-(date range on `created_at`). Text matching SHALL search on `template_name` and requester `display_name`. Access control
+(filter by request status), `template_id` (filter by template), `created_by` (filter by requester: the requester's
+**user ID**, the ID the screen's people picker holds; the server resolves it to the NGAC node a request records, and an
+unknown ID, or a node ID, matches nothing), `from` and `to` (date range on `created_at`). Text matching SHALL search on
+`template_name` and requester `display_name`, case-insensitively; `%` and `_` in `q` are the characters themselves, never
+LIKE wildcards, so `q=%%` matches only a name containing `%%`. Access control
 SHALL use `canSeeRequest`: a request is visible to its creator (`created_by`), anyone who has an assignment on it
 (directly or through a role/department ancestor), or anyone whose department-request scope (`ResolveAccessibleScopes`
 with `OpRead`) includes its `scope_oa_id`. The response SHALL be `{items: ApprovalRequest[], total: number}`.
@@ -51,6 +54,15 @@ with `OpRead`) includes its `scope_oa_id`. The response SHALL be `{items: Approv
 #### Scenario: Assignee searches
 - **WHEN** an approver searches with `q=mua sắm` and has an assignment on a matching request
 - **THEN** that request appears; a request they have no relationship to does not
+
+#### Scenario: Filter by requester
+- **WHEN** a person searches with `created_by` set to a requester's user ID
+- **THEN** only that requester's matching requests the caller may see are returned; another requester's user ID returns
+  none of them
+
+#### Scenario: Wildcards in the words
+- **WHEN** a person searches with `q=%%` or `q=__`
+- **THEN** only requests whose template or requester name contains those characters are returned, not every visible request
 
 #### Scenario: Department scope
 - **WHEN** a department head whose readable scopes include an OA searches

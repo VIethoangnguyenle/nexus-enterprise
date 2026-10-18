@@ -3,7 +3,7 @@ import { Check, MessagesSquare } from 'lucide-react'
 import type { Arrival } from '../../hooks/useArrivals'
 import { useBottomBarLayout } from '../../hooks/usePhone'
 import { useWebSocketStore } from '../../stores/websocket.store'
-import { filterConversations, type Conversation, type ConversationFilter } from '../../lib/conversations'
+import { filterConversations, orderConversations, type Conversation, type ConversationFilter } from '../../lib/conversations'
 import { SwipeRow, SwipeRowGroup } from '../patterns/SwipeRow'
 import { useChatRowSwipe } from './chat-row-swipe'
 import { EmptyState } from './EmptyState'
@@ -22,13 +22,15 @@ const COPY: Record<FeedScope, { empty: string; filter: ConversationFilter }> = {
 
 /**
  * The list under the chips of Chat on a phone (DESIGN.md "Chat trên điện thoại"): Tất cả, Chưa đọc, Trực
- * tiếp or Nhóm, the conversations of that chip newest activity first as `FeedRow`s. Long-pressing a row
+ * tiếp or Nhóm, the conversations of that chip as `FeedRow`s, newest activity first or by name (`sort`, Cài
+ * đặt Chat → Sắp xếp). Long-pressing a row
  * opens its sheet. Chưa đọc with nothing left says "Bạn đã đọc hết".
  *
  * A swipe on a row reveals its buttons (`useChatRowSwipe`); one row is open at a time.
  */
-export function PhoneHomeFeed({ scope, conversations, fresh, overlays }: {
+export function PhoneHomeFeed({ scope, conversations, fresh, overlays, sort = 'activity' }: {
   scope: FeedScope
+  sort?: 'activity' | 'name'
   /** Every conversation, newest activity first; the chip's share of them is picked here. */
   conversations: Conversation[]
   fresh: Map<string, Arrival>
@@ -44,7 +46,7 @@ export function PhoneHomeFeed({ scope, conversations, fresh, overlays }: {
   const listed = useRef(false)
   useEffect(() => { listed.current = true }, [])
 
-  const shown = filterConversations(conversations, copy.filter)
+  const shown = orderConversations(filterConversations(conversations, copy.filter), sort)
 
   return (
     <div className="grid">

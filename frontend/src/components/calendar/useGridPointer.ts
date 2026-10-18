@@ -47,6 +47,8 @@ interface Options {
   onMove: (occurrence: Occurrence, start: Date, end: Date) => void
   /** A drag across empty time (or a click on it) chose a span. */
   onSelect: (start: Date, end: Date) => void
+  /** How long the span a click on empty time makes is, in minutes (an hour unless the person chose otherwise). */
+  clickMinutes?: number
 }
 
 /**
@@ -55,16 +57,16 @@ interface Options {
  * the event. A finger scrolls and taps; holding it 400ms on a block picks it up to move or resize, and from
  * then on the page does not scroll under it. A tap on empty time makes the draft, as a click does.
  */
-export function useGridPointer({ days, columns, onMove, onSelect }: Options) {
+export function useGridPointer({ days, columns, onMove, onSelect, clickMinutes = CLICK_MINUTES }: Options) {
   const [preview, setPreview] = useState<MovePreview | null>(null)
   const [selection, setSelection] = useState<Selection | null>(null)
   const press = useRef<Press | null>(null)
   const cleanup = useRef<(() => void) | null>(null)
   const swallowClick = useRef(false)
   // The newest callbacks and days, read from listeners that outlive a render.
-  const latest = useRef({ days, onMove, onSelect })
+  const latest = useRef({ days, onMove, onSelect, clickMinutes })
   useEffect(() => {
-    latest.current = { days, onMove, onSelect }
+    latest.current = { days, onMove, onSelect, clickMinutes }
   })
   useEffect(() => () => cleanup.current?.(), [])
 
@@ -134,7 +136,7 @@ export function useGridPointer({ days, columns, onMove, onSelect }: Options) {
           stop()
           return
         }
-        const { onMove: move, onSelect: select, days: dayList } = latest.current
+        const { onMove: move, onSelect: select, days: dayList, clickMinutes: span } = latest.current
         if (p.moved) {
           swallowClick.current = true
           setTimeout(() => (swallowClick.current = false), 0)
@@ -149,7 +151,7 @@ export function useGridPointer({ days, columns, onMove, onSelect }: Options) {
             const [s, en] = here < a ? [here, a] : [a, here]
             select(s, en.getTime() === s.getTime() ? addMinutes(s, step) : en)
           } else {
-            select(p.anchor!, addMinutes(p.anchor!, CLICK_MINUTES))
+            select(p.anchor!, addMinutes(p.anchor!, span))
           }
         } else if (p.moved) {
           const step = ev.altKey ? SNAP_MINUTES_FINE : SNAP_MINUTES

@@ -1,18 +1,14 @@
 import { useState } from 'react'
 import type { ApprovalSettings as ApprovalOptions } from '../../../api/settings'
 import { useActiveWorkspace } from '../../../hooks/useActiveWorkspace'
+import { useBottomBarLayout } from '../../../hooks/usePhone'
 import { useServerSettings } from '../../../hooks/useServerSettings'
+import { APPROVAL_DEFAULTS } from '../../../lib/settings-defaults'
 import { ChoicePage, SettingsGroup, SettingsPage, SettingsRow, SettingsSwitch, choiceLabel, type Choice } from '../SettingsGroup'
 import { useSettingsNav } from '../settings-nav'
 
-/** The approval service's defaults for someone who never saved. */
-export const APPROVAL_DEFAULTS: ApprovalOptions = { default_tab: 'pending', sort: 'newest', notify_pending: true, notify_result: true }
+export { APPROVAL_DEFAULTS }
 
-const TABS: Choice<NonNullable<ApprovalOptions['default_tab']>>[] = [
-  { value: 'pending', label: 'Chờ tôi duyệt' },
-  { value: 'approved', label: 'Đã duyệt' },
-  { value: 'rejected', label: 'Đã từ chối' },
-]
 const SORTS: Choice<NonNullable<ApprovalOptions['sort']>>[] = [
   { value: 'newest', label: 'Mới nhất trước' },
   { value: 'oldest', label: 'Cũ nhất trước' },
@@ -20,16 +16,20 @@ const SORTS: Choice<NonNullable<ApprovalOptions['sort']>>[] = [
 
 /**
  * Cài đặt Phê duyệt (DESIGN.md §6, organization workspaces only, kept per organization): notifications by kind of
- * work and how the list opens. A personal workspace has no Phê duyệt and no address for this page.
+ * work and the order of Chờ tôi duyệt. A personal workspace has no Phê duyệt and no address for this page.
+ *
+ * The order applies below 1024px only (a wide screen keeps the server's order, oldest first), so a wide screen
+ * does not offer it. "Tab mở đầu" is not offered: the stored choices (chờ duyệt, đã duyệt, đã từ chối) are not the
+ * screen's tabs, so it would change nothing.
  */
 export function ApprovalSettings() {
   const { back } = useSettingsNav()
   const { workspaceId } = useActiveWorkspace()
+  const compact = useBottomBarLayout()
   const { settings, save } = useServerSettings('approval', workspaceId, APPROVAL_DEFAULTS)
-  const [page, setPage] = useState<'tab' | 'sort' | null>(null)
+  const [page, setPage] = useState<'sort' | null>(null)
   const done = () => setPage(null)
 
-  if (page === 'tab') return <ChoicePage title="Tab mở đầu" value={settings.default_tab} choices={TABS} onPick={(default_tab) => void save({ default_tab })} onBack={done} />
   if (page === 'sort') return <ChoicePage title="Sắp xếp" value={settings.sort} choices={SORTS} onPick={(sort) => void save({ sort })} onBack={done} />
 
   return (
@@ -47,10 +47,16 @@ export function ApprovalSettings() {
           onChange={(notify_result) => void save({ notify_result })}
         />
       </SettingsGroup>
-      <SettingsGroup title="Hiển thị">
-        <SettingsRow label="Tab mở đầu" value={choiceLabel(TABS, settings.default_tab)} onPress={() => setPage('tab')} />
-        <SettingsRow label="Sắp xếp" value={choiceLabel(SORTS, settings.sort)} onPress={() => setPage('sort')} />
-      </SettingsGroup>
+      {compact && (
+        <SettingsGroup title="Hiển thị">
+          <SettingsRow
+            label="Sắp xếp"
+            hint="Áp dụng cho Chờ tôi duyệt"
+            value={choiceLabel(SORTS, settings.sort)}
+            onPress={() => setPage('sort')}
+          />
+        </SettingsGroup>
+      )}
     </SettingsPage>
   )
 }

@@ -2,13 +2,11 @@ import { useState } from 'react'
 import type { DriveSettings as DriveOptions } from '../../../api/settings'
 import { useActiveWorkspace } from '../../../hooks/useActiveWorkspace'
 import { useServerSettings } from '../../../hooks/useServerSettings'
+import { DRIVE_DEFAULTS } from '../../../lib/settings-defaults'
 import { ChoicePage, SettingsGroup, SettingsPage, SettingsRow, SettingsSwitch, choiceLabel, type Choice } from '../SettingsGroup'
 import { useSettingsNav } from '../settings-nav'
 
-/** The drive service's defaults for someone who never saved. */
-export const DRIVE_DEFAULTS: DriveOptions = {
-  view: 'auto', sort: 'modified', folders_first: true, cellular_previews: true, notify_shared: true,
-}
+export { DRIVE_DEFAULTS }
 
 const VIEWS: Choice<NonNullable<DriveOptions['view']>>[] = [
   { value: 'auto', label: 'Tự động', hint: 'Danh sách trên điện thoại, lưới trên máy tính' },
@@ -22,8 +20,9 @@ const SORTS: Choice<NonNullable<DriveOptions['sort']>>[] = [
 ]
 
 /**
- * Cài đặt Tài liệu (DESIGN.md §6, mockup mobile-shell.html §4): how the list shows, previews on mobile data, and the
- * one notification documents have (shared with you; there are no document comments).
+ * Cài đặt Tài liệu (DESIGN.md §6, mockup mobile-shell.html §4): how the list shows and previews on mobile data.
+ * "Được chia sẻ tài liệu" is stored by the drive service but no notification is sent for a share yet, so the
+ * switch is not offered until one is.
  */
 export function DriveSettings() {
   const { back } = useSettingsNav()
@@ -49,9 +48,6 @@ export function DriveSettings() {
           checked={!!settings.cellular_previews}
           onChange={(cellular_previews) => void save({ cellular_previews })}
         />
-      </SettingsGroup>
-      <SettingsGroup title="Thông báo">
-        <SettingsSwitch label="Được chia sẻ tài liệu" checked={!!settings.notify_shared} onChange={(notify_shared) => void save({ notify_shared })} />
       </SettingsGroup>
     </SettingsPage>
   )

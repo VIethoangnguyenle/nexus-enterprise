@@ -162,12 +162,59 @@ describe('module pages', () => {
   it('Tài liệu: a switch saves only that key at once', async () => {
     const user = userEvent.setup()
     await renderSettings(`/settings/drive?ws=${WS}`)
-    const sw = await screen.findByRole('switch', { name: 'Được chia sẻ tài liệu' })
+    const sw = await screen.findByRole('switch', { name: /^Tải ảnh xem trước/ })
     expect(sw).toHaveAttribute('aria-checked', 'true')
     await user.click(sw)
     await waitFor(() => expect(server.writes).toHaveLength(1))
-    expect(server.writes[0]!.body).toEqual({ notify_shared: false })
+    expect(server.writes[0]!.body).toEqual({ cellular_previews: false })
     expect(sw).toHaveAttribute('aria-checked', 'false')
+  })
+
+  it('offers no row that would change nothing: no sender for the share and asset notices, no link previews, no asset order, no approval tab', async () => {
+    await renderSettings(`/settings/drive?ws=${WS}`)
+    await screen.findByRole('switch', { name: 'Thư mục trước tệp' })
+    expect(screen.queryByRole('switch', { name: 'Được chia sẻ tài liệu' })).toBeNull()
+    expect(screen.queryByText('Thông báo')).toBeNull()
+    cleanup()
+    resetClient()
+
+    await renderSettings(`/settings/assets?ws=${WS}`)
+    await screen.findByRole('button', { name: /^Tab mở đầu/ })
+    for (const label of ['Yêu cầu tài sản', 'Bảo trì']) expect(screen.queryByRole('switch', { name: new RegExp(`^${label}`) }), label).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Sắp xếp/ })).toBeNull()
+    cleanup()
+    resetClient()
+
+    await renderSettings(`/settings/chat?ws=${WS}`)
+    await screen.findByRole('switch', { name: /^Enter để gửi/ })
+    expect(screen.queryByRole('switch', { name: 'Xem trước liên kết' })).toBeNull()
+    cleanup()
+    resetClient()
+
+    await renderSettings(`/settings/approval?ws=${WS}`)
+    expect(await screen.findByRole('button', { name: /^Sắp xếp\s*Áp dụng cho Chờ tôi duyệt/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Tab mở đầu/ })).toBeNull()
+  })
+
+  it('on a wide screen the options that only shape the phone are not offered', async () => {
+    viewport(false)
+    await renderSettings(`/settings/chat?ws=${WS}`)
+    await screen.findByRole('heading', { name: 'Cài đặt Chat' })
+    expect(screen.queryByRole('switch', { name: /^Enter để gửi/ })).toBeNull()
+    for (const label of ['Mở Chat ở', 'Sắp xếp']) expect(screen.queryByRole('button', { name: new RegExp(`^${label}`) }), label).toBeNull()
+    expect(screen.getByRole('button', { name: /^Cảm xúc khi chạm đúp/ })).toBeInTheDocument()
+    cleanup()
+    resetClient()
+
+    await renderSettings(`/settings/calendar?ws=${WS}`)
+    await screen.findByRole('button', { name: /^Tuần bắt đầu vào/ })
+    for (const label of ['Chế độ xem mặc định', 'Thời lượng mặc định']) expect(screen.queryByRole('button', { name: new RegExp(`^${label}`) }), label).toBeNull()
+    cleanup()
+    resetClient()
+
+    await renderSettings(`/settings/approval?ws=${WS}`)
+    await screen.findByRole('switch', { name: 'Đề nghị chờ bạn duyệt' })
+    expect(screen.queryByRole('button', { name: /^Sắp xếp/ })).toBeNull()
   })
 
   it('Tài liệu: a refused save puts the old value back', async () => {

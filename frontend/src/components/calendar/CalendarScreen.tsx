@@ -6,6 +6,8 @@ import { motion } from 'motion/react'
 import { Plus } from 'lucide-react'
 import type { EditScope, Occurrence, RsvpResponse } from '../../api/calendar'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
+import { useCalendarVisibility } from '../../hooks/useCalendarVisibility'
+import { useModuleSettings } from '../../hooks/useModuleSettings'
 import { useSearchEvents } from '../../hooks/useCalendarEditor'
 import { useUnsubscribe } from '../../hooks/useCalendarSharing'
 import {
@@ -17,7 +19,7 @@ import { useRealtimeWash } from '../../hooks/useRealtimeWash'
 import { useSwipeStep } from '../../hooks/useSwipeStep'
 import { instanceKey } from '../../lib/calendar-cache'
 import {
-  AGENDA_DAYS, CALENDAR_VIEWS, parseDateKey, rangeOf, shiftDate, toDateKey, visibleDays, type CalendarView,
+  AGENDA_DAYS, CALENDAR_VIEWS, parseDateKey, rangeOf, shiftDate, toDateKey, visibleDays, type CalendarView, type WeekStart,
 } from '../../lib/calendar-format'
 import { validateCalendarSearch, type CalendarSearch, type NewEventSearch } from '../../lib/calendar-search'
 import { workspaceDisplayName } from '../../lib/workspace'
@@ -69,10 +71,19 @@ const EMPTY_HINT: Record<CalendarView, string> = {
 /** Words that tell a change from the same event apart when the data comes back (not shown). */
 const versionOf = (o: Occurrence) => `${instanceKey(o)}|${o.start}|${o.end}|${o.title}|${o.version}`
 
+/** The settings' view, when it is one Lịch offers. */
+const settingView = (v: unknown): CalendarView | undefined =>
+  (CALENDAR_VIEWS as readonly unknown[]).includes(v) ? (v as CalendarView) : undefined
+
 /**
  * Lịch (design/mockups/calendar.html): the Google-style top bar, the side column (Tạo, the small month, the
  * calendars) and the view. The address carries the view and the day, so reload, Back and a pasted link
  * land in the same place.
+ *
+ * Cài đặt Lịch shapes it: the week starts on the chosen day everywhere, only the calendars the person shows are
+ * drawn, a phone opens on the chosen view, and below 1024px a new event lasts the chosen duration. A wide screen
+ * keeps opening on the view it last showed (the week at first) and making one-hour events, as the default view
+ * and duration are the phone's options. Until the settings answer, their defaults stand in.
  */
 export function CalendarScreen() {
   const { workspaceId: wsId, workspaceName } = useActiveWorkspace()
@@ -83,9 +94,15 @@ export function CalendarScreen() {
   const phone = usePhone()
   const compact = useBottomBarLayout()
   const tablet = compact && !phone
+  const options = useModuleSettings('calendar', wsId)
+  const weekStart: WeekStart = options.weekStart === 0 ? 0 : 1
+  // Minutes of a new event: the person's choice below 1024px, an hour on a wide screen.
+  const newEventMinutes = compact && options.defaultDuration > 0 ? options.defaultDuration : 60
 
-  // A phone opens on the agenda, a tablet on three days, a desktop on the week.
-  const view: CalendarView = search.mode ?? rememberedView(userId) ?? (phone ? 'agenda' : tablet ? '3day' : 'week')
+  // A phone opens on the view of Cài đặt Lịch (the agenda by default), a tablet on three days, a desktop on the week;
+  // a tablet and a desktop come back to the view they last showed.
+  const view: CalendarView = search.mode
+    ?? (phone ? settingView(options.defaultView) ?? 'agenda' : rememberedView(userId) ?? (tablet ? '3day' : 'week'))
   // A whole week does not fit a phone; it shows three days.
   const shownView: CalendarView = phone && view === 'week' ? '3day' : view
   const today = startOfDay(now)
@@ -121,15 +138,18 @@ export function CalendarScreen() {
   const calendarsQuery = useCalendars(wsId)
   const calendars = useMemo(() => calendarsQuery.data ?? [], [calendarsQuery.data])
   const byId = useMemo(() => new Map(calendars.map((c) => [c.id, c])), [calendars])
-  const visibleIds = useMemo(() => calendars.filter((c) => c.visible).map((c) => c.id), [calendars])
+  const { isShown, setShown } = useCalendarVisibility(wsId)
+  const visibleIds = useMemo(() => calendars.filter(isShown).map((c) => c.id), [calendars, isShown])
+  // The side list ticks a calendar exactly when it is drawn.
+  const listed = useMemo(() => calendars.map((c) => ({ ...c, visible: isShown(c) })), [calendars, isShown])
   const writable = useMemo(() => calendars.filter((c) => c.access === 'write' || c.access === 'manage'), [calendars])
 
   const [agendaDays, setAgendaDays] = useState(AGENDA_DAYS)
   const range = useMemo(() => {
-    const r = rangeOf(shownView, date)
+    const r = rangeOf(shownView, date, weekStart)
     return shownView === 'agenda' ? { from: r.from, to: addDays(r.from, agendaDays) } : r
     // `date` is rebuilt from the address each render; its day is what matters.
-  }, [shownView, toDateKey(date), agendaDays])
+  }, [shownView, toDateKey(date), agendaDays, weekStart])
   const eventsQuery = useOccurrences(wsId, range.from, range.to, visibleIds)
   const occurrences = useMemo(() => eventsQuery.data ?? [], [eventsQuery.data])
 
@@ -152,7 +172,7 @@ export function CalendarScreen() {
   }, [fresh, occurrences])
 
   // The week strip of the phone shows a dot under each day with something on; the agenda may start mid-week.
-  const stripWeek = useMemo(() => rangeOf('week', date), [toDateKey(date)])
+  const stripWeek = useMemo(() => rangeOf('week', date, weekStart), [toDateKey(date), weekStart])
   const stripQuery = useOccurrences(wsId, stripWeek.from, stripWeek.to, phone && (shownView === 'agenda' || shownView === 'day') ? visibleIds : [])
   const hasEvents = useCallback(
     (d: Date) => (stripQuery.data ?? occurrences).some((o) => {
@@ -216,14 +236,14 @@ export function CalendarScreen() {
     setDraft(next)
   }, [])
 
-  /** Tạo and the C key: the full editor, on an hour starting at the next hour (or 09:00 on another day). */
+  /** Tạo and the C key: the full editor, starting at the next hour (or 09:00 on another day) for `newEventMinutes`. */
   const createFromButton = useCallback(() => {
     const base = isSameDay(date, new Date()) ? new Date() : setHours(date, 8)
     const start = new Date(base)
     start.setHours(base.getHours() + 1, 0, 0, 0)
-    const end = new Date(start.getTime() + 3_600_000)
+    const end = new Date(start.getTime() + newEventMinutes * 60_000)
     toEditor({ date: toDateKey(start), start: format(start, 'HH:mm'), end: format(end, 'HH:mm') })
-  }, [date, toEditor])
+  }, [date, toEditor, newEventMinutes])
 
   // Register the create action for the ModuleBar + button.
   const createAction = useMemo(() => ({ label: 'Sự kiện mới', handler: createFromButton }), [createFromButton])
@@ -295,7 +315,7 @@ export function CalendarScreen() {
   )
 
   // --- What the view shows ------------------------------------------------------------
-  const columns = visibleDays(shownView, date).length
+  const columns = visibleDays(shownView, date, weekStart).length
   const selectedKey = openOccurrence ? instanceKey(openOccurrence) : undefined
   const calendarFailed = calendarsQuery.isError
   const noneVisible = calendarsQuery.isSuccess && visibleIds.length === 0
@@ -332,6 +352,7 @@ export function CalendarScreen() {
     body = (
       <MonthGrid
         date={date}
+        weekStart={weekStart}
         occurrences={occurrences}
         now={now}
         selectedKey={selectedKey}
@@ -367,7 +388,8 @@ export function CalendarScreen() {
   } else {
     body = (
       <TimeGrid
-        days={visibleDays(shownView, date)}
+        days={visibleDays(shownView, date, weekStart)}
+        newEventMinutes={newEventMinutes}
         occurrences={occurrences}
         now={now}
         selectedKey={selectedKey}
@@ -402,13 +424,13 @@ export function CalendarScreen() {
 
   const calendarColumn = (
     <>
-      <MiniMonth date={date} now={now} onPick={(d) => go({ date: d })} />
+      <MiniMonth date={date} now={now} weekStart={weekStart} onPick={(d) => go({ date: d })} />
       <AddCalendarPicker wsId={wsId} calendars={calendars} />
       {calendarsQuery.isPending && <div className="skeleton h-24 rounded-md" aria-hidden="true" />}
       {calendarsQuery.isSuccess && (
         <CalendarList
-          calendars={calendars}
-          onToggle={(c, visible) => subscription.mutate({ calId: c.id, patch: { visible } })}
+          calendars={listed}
+          onToggle={(c, visible) => setShown(byId.get(c.id) ?? c, visible)}
           onColor={(c, color) => subscription.mutate({ calId: c.id, patch: { color } })}
           onShare={setSharing}
           onRemove={(c) => unsubscribe.mutate({ calId: c.id, name: c.name })}
@@ -448,6 +470,7 @@ export function CalendarScreen() {
             date={date}
             now={now}
             tablet={tablet}
+            weekStart={weekStart}
             hasEvents={hasEvents}
             onView={(v) => go({ view: v })}
             onDate={(d) => go({ date: d })}
@@ -459,6 +482,7 @@ export function CalendarScreen() {
           <CalendarTopBar
             view={shownView}
             date={date}
+            weekStart={weekStart}
             onView={(v) => go({ view: v })}
             onToday={() => go({ date: new Date() })}
             onStep={(steps) => go({ date: shiftDate(shownView, date, steps) })}

@@ -1,7 +1,7 @@
 ---
 phase: 2
 title: "Bottom bar and shell"
-status: pending
+status: completed
 priority: P1
 effort: "2.5d"
 dependencies: [1, 4]

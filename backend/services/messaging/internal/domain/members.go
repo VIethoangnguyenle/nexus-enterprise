@@ -134,7 +134,8 @@ func (s *Service) announceMembership(ctx context.Context, kind string, ch *store
 //   - the person themselves (leaving), but the owner must transfer first (409)
 //   - the group owner
 //   - a group manager
-//   - a holder of manage on the channel's content OA (workspace owners)
+//   - a holder of manage on the channel's content OA (workspace owners), but
+//     never the group's owner (409: transfer ownership first)
 //
 // A direct message is a fixed pair and #general's people are the workspace's, so
 // neither loses anyone this way.
@@ -146,8 +147,10 @@ func (s *Service) announceMembership(ctx context.Context, kind string, ch *store
 // the channel_members copy follows; a copy that cannot be deleted is reported after
 // the live feed has been cut and the roster announced, and a repeat is harmless.
 //
-// Nobody but a workspace owner removes the group's owner; the owner leaves only
-// after handing the group over.
+// Nobody removes the group's owner, a workspace owner included: a group whose
+// owner is gone could never be handed over or disbanded. A holder of manage is
+// told 409 "transfer ownership first"; anyone else is refused. The owner leaves
+// only after handing the group over (the leave rule's own 409).
 //
 // Removing someone withdraws every group edge they hold. The policy writer has
 // no batch call, so the Managers edge goes first and the Members edge second: a
@@ -179,12 +182,14 @@ func (s *Service) RemoveMember(ctx context.Context, channelID, requesterNodeID, 
 		return fmt.Errorf("%w: the owner must transfer ownership before leaving", ErrAlreadyExists)
 	}
 	// Authority: self, owner, manager, or workspace manager (manage on OA).
-	if requesterNodeID != targetNodeID && !manages {
-		holdsManage := s.checkAccess(ctx, requesterNodeID, ch.NGACOaID, ngac.OpManage) == nil
+	if requesterNodeID != targetNodeID {
+		holdsManage := manages || s.checkAccess(ctx, requesterNodeID, ch.NGACOaID, ngac.OpManage) == nil
 		switch {
-		case holdsManage:
+		case targetIsOwner && holdsManage:
+			return fmt.Errorf("%w: the group's owner cannot be removed; transfer ownership first", ErrAlreadyExists)
 		case targetIsOwner:
 			return fmt.Errorf("%w: the group's owner cannot be removed", ErrAccessDenied)
+		case holdsManage:
 		case !s.isGroupOwnerOrManager(ctx, ch, requesterNodeID):
 			return fmt.Errorf("%w: only the person themselves, the owner, a manager or a workspace manager removes someone", ErrAccessDenied)
 		}

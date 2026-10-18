@@ -17,6 +17,7 @@ import (
 	"ngac-platform/ngac"
 	"ngac-platform/pkg/policyclient"
 	"ngac-platform/pkg/realtime"
+	drivepb "ngac-platform/proto/drive"
 	policypb "ngac-platform/proto/policy"
 	"ngac-platform/services/messaging/internal/store"
 )
@@ -129,11 +130,38 @@ func (s *Service) GetGroupManagement(ctx context.Context, channelID, userNodeID 
 	}
 	return &GroupSettings{
 		PostPolicy:       ch.PostPolicy,
-		InvitePolicy:     ch.InvitePolicy,
+		InvitePolicy:     s.enforcedInviteRule(ctx, ch),
 		MentionAllPolicy: ch.MentionAllPolicy,
 		OwnerID:          ch.CreatedBy,
 		ManagerIDs:       managers,
 	}, nil
+}
+
+// enforcedInviteRule is the group's "Ai được thêm người" as the policy enforces
+// it: read from the Members → Content grant (ngac.InviteRule), so the screen
+// never promises what the graph refuses. The row's value stands in only when
+// the grant cannot be read or is missing, and that is logged.
+func (s *Service) enforcedInviteRule(ctx context.Context, ch *store.Channel) string {
+	if ch.NGACUaID == "" || ch.NGACOaID == "" {
+		return ch.InvitePolicy
+	}
+	list, err := s.policyWrite.GetAssociations(ctx, &policypb.GetAssociationsRequest{UaId: ch.NGACUaID})
+	if err != nil {
+		slog.Warn("members grant unreadable, showing the stored invite rule", "channel", ch.ID, "error", err)
+		return ch.InvitePolicy
+	}
+	for _, a := range list.GetAssociations() {
+		if a.GetOaId() == ch.NGACOaID {
+			rule := ngac.InviteRule(a.GetOperations())
+			if rule != ch.InvitePolicy {
+				slog.Warn("stored invite rule differs from the graph; saving the rule repairs it",
+					"channel", ch.ID, "stored", ch.InvitePolicy, "graph", rule)
+			}
+			return rule
+		}
+	}
+	slog.Warn("group has no members grant on its content", "channel", ch.ID)
+	return ch.InvitePolicy
 }
 
 // groupManagerIDs lists the user IDs of the people directly under the group's
@@ -186,8 +214,12 @@ func (s *Service) UpdateGroupSettings(ctx context.Context, channelID, userNodeID
 		}
 	}
 
-	// When invite_policy changes to "managers", remove invite from Members → Content.
-	if invitePolicy != "" && invitePolicy != ch.InvitePolicy {
+	// The grant is written whenever the rule is saved, even when the row already
+	// holds that value: the row and the graph are separate writes, so they can
+	// drift (a row write that failed after the grant, two managers saving at
+	// once), and comparing with the row would leave a drifted pair stuck.
+	// CreateAssociation is an upsert, so a grant already right costs nothing.
+	if invitePolicy != "" {
 		if err := s.syncInviteGrant(ctx, ch, invitePolicy); err != nil {
 			return err
 		}
@@ -329,7 +361,8 @@ func (s *Service) TransferOwnership(ctx context.Context, channelID, userNodeID, 
 	return nil
 }
 
-// DisbandGroup deletes a group. Owner only.
+// DisbandGroup deletes a group. Owner only. The group's drive goes to the
+// trash first (see trashChannelDrive); if it cannot, nothing is deleted.
 func (s *Service) DisbandGroup(ctx context.Context, channelID, userNodeID string) error {
 	ch, err := s.authorizeChannel(ctx, channelID, userNodeID, ngac.OpRead)
 	if err != nil {
@@ -346,6 +379,9 @@ func (s *Service) DisbandGroup(ctx context.Context, channelID, userNodeID string
 	if err != nil {
 		return err
 	}
+	if err := s.trashChannelDrive(ctx, ch); err != nil {
+		return err
+	}
 	// Remove the channel row (cascades to members cache).
 	if err := s.store.DeleteChannel(ctx, channelID); err != nil {
 		return err
@@ -356,6 +392,37 @@ func (s *Service) DisbandGroup(ctx context.Context, channelID, userNodeID string
 	disbanded := channelEvent(ctx, realtime.KindDeleted, ch)
 	disbanded.ChannelID = ch.ID
 	s.emit(disbanded)
+	return nil
+}
+
+// trashChannelDrive moves a group's drive (its root folder and everything in
+// it) to the trash through the drive service, as the caller on ctx, whose write
+// on the drive the drive service checks. Nothing is deleted for good: the
+// items keep their rows, objects and quota share, and once the group's nodes
+// are gone only an operator, in the database, can restore or purge them.
+//
+// It runs before the group is deleted. Afterwards the drive's OA hangs under
+// no group and its files would stay counted against the workspace, reachable
+// by nobody. A drive that cannot be looked up or trashed stops the disband
+// (ErrUnavailable, 503): the group stays whole and a retry finishes. A drive
+// already in the trash (an earlier attempt) is not trashed again. With no drive
+// service wired there is no drive to trash.
+func (s *Service) trashChannelDrive(ctx context.Context, ch *store.Channel) error {
+	if s.driveClient == nil {
+		return nil
+	}
+	root, err := s.driveClient.GetChannelDrive(ctx, &drivepb.GetChannelDriveRequest{ChannelId: ch.ID})
+	if err != nil {
+		slog.Error("disband refused: the group's drive could not be looked up", "channel", ch.ID, "error", err)
+		return fmt.Errorf("%w: the group's drive could not be moved to the trash; try again", ErrUnavailable)
+	}
+	if root.GetId() == "" || root.GetStatus() == "trashed" {
+		return nil
+	}
+	if _, err := s.driveClient.TrashItem(ctx, &drivepb.TrashItemRequest{ItemId: root.GetId()}); err != nil {
+		slog.Error("disband refused: the group's drive could not be trashed", "channel", ch.ID, "drive", root.GetId(), "error", err)
+		return fmt.Errorf("%w: the group's drive could not be moved to the trash; try again", ErrUnavailable)
+	}
 	return nil
 }
 

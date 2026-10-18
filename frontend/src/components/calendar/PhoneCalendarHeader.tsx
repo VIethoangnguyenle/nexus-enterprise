@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { motion } from 'motion/react'
 import { addDays, addMonths, format, isSameDay, startOfWeek } from 'date-fns'
 import { CalendarCheck, ChevronDown, MoreHorizontal, PanelRight, Settings } from 'lucide-react'
-import { VIEW_LABEL, WEEK_OPTIONS, formatDayMonth, weekdayShort, type CalendarView } from '../../lib/calendar-format'
+import { VIEW_LABEL, formatDayMonth, weekOptions, weekdayShort, type CalendarView, type WeekStart } from '../../lib/calendar-format'
 import { Button, Heading, IconButton, Pressable } from '../primitives'
 import { useSwipeStep } from '../../hooks/useSwipeStep'
 import { NavSheet, SheetItem } from '../spaces/NavSheet'
@@ -19,11 +19,13 @@ interface StripProps {
   hasEvents: (day: Date) => boolean
   onPick: (day: Date) => void
   onStep: (steps: -1 | 1) => void
+  /** The first cell: Monday unless the person chose Sunday. */
+  weekStart?: WeekStart
 }
 
 /** Seven cells of the week with a dot under the days that have events; a swipe changes the week (`useSwipeStep`). */
-export function WeekStrip({ date, now, hasEvents, onPick, onStep }: StripProps) {
-  const first = startOfWeek(date, WEEK_OPTIONS)
+export function WeekStrip({ date, now, hasEvents, onPick, onStep, weekStart = 1 }: StripProps) {
+  const first = startOfWeek(date, weekOptions(weekStart))
   const { bind, x } = useSwipeStep(onStep)
   return (
     <motion.div
@@ -60,11 +62,13 @@ export function WeekStrip({ date, now, hasEvents, onPick, onStep }: StripProps) 
 }
 
 /** The month folded open under "Tháng 10 ▾"; a swipe changes the month, as on the month grid. */
-function MonthFold({ date, now, onDate, onPicked }: { date: Date; now: Date; onDate: (d: Date) => void; onPicked: () => void }) {
+function MonthFold({ date, now, onDate, onPicked, weekStart }: {
+  date: Date; now: Date; onDate: (d: Date) => void; onPicked: () => void; weekStart?: WeekStart
+}) {
   const { bind, x } = useSwipeStep((step) => onDate(addMonths(date, step)))
   return (
     <motion.div className="px-4 pb-2 touch-pan-y" data-testid="month-fold" style={{ x }} {...bind}>
-      <MiniMonth date={date} now={now} onPick={(d) => { onDate(d); onPicked() }} />
+      <MiniMonth date={date} now={now} weekStart={weekStart} onPick={(d) => { onDate(d); onPicked() }} />
     </motion.div>
   )
 }
@@ -82,6 +86,8 @@ interface Props {
   onToday: () => void
   /** Tablet: opens the sheet with the small month and the calendars. */
   onCalendars: () => void
+  /** The first day of the week strip and the folded month: Monday unless the person chose Sunday. */
+  weekStart?: WeekStart
 }
 
 /**
@@ -89,7 +95,7 @@ interface Props {
  * month open, Hôm nay, the view sheet (⋯ on a phone, a named button on a tablet) and, in the agenda and the
  * day, the week strip.
  */
-export function PhoneCalendarHeader({ view, date, now, tablet, hasEvents, onView, onDate, onStep, onToday, onCalendars }: Props) {
+export function PhoneCalendarHeader({ view, date, now, tablet, hasEvents, onView, onDate, onStep, onToday, onCalendars, weekStart }: Props) {
   const [month, setMonth] = useState(false)
   const [sheet, setSheet] = useState(false)
   const settings = useSettingsNav()
@@ -127,8 +133,10 @@ export function PhoneCalendarHeader({ view, date, now, tablet, hasEvents, onView
           </>
         )}
       </div>
-      {month && <MonthFold date={date} now={now} onDate={onDate} onPicked={() => setMonth(false)} />}
-      {(view === 'agenda' || view === 'day') && <WeekStrip date={date} now={now} hasEvents={hasEvents} onPick={onDate} onStep={onStep} />}
+      {month && <MonthFold date={date} now={now} weekStart={weekStart} onDate={onDate} onPicked={() => setMonth(false)} />}
+      {(view === 'agenda' || view === 'day') && (
+        <WeekStrip date={date} now={now} weekStart={weekStart} hasEvents={hasEvents} onPick={onDate} onStep={onStep} />
+      )}
       {sheet && (
         <NavSheet label="Kiểu xem" onClose={() => setSheet(false)}>
           {/* The ⋯ of a module starts with its settings (DESIGN.md §5, Hàng tiêu đề của phân hệ). */}

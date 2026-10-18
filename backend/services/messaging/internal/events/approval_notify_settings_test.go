@@ -38,6 +38,30 @@ func TestApprovalEvent_PendingSkipsAnApproverWhoTurnedItOff(t *testing.T) {
 	assert.Equal(t, []string{"n-req"}, kinds(n)["approval_approved"], "the requester's own switch is separate")
 }
 
+// "An approval request is waiting for you" is said once per step. A co-approver
+// approving a step that needs everyone leaves the step where it was, and the
+// approvers still pending on it, who were told when it began, are not told
+// again. A step that advanced tells its approvers; an event from an older
+// producer, which does not say, tells them as before.
+func TestApprovalEvent_PendingIsToldOncePerStep(t *testing.T) {
+	for _, tc := range []struct {
+		name, field string
+		want        []string
+	}{
+		{"step stayed", `,"step_advanced":false`, nil},
+		{"step advanced", `,"step_advanced":true`, []string{"n-ap2"}},
+		{"older producer", ``, []string{"n-ap2"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, n := consumer()
+			c.handleApprovalEvent(context.Background(), []byte(`{"request_id":"r1","action":"approved","actor_node_id":"n-ap1",
+				"created_by":"n-req","assignee_node_ids":["n-ap2"]`+tc.field+`}`))
+
+			assert.Equal(t, tc.want, kinds(n)["approval_pending"])
+		})
+	}
+}
+
 // A rejection waits on nobody.
 func TestApprovalEvent_RejectionTellsNoApprover(t *testing.T) {
 	c, n := consumer()

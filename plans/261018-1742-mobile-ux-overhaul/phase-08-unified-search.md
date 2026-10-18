@@ -1,7 +1,7 @@
 ---
 phase: 8
 title: "Unified search"
-status: pending
+status: completed
 priority: P2
 effort: "2d"
 dependencies: [3]

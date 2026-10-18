@@ -76,7 +76,6 @@ type SettingsRow struct {
 
 // SettingsStore defines settings data access methods.
 type SettingsStore interface {
-	EnsureSettingsTable(ctx context.Context) error
 	GetApprovalUserSettings(ctx context.Context, userID string) (*SettingsRow, error)
 	UpsertApprovalUserSettings(ctx context.Context, st *SettingsRow) error
 }
@@ -95,9 +94,6 @@ func (s *Service) GetUserSettings(ctx context.Context, userID string) (*Approval
 
 // storedApprovalSettings reads the caller's saved settings, or the defaults.
 func storedApprovalSettings(ctx context.Context, ss SettingsStore, userID string) (*ApprovalSettings, error) {
-	if err := ss.EnsureSettingsTable(ctx); err != nil {
-		return nil, fmt.Errorf("ensure settings table: %w", err)
-	}
 	row, err := ss.GetApprovalUserSettings(ctx, userID)
 	if err != nil {
 		return nil, err

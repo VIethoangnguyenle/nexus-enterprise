@@ -1,7 +1,7 @@
 ---
 phase: 4
 title: "Settings backend"
-status: pending
+status: completed
 priority: P1
 effort: "4d"
 dependencies: [1]

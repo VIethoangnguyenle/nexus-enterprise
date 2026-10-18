@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'motion/react'
 import { Bell, BellRing, CircleAlert, Upload } from 'lucide-react'
 import { useThread, useSendReply } from '../../hooks/useMessages'
+import { useEnterSends } from '../../hooks/useModuleSettings'
 import { useMessageActions } from '../../hooks/useMessageActions'
 import { usePhone } from '../../hooks/usePhone'
 import { useAttachmentUploads } from '../../hooks/useAttachmentUploads'
@@ -56,6 +57,7 @@ const DIVIDER_OFFSET = 48
  */
 export function ThreadPanel({ channelId, workspaceId, messageId, spaceName, people, me, onBack, onClose }: ThreadPanelProps) {
   const uploads = useAttachmentUploads({ workspaceId: workspaceId ?? '', channelId })
+  const enterSends = useEnterSends(workspaceId ?? '')
   const uploadsRef = useRef(uploads)
   uploadsRef.current = uploads
 
@@ -229,7 +231,8 @@ export function ThreadPanel({ channelId, workspaceId, messageId, spaceName, peop
             people={people}
             tone="base"
             placeholder="Trả lời trong thread"
-            hint="Enter để gửi"
+            hint={enterSends ? 'Enter để gửi' : 'Enter xuống dòng'}
+            enterSends={enterSends}
             uploads={uploads}
             parentMessageId={messageId}
             draftKey={threadScope(messageId)}

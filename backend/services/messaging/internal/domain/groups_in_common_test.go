@@ -167,6 +167,51 @@ func TestGroupsInCommon_PolicyFailureFailsClosed(t *testing.T) {
 	assert.Nil(t, got)
 }
 
+// The membership of both people is read once each, whatever the number of
+// groups: two parent lookups and no per-group assignment check, so a profile in
+// a workspace with many groups costs the policy the same as one with a few.
+func TestGroupsInCommon_ReadsMembershipOnceForEveryGroup(t *testing.T) {
+	f := newFixture(t)
+	f.read.addMember(f.wsID, commonViewer, commonOther)
+	var uas []string
+	for i := 0; i < 6; i++ {
+		_, oa, ua := f.commonChannel(t, f.wsID, fmt.Sprintf("common-many-%d", i), "private")
+		f.seat(ua, commonViewer, commonOther)
+		f.readable(oa)
+		uas = append(uas, ua)
+	}
+	// Deny inside the batch: one more group only the viewer is in.
+	_, soloOA, soloUA := f.commonChannel(t, f.wsID, "common-many-solo", "private")
+	f.seat(soloUA, commonViewer)
+	f.readable(soloOA)
+
+	got, err := f.svc.GroupsInCommon(f.asViewer(), f.wsID, commonViewer, commonOther)
+
+	require.NoError(t, err)
+	assert.Len(t, got, 6)
+	assert.NotContains(t, channelNames(got), "common-many-solo")
+	f.read.mu.Lock()
+	defer f.read.mu.Unlock()
+	assert.ElementsMatch(t, []string{commonViewer, commonOther}, f.read.parentsAsk, "one parent lookup per person")
+	for _, a := range f.read.assignedAsk {
+		assert.NotContains(t, append(uas, soloUA), a[1], "no per-group assignment check")
+	}
+}
+
+// Deny: a membership lookup that fails fails the whole answer.
+func TestGroupsInCommon_MembershipLookupFailureFailsClosed(t *testing.T) {
+	f := newFixture(t)
+	f.read.addMember(f.wsID, commonViewer, commonOther)
+	_, oa, ua := f.commonChannel(t, f.wsID, "common-parents-down", "private")
+	f.seat(ua, commonViewer, commonOther)
+	f.readable(oa)
+	f.read.parentsErr = errors.New("policy unreachable")
+
+	got, err := f.svc.GroupsInCommon(f.asViewer(), f.wsID, commonViewer, commonOther)
+	require.Error(t, err)
+	assert.Nil(t, got)
+}
+
 // The question needs a workspace and another person; asking about oneself is not one.
 func TestGroupsInCommon_RejectsAMalformedQuestion(t *testing.T) {
 	f := newFixture(t)

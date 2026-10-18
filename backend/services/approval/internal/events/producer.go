@@ -43,7 +43,12 @@ type ApprovalEventPayload struct {
 	// "đề nghị chờ bạn" (notify_pending) off; the consumer tells every other
 	// approver the request waits on.
 	PendingNotifyOff []string `json:"pending_notify_off,omitempty"`
-	Timestamp        int64    `json:"timestamp"`
+	// StepAdvanced is set on an approval: whether it moved the request on to
+	// its next step (or completed it). False means the step still waits on its
+	// other approvers, who were told when it began; the consumer does not tell
+	// them again. Omitted means it did advance.
+	StepAdvanced *bool `json:"step_advanced,omitempty"`
+	Timestamp    int64 `json:"timestamp"`
 }
 
 // Producer publishes approval lifecycle events to Kafka.

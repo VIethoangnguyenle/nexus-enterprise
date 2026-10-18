@@ -30,7 +30,8 @@ type AuthStore interface {
 	ListTenantsByUser(ctx context.Context, userID string) ([]store.TenantMembership, error)
 	GetTenantUser(ctx context.Context, tenantID, userID string) (*store.TenantMembership, error)
 	FindTenantByDomain(ctx context.Context, domain string) (*store.Tenant, error)
-	// UpdateProfile writes only the fields set in ch and marks the profile done.
+	// UpdateProfile writes only the fields set in ch and marks the profile done
+	// when a profile field (not only the language) is among them.
 	UpdateProfile(ctx context.Context, userID string, ch store.ProfileChanges) error
 	// ListWorkspaceSummaries lists the workspaces a person actively belongs to.
 	ListWorkspaceSummaries(ctx context.Context, userID string) ([]store.WorkspaceSummary, error)

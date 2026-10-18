@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { Calendar, ChevronDown, ChevronLeft, ChevronRight, Search, Settings } from 'lucide-react'
-import { CALENDAR_VIEWS, VIEW_LABEL, titleOf, weekLabel, type CalendarView } from '../../lib/calendar-format'
+import { CALENDAR_VIEWS, VIEW_LABEL, titleOf, weekLabel, type CalendarView, type WeekStart } from '../../lib/calendar-format'
 import { Button, Heading, IconButton, MenuItem, Popover } from '../primitives'
 
 /** The key that switches to each view, beside its name in the menu (DESIGN.md §6, Phím tắt). */
@@ -18,13 +18,15 @@ interface CalendarTopBarProps {
   onStep: (steps: -1 | 1) => void
   onSearch?: () => void
   onSettings?: () => void
+  /** Where the week the heading names starts: Monday unless the person chose Sunday. */
+  weekStart?: WeekStart
 }
 
 /**
  * The wide bar over the calendar (DESIGN.md §6 Lịch): Hôm nay, the two arrows, the heading of the range and
  * the view menu. No primary button here: Tạo lives in the side column.
  */
-export function CalendarTopBar({ view, date, onView, onToday, onStep, onSearch, onSettings }: CalendarTopBarProps) {
+export function CalendarTopBar({ view, date, onView, onToday, onStep, onSearch, onSettings, weekStart }: CalendarTopBarProps) {
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLButtonElement>(null)
   const unit = view === 'month' ? 'tháng' : view === 'day' ? 'ngày' : view === 'agenda' ? '30 ngày' : view === '3day' ? '3 ngày' : 'tuần'
@@ -42,7 +44,7 @@ export function CalendarTopBar({ view, date, onView, onToday, onStep, onSearch, 
         <ChevronRight size={20} strokeWidth={1.75} />
       </IconButton>
       <Heading as="h2" className="ml-1 min-w-0 truncate text-xl! font-normal! font-body!">
-        {titleOf(view, date)}
+        {titleOf(view, date, weekStart)}
         {(view === 'week' || view === '3day') && <span className="ml-2 text-sm text-ink-muted">{weekLabel(date)}</span>}
       </Heading>
       <span className="flex-1" />

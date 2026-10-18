@@ -8,8 +8,9 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// pgUndefinedTable is SQLSTATE 42P01: the tenant has no approval_user_settings
-// table yet, because nobody in it ever opened their approval settings.
+// pgUndefinedTable is SQLSTATE 42P01: the tenant schema has no
+// approval_user_settings table yet (provisioned before the table existed, and
+// the service has not started since to add it).
 const pgUndefinedTable = "42P01"
 
 // NotifyOffByNode looks the given user nodes up in the tenant's
@@ -38,8 +39,7 @@ func (s *Store) NotifyOffByNode(ctx context.Context, nodeIDs []string) (pendingO
 		FROM approval_user_settings s JOIN users u ON u.id = s.user_id
 		WHERE u.ngac_node = ANY($1)`, nodes)
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == pgUndefinedTable {
+		if undefinedTable(err) {
 			return pendingOff, resultOff, nil
 		}
 		return nil, nil, fmt.Errorf("notify settings: %w", err)
@@ -55,7 +55,17 @@ func (s *Store) NotifyOffByNode(ctx context.Context, nodeIDs []string) (pendingO
 		resultOff[node] = !result
 	}
 	if err := rows.Err(); err != nil {
+		// A statement prepared while the table existed reports it missing here,
+		// not from Query.
+		if undefinedTable(err) {
+			return map[string]bool{}, map[string]bool{}, nil
+		}
 		return nil, nil, fmt.Errorf("notify settings: %w", err)
 	}
 	return pendingOff, resultOff, nil
+}
+
+func undefinedTable(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == pgUndefinedTable
 }

@@ -14,7 +14,7 @@ type SearchParams struct {
 	// Optional filters from query params.
 	Status     string // pending|approved|rejected|cancelled
 	TemplateID string
-	CreatedBy  string // NGAC node ID of the requester
+	CreatedBy  string // user ID of the requester (resolved to their node by the store)
 	From       string // YYYY-MM-DD inclusive
 	To         string // YYYY-MM-DD inclusive
 	Limit      int    // default 20, max 50

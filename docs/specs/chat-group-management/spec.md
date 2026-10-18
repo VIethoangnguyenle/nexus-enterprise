@@ -67,7 +67,7 @@ checks through the Managers UA test.
 | Delete someone else's message | `domain/lifecycle.go:125` | workspace owners | workspace owners; owner, managers |
 | Close someone else's poll | `domain/polls_tasks.go:231` | workspace owners | workspace owners; owner, managers |
 | Edit someone else's task | `domain/polls_tasks.go:391` | workspace owners | workspace owners; owner, managers |
-| Remove a member | `domain/members.go:151,160` | the person, the creator, workspace owners | the person; owner; managers; workspace owners |
+| Remove a member | `domain/members.go:151,160` | the person, the creator, workspace owners | the person; owner; managers; workspace owners (never the group's owner) |
 | `can_remove_members` flag on the roster | `domain/members.go:242` | the creator, workspace owners | owner, managers, workspace owners |
 
 The creator shortcut (`isChannelCreator`) becomes the owner check and moves with a transfer.
@@ -83,7 +83,12 @@ Each group SHALL have three settings, each "Mọi thành viên" (default) or "Ch
   stay open to every member (members keep `write`). This rule is enforced by messaging, not the PDP, because messages are
   not graph nodes.
 - **Ai được thêm người:** when restricted, the Members → Content association SHALL lose `invite` (Managers keep it), so
-  the PDP refuses a member's invite.
+  the PDP refuses a member's invite. The rule is stored twice, in `channels.invite_policy` and in that association, by
+  two separate writes. Every save that carries the rule SHALL write the association again (an upsert), whatever the row
+  already holds, so a pair that drifted apart (a row write that failed after the grant, two managers saving at once) is
+  repaired by saving the rule. The rule the group reports (`GET …/management`) SHALL be read from the association
+  (`ngac.InviteRule`), what the PDP enforces; the row stands in only when the association cannot be read or is missing,
+  and that is logged.
 - **Ai được nhắc @Tất cả:** when restricted, messaging SHALL refuse an `@Tất cả` mention from a non-manager on send,
   reply and edit (see `chat-mention-all`).
 Changing a setting SHALL require manager authority and SHALL go through the EPP path when it changes the graph.
@@ -115,6 +120,11 @@ restricted. Replies inside a thread, voting in a poll and closing one's own poll
 #### Scenario: Restricted mention of everyone
 - **WHEN** `@Tất cả` is restricted and a member sends it, replies with it or edits it into a message
 - **THEN** each is refused; a manager sending it succeeds
+
+#### Scenario: Drifted adding rule
+- **WHEN** the row says everyone may add people but the Members → Content association lacks `invite`
+- **THEN** the group reports "Chỉ chủ nhóm và quản trị nhóm" (the enforced rule), and an owner or manager saving
+  "Mọi thành viên" gives the members `invite` back; a plain member's save is refused and writes nothing
 
 #### Scenario: Demoted manager
 - **WHEN** a manager is demoted while adding people is restricted
@@ -150,10 +160,24 @@ Transferring to oneself is refused.
 
 #### Scenario: Disband
 - **WHEN** the owner disbands the group, and separately a manager tries to
-- **THEN** the first succeeds: the channel row is deleted (cascades to the members cache), and the Managers UA, the Members
-  UA and the Content OA are removed from the graph through the policy writer (`cleanupChannelGraph`); a node that cannot
-  be deleted is logged and left, granting nothing once its channel no longer exists. The second attempt is denied and the
-  group stays
+- **THEN** the first succeeds: the group's drive (the `drive_context = 'channel'` root made for it, with everything in it)
+  is first moved to the trash through the drive service's `TrashItem`, as the owner (the drive checks their `write`);
+  then the channel row is deleted (cascades to the members cache), and the Managers UA, the Members UA and the Content OA
+  are removed from the graph through the policy writer (`cleanupChannelGraph`); a node that cannot be deleted is logged
+  and left, granting nothing once its channel no longer exists. The second attempt is denied and nothing, the drive
+  included, is touched
+
+#### Scenario: Disband while the drive cannot be trashed
+- **WHEN** the drive service cannot find or trash the group's drive
+- **THEN** the disband is refused with 503 ("the group's drive could not be moved to the trash; try again") and the
+  group, its nodes and its drive all stay; a retry finishes, and a drive already in the trash is not trashed again.
+  Nothing is deleted for good: the trashed items keep their rows, their stored objects and their share of the
+  workspace quota (the drive releases quota only on permanent deletion). Once the group's nodes are gone nobody holds
+  `write` on the drive's OA, so restoring or purging them is an operator's job in the database; no API reaches them
+
+#### Scenario: The group is already gone
+- **WHEN** a second disband, a transfer or a settings save reaches a group whose row was deleted a moment earlier
+- **THEN** the answer is 404, not 500
 
 #### Scenario: Former owner after a transfer
 - **WHEN** ownership has moved from A to B and A tries to remove B or disband the group
@@ -167,6 +191,12 @@ Transferring to oneself is refused.
 Removing someone from a group SHALL be allowed to the person themselves (leaving), the owner and managers (not the
 owner), and workspace owners as today through `manage`. Anyone else SHALL be denied. After a transfer the former owner
 has no creator shortcut. Direct messages and the workspace-wide channel keep refusing removal.
+
+Nobody SHALL remove the group's owner, a workspace owner included: a group whose owner is gone could never be handed over
+or disbanded, since both need the owner. A holder of `manage` (a workspace owner, inside the group or not) who tries is
+refused with 409 "the group's owner cannot be removed; transfer ownership first", and nothing is written; anyone else gets
+403. The owner leaving is the leave rule's own 409 (transfer first). Once ownership has moved, the former owner is a
+manager like any other and may be removed. (Decision of 2026-10-19: refuse rather than move ownership automatically.)
 
 #### Scenario: Owner or manager removes a member
 - **WHEN** the owner, or a manager, removes a member
@@ -182,6 +212,11 @@ has no creator shortcut. Direct messages and the workspace-wide channel keep ref
 - **WHEN** a workspace owner who is not in the group removes a member
 - **THEN** it succeeds as today, and they still cannot read the group
 
+#### Scenario: Workspace owner removes the group's owner
+- **WHEN** a workspace owner, inside the group or not, removes the group's owner
+- **THEN** it is refused with 409 asking to transfer ownership first; the owner keeps their Members and Managers edges and
+  `channels.created_by` is unchanged. After the owner hands the group over, the same removal of the former owner succeeds
+
 #### Scenario: Former owner removes a member
 - **WHEN** ownership has moved from A to B and A, now a manager, removes a member
 - **THEN** it succeeds only because A is a manager; with A also demoted it is denied, since the creator shortcut moved with the transfer
@@ -191,12 +226,21 @@ Existing groups SHALL get settings "Mọi thành viên" and an owner: `created_b
 group's Members UA, otherwise the earliest currently assigned member (by `channel_members.joined_at`, then
 `users.created_at`, then `users.id`). A group with nobody assigned keeps its creator column and gets no owner node.
 
-The backfill is the standalone command `backfill-managers` (`backend/services/messaging/cmd/backfill-managers/`). It
-lists every private channel oldest first, applies the owner rule, creates the Managers UA (`Ch_{id}_Managers`) beside
-Members under the workspace's policy class, grants `ChannelManagerOps` (invite) on the group's Content OA, and assigns
-the owner to the Managers UA. Graph writes go through the policy writer so decisions are invalidated. A group whose
-creator left before the backfill gets a different owner. Rerunning is safe (idempotent); failed groups are listed and
-make the command exit non-zero. The command supports `--dry-run` to print what would change without applying.
+The backfill is the standalone command `backfill-managers` (`backend/services/messaging/cmd/backfill-managers/`), run
+once per environment as a deploy step (`docs/deployment.md`, "One-off: group managers backfill"). It lists every private
+channel oldest first, applies the owner rule, creates the Managers UA (`Ch_{id}_Managers`) beside Members under the
+workspace's policy class when it is missing, and then, on every run whether the UA was just made or found, writes the
+UA's assignment under the policy class, the `ChannelManagerOps` (invite) grant on the group's Content OA, the Members →
+Content grant from the group's `invite_policy` (`ChannelMemberOps`, or `ChannelMemberOpsRestricted` when restricted), and
+the owner's assignment to the Managers UA. Each write is an upsert, so a run that failed part-way (the UA made, a later
+edge not) is finished by the next. Graph writes go through the policy writer so decisions are invalidated. A group whose
+creator left before the backfill gets a different owner. Failed groups are listed and make the command exit non-zero.
+The command supports `-dry-run` to print what would change without applying.
+
+The command has no user. It dials the policy as the service identity `backfill-managers`, which the policy admits on
+exactly the writer's `FindNodeByName`, `CreateNode`, `CreateAssignment` and `CreateAssociation`
+(`backend/services/policy/internal/grpc/authpolicy.go`); every other RPC, and those four from any other service
+identity, stay refused.
 
 #### Scenario: Creator who left before the backfill
 - **WHEN** a group's creator had left before roles arrived
@@ -205,6 +249,15 @@ make the command exit non-zero. The command supports `--dry-run` to print what w
 #### Scenario: Backfill rerun
 - **WHEN** the backfill runs again on a group that already has its Managers UA
 - **THEN** the existing UA is reused, the owner's assignment is idempotent, and no second copy is created
+
+#### Scenario: Backfill rerun after a partial failure
+- **WHEN** a run created a group's Managers UA and then failed before its PC edge or its grant was written
+- **THEN** the next run finds the UA by name and writes the PC edge, the managers' grant, the members' grant and the
+  owner's edge; the owner may add people again and a plain member of a restricted group still may not
+
+#### Scenario: Another service identity runs the backfill
+- **WHEN** the backfill dials as any service identity other than `backfill-managers`
+- **THEN** the policy answers Unauthenticated and nothing is written
 
 ### Requirement: Clients learn about role changes at once
 A change of roles or settings SHALL publish a realtime event (`management_changed`) that makes clients refresh their

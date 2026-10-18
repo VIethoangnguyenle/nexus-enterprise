@@ -21,9 +21,10 @@ type db interface {
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }
 
-// group is a private channel as the backfill sees it.
+// group is a private channel as the backfill sees it. InvitePolicy is its
+// "Ai được thêm người" rule (ngac.GroupSettingEveryone or GroupSettingManagers).
 type group struct {
-	ID, CreatedBy, WorkspaceID, ContentOA, MembersUA string
+	ID, CreatedBy, WorkspaceID, ContentOA, MembersUA, InvitePolicy string
 }
 
 // backfiller gives existing groups an owner and a Managers UA. Rows are read and
@@ -43,7 +44,8 @@ type summary struct {
 // groups lists every private channel, oldest first.
 func (b *backfiller) groups(ctx context.Context) ([]group, error) {
 	rows, err := b.db.Query(ctx, `
-		SELECT id, COALESCE(created_by, ''), COALESCE(workspace_id, ''), COALESCE(ngac_oa_id, ''), COALESCE(ngac_ua_id, '')
+		SELECT id, COALESCE(created_by, ''), COALESCE(workspace_id, ''), COALESCE(ngac_oa_id, ''), COALESCE(ngac_ua_id, ''),
+		       COALESCE(invite_policy, '')
 		FROM channels WHERE channel_type = 'private' ORDER BY created_at ASC, id ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("list groups: %w", err)
@@ -52,7 +54,7 @@ func (b *backfiller) groups(ctx context.Context) ([]group, error) {
 	var out []group
 	for rows.Next() {
 		var g group
-		if err := rows.Scan(&g.ID, &g.CreatedBy, &g.WorkspaceID, &g.ContentOA, &g.MembersUA); err != nil {
+		if err := rows.Scan(&g.ID, &g.CreatedBy, &g.WorkspaceID, &g.ContentOA, &g.MembersUA, &g.InvitePolicy); err != nil {
 			return nil, fmt.Errorf("scan group: %w", err)
 		}
 		out = append(out, g)
@@ -136,9 +138,15 @@ func (b *backfiller) backfill(ctx context.Context, g group, s *summary) error {
 	return b.ensureManagers(ctx, g, ownerNode, s)
 }
 
-// ensureManagers finds the group's Managers UA by its name, creating it beside
-// Members (under the workspace PC, holding the managers' operations on the
-// content OA) when it is missing, and puts the owner in it.
+// ensureManagers finds the group's Managers UA by its name, creating it when it
+// is missing, and then writes every edge the group's roles need: the UA under
+// the workspace PC, the managers' grant on the content OA, the members' grant
+// on it as the group's invite rule says, and the owner in the UA.
+//
+// The edges are written on every run, whether the UA was just made or found.
+// A run that made the UA and then failed left it without some of them, and a
+// rerun that skipped a found UA would leave it so for good. Each write is an
+// upsert, so writing an edge that exists changes nothing.
 func (b *backfiller) ensureManagers(ctx context.Context, g group, ownerNode string, s *summary) error {
 	name := ngac.ChannelManagersUAName(ngac.ChannelID(g.ID))
 	managersUA := ""
@@ -152,38 +160,57 @@ func (b *backfiller) ensureManagers(ctx context.Context, g group, ownerNode stri
 	if managersUA == "" {
 		s.ManagersUAsMade++
 		fmt.Fprintf(b.out, "  group %s: creating managers UA %s\n", g.ID, name)
-		if b.dryRun {
-			return nil
-		}
-		if g.ContentOA == "" {
-			return fmt.Errorf("group has no content OA")
-		}
-		var pc string
-		if err := b.db.QueryRow(ctx, `SELECT COALESCE(ngac_pc_id, '') FROM workspaces WHERE id = $1`, g.WorkspaceID).Scan(&pc); err != nil {
-			return fmt.Errorf("workspace PC: %w", err)
-		}
-		if pc == "" {
-			return fmt.Errorf("workspace has no PC")
-		}
+	}
+	if b.dryRun {
+		return nil
+	}
+	if g.ContentOA == "" {
+		return fmt.Errorf("group has no content OA")
+	}
+	var pc string
+	if err := b.db.QueryRow(ctx, `SELECT COALESCE(ngac_pc_id, '') FROM workspaces WHERE id = $1`, g.WorkspaceID).Scan(&pc); err != nil {
+		return fmt.Errorf("workspace PC: %w", err)
+	}
+	if pc == "" {
+		return fmt.Errorf("workspace has no PC")
+	}
+	if managersUA == "" {
 		created, err := b.write.CreateNode(ctx, &policypb.CreateNodeRequest{Name: name, NodeType: ngac.TypeUA})
 		if err != nil {
 			return fmt.Errorf("create managers UA: %w", err)
 		}
 		managersUA = created.GetId()
-		if _, err := b.write.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: managersUA, ParentId: pc}); err != nil {
-			return fmt.Errorf("assign managers UA under PC: %w", err)
-		}
+	}
+	if _, err := b.write.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: managersUA, ParentId: pc}); err != nil {
+		return fmt.Errorf("assign managers UA under PC: %w", err)
+	}
+	if _, err := b.write.CreateAssociation(ctx, &policypb.CreateAssociationRequest{
+		UaId: managersUA, OaId: g.ContentOA, Operations: ngac.ChannelManagerOps(),
+	}); err != nil {
+		return fmt.Errorf("grant managers on content: %w", err)
+	}
+	if g.MembersUA != "" {
 		if _, err := b.write.CreateAssociation(ctx, &policypb.CreateAssociationRequest{
-			UaId: managersUA, OaId: g.ContentOA, Operations: ngac.ChannelManagerOps(),
+			UaId: g.MembersUA, OaId: g.ContentOA, Operations: memberOps(g.InvitePolicy),
 		}); err != nil {
-			return fmt.Errorf("grant managers on content: %w", err)
+			return fmt.Errorf("grant members on content: %w", err)
 		}
 	}
-	if ownerNode == "" || b.dryRun {
+	if ownerNode == "" {
 		return nil
 	}
 	if _, err := b.write.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: ownerNode, ParentId: managersUA}); err != nil {
 		return fmt.Errorf("add owner to managers: %w", err)
 	}
 	return nil
+}
+
+// memberOps is the members' grant on a group's content under its invite rule:
+// without invite when only managers may add people, the full member
+// operations otherwise (the rule's default).
+func memberOps(invitePolicy string) []string {
+	if invitePolicy == ngac.GroupSettingManagers {
+		return ngac.ChannelMemberOpsRestricted()
+	}
+	return ngac.ChannelMemberOps()
 }

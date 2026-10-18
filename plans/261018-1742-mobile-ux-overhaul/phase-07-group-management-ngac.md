@@ -1,7 +1,7 @@
 ---
 phase: 7
 title: "Group management"
-status: pending
+status: completed
 priority: P1
 effort: "3.5d"
 dependencies: [6]

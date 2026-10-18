@@ -46,12 +46,16 @@ type spy struct {
 	ret      *pb.ReturnAssetReq
 	createT  *pb.CreateTypeRequest
 	schema   *pb.UpdateTypeSchemaRequest
+	listSort string
 
 	err error
 }
 
-func (s *spy) ListAssets(ctx context.Context, r *pb.ListAssetsRequest) (*pb.AssetList, error) {
+func (s *spy) ListAssets(ctx context.Context, r *pb.ListAssetsRequest, sort ...string) (*pb.AssetList, error) {
 	s.ctx, s.listA = ctx, r
+	if len(sort) > 0 {
+		s.listSort = sort[0]
+	}
 	return &pb.AssetList{}, s.err
 }
 func (s *spy) CreateAsset(ctx context.Context, r *pb.CreateAssetRequest) (*pb.Asset, error) {
@@ -153,6 +157,18 @@ func TestListAssets_IgnoresNumbersItCannotRead(t *testing.T) {
 	s := &spy{}
 	assert.Equal(t, http.StatusBadRequest, run(t, s.handler().ListAssets, http.MethodGet, "/?limit=lots", "", map[string]string{"id": "ws-1"}))
 	assert.Nil(t, s.listA, "a malformed number is refused before anything is asked of the service")
+}
+
+func TestListAssets_ReadsSortParam(t *testing.T) {
+	s := &spy{}
+	assert.Equal(t, http.StatusOK, run(t, s.handler().ListAssets, http.MethodGet, "/?sort=name", "", map[string]string{"id": "ws-1"}))
+	assert.Equal(t, "name", s.listSort)
+}
+
+func TestListAssets_RefusesInvalidSort(t *testing.T) {
+	s := &spy{}
+	assert.Equal(t, http.StatusBadRequest, run(t, s.handler().ListAssets, http.MethodGet, "/?sort=invalid", "", map[string]string{"id": "ws-1"}))
+	assert.Nil(t, s.listA, "an invalid sort is refused before anything is asked of the service")
 }
 
 func TestSummaryAndActivity_AskTheServiceAsTheCaller(t *testing.T) {

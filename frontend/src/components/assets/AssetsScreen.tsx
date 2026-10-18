@@ -10,6 +10,7 @@ import { useArrivals } from '../../hooks/useArrivals'
 import { usePeople } from '../../hooks/usePeople'
 import { useBottomBarLayout } from '../../hooks/usePhone'
 import { useRecentSearches } from '../../hooks/useRecentSearches'
+import { useServerSettings } from '../../hooks/useServerSettings'
 import { useSuggestionPanel } from '../../hooks/useSuggestionPanel'
 import { parseFields } from '../../lib/asset-fields'
 import { REQUEST_FILTERS, assetPerson, requestFilterStatuses, type RequestFilter } from '../../lib/asset-model'
@@ -20,6 +21,7 @@ import {
 } from '../../lib/assets-search'
 import { formatListTime, toMillis } from '../../lib/format'
 import { useMotionPresets } from '../../lib/motion'
+import { ASSET_DEFAULTS } from '../../lib/settings-defaults'
 import { workspaceDisplayName } from '../../lib/workspace'
 import { useAuthStore } from '../../stores/auth.store'
 import { Avatar, Button, FilterChip, Heading, ScrollFade, TabBar, type TabItem } from '../primitives'
@@ -57,6 +59,9 @@ const REQUEST_EMPTY: Record<RequestFilter, string> = {
   mine: 'Bạn chưa gửi yêu cầu nào. Tạo yêu cầu để người duyệt nhận được ngay.',
 }
 
+/** The tab of Cài đặt Tài sản → Tab mở đầu, as the screen names it. */
+const TAB_OF_SETTING: Record<'overview' | 'inventory' | 'requests', AssetsTab> = { overview: 'overview', inventory: 'list', requests: 'requests' }
+
 const SUBTITLE: Record<AssetsTab, string> = {
   overview: 'Thiết bị, giấy phép và nội thất',
   list: 'Tài sản',
@@ -71,6 +76,9 @@ const SUBTITLE: Record<AssetsTab, string> = {
  * request or type, the new-request form — is the URL's business, so reload,
  * Back/Forward and a pasted link land in the same place. Only the open dialogs
  * are client state.
+ *
+ * Opened without a tab in the address, it moves (in place, no history entry) to the tab of Cài đặt Tài sản →
+ * Tab mở đầu once the settings answer; until then, and by default, it shows Tổng quan.
  */
 export function AssetsScreen() {
   const search = useSearch({ strict: false }) as AssetsSearch
@@ -184,6 +192,17 @@ export function AssetsScreen() {
     (to: (prev: AssetsSearch) => AssetsSearch) => void navigate({ to: '/assets', search: to }),
     [navigate],
   )
+
+  // The opening tab, decided once per visit: a tab chosen afterwards (Tổng quan included) is left alone.
+  const options = useServerSettings('asset', wsId, ASSET_DEFAULTS)
+  const opened = useRef(false)
+  useEffect(() => {
+    if (opened.current || !wsId || options.isLoading) return
+    opened.current = true
+    const first = TAB_OF_SETTING[options.settings.default_tab ?? 'overview'] ?? 'overview'
+    if (search.section || first === 'overview') return
+    void navigate({ to: '/assets', search: (p: AssetsSearch) => tabSearch(p, first), replace: true })
+  }, [wsId, options.isLoading, options.settings.default_tab, search.section, navigate])
   useEffect(() => {
     if (typed.trim() === (search.q ?? '').trim()) return
     const t = setTimeout(() => {

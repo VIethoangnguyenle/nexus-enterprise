@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/google/uuid"
@@ -32,13 +33,19 @@ func TestNotifyOffByNode_ReadsEachPersonsOwnSwitches(t *testing.T) {
 
 	pending, result, err := st.NotifyOffByNode(ctx, nodes)
 	if err != nil {
-		t.Fatalf("before any settings table: %v", err)
+		t.Fatalf("before any settings: %v", err)
 	}
 	if len(pending) != 0 || len(result) != 0 {
 		t.Fatalf("before any settings: pending off %v, result off %v; want nobody", pending, result)
 	}
-
-	if err := st.EnsureSettingsTable(ctx); err != nil {
+	// A schema provisioned before the settings table existed has nobody opted out.
+	if _, err := pool.Exec(context.Background(), fmt.Sprintf(`DROP TABLE %q.approval_user_settings`, schema)); err != nil {
+		t.Fatal(err)
+	}
+	if pending, result, err := st.NotifyOffByNode(ctx, nodes); err != nil || len(pending) != 0 || len(result) != 0 {
+		t.Fatalf("without the table: pending off %v, result off %v, err %v; want nobody, no error", pending, result, err)
+	}
+	if err := st.EnsureTenantTables(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	for _, row := range []*domain.SettingsRow{

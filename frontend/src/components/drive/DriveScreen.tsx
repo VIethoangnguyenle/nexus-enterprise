@@ -4,6 +4,8 @@ import { useNavigate, useRouter, useSearch } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
 import { FolderTree, MoreHorizontal, Search, Star, StarOff, UserPlus, WifiOff } from 'lucide-react'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
+import { useMeteredConnection } from '../../hooks/useMeteredConnection'
+import { useModuleSettings } from '../../hooks/useModuleSettings'
 import { useArrivals } from '../../hooks/useArrivals'
 import { useConnectionLost } from '../../hooks/useConnectionLost'
 import { useCreateTextDocument } from '../../hooks/useDocuments'
@@ -24,7 +26,7 @@ import { useMotionPresets } from '../../lib/motion'
 import { workspaceDisplayName } from '../../lib/workspace'
 import { useAuthStore } from '../../stores/auth.store'
 import { useDriveStore } from '../../stores/drive.store'
-import { useFileViewMode } from '../../stores/file-view.store'
+import { useFileViewMode, type FileViewMode } from '../../stores/file-view.store'
 import { setUploadNavigator, useUploadQueue } from '../../stores/upload-queue.store'
 import { useWebSocketStore } from '../../stores/websocket.store'
 import { Heading, IconButton, toast } from '../primitives'
@@ -55,9 +57,10 @@ import { UploadQueue } from './UploadQueue'
 import { useDriveActions } from './useDriveActions'
 import { useDriveLayout } from './use-drive-layout'
 import {
-  filterByType, itemVersion, kindOf, matchesName, ownerOf, sortItems, type SortKey, type TypeFilter,
+  SORT_OF_SETTING, filterByType, itemVersion, kindOf, matchesName, ownerOf, sortItems, type SortKey, type TypeFilter,
 } from './drive-model'
 import { FileViewer, type ViewerFile } from '../files/FileViewer'
+import { ThumbnailsAllowed } from '../files/FileThumb'
 import type { MenuAnchor } from '../files/use-long-press'
 
 /** Items without an NGAC node are never checked; they can be seen and nothing else. */
@@ -94,6 +97,10 @@ const EMPTY: DriveItem[] = []
  * tree gives way to entry chips, a home with Truy cập nhanh and Gần đây, a
  * folder bar with the path, a sheet per item, multi-select and background uploads.
  *
+ * Cài đặt Tài liệu shapes it: the layout (Tự động keeps the one last chosen on this device; Lưới or Danh sách
+ * opens on that, and the toggle changes it for the visit), the order, whether folders come first, and whether
+ * pictures load on mobile data. Until the settings answer, their defaults stand in.
+ *
  * Where the user is — workspace, folder, shared view — is the URL's business:
  * `?folder=<id>` makes reload, Back/Forward and a pasted link land in the same
  * folder. Only the selection, the filters, the phone's chip and the tree's open
@@ -110,7 +117,15 @@ export function DriveScreen() {
   const { workspaceId: wsId, workspaceName, workspaces } = useActiveWorkspace()
   const people = usePeople(wsId)
   const me = useAuthStore((s) => s.user)
-  const [mode, setMode] = useFileViewMode('drive')
+  const options = useModuleSettings('drive', wsId)
+  const [storedMode, setStoredMode] = useFileViewMode('drive')
+  // A layout picked with the toggle while the settings name one holds for this visit.
+  const [pickedMode, setPickedMode] = useState<FileViewMode | null>(null)
+  const fixedMode = options.view === 'grid' || options.view === 'list' ? options.view : null
+  const mode: FileViewMode = fixedMode ? pickedMode ?? fixedMode : storedMode
+  const setMode = (next: FileViewMode) => (fixedMode ? setPickedMode(next) : setStoredMode(next))
+  const metered = useMeteredConnection()
+  const thumbnailsAllowed = options.cellular_previews !== false || !metered
 
   const shared = search.view === 'shared'
   const folderId = shared ? undefined : search.folder
@@ -159,7 +174,9 @@ export function DriveScreen() {
   const queryRef = useRef(query)
   queryRef.current = query
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
-  const [sort, setSort] = useState<SortKey>('recent')
+  // The order picked on screen for this visit; until then, the one of the settings.
+  const [pickedSort, setSort] = useState<SortKey | null>(null)
+  const sort: SortKey = pickedSort ?? SORT_OF_SETTING[options.sort] ?? 'recent'
   const [dragging, setDragging] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [menu, setMenu] = useState<MenuTarget | null>(null)
@@ -205,8 +222,8 @@ export function DriveScreen() {
   }, [shared, trail, expandFolders])
 
   const items = useMemo(
-    () => sortItems(filterByType(all.filter((i) => matchesName(i, query)), typeFilter), sort),
-    [all, query, typeFilter, sort],
+    () => sortItems(filterByType(all.filter((i) => matchesName(i, query)), typeFilter), sort, options.folders_first !== false),
+    [all, query, typeFilter, sort, options.folders_first],
   )
   if (rowsSeen.current.scope !== scope) rowsSeen.current = { scope, n: 0 }
   // Only the table folds rows away; the gallery has nothing to wait for.
@@ -674,6 +691,7 @@ export function DriveScreen() {
   )
 
   return (
+    <ThumbnailsAllowed.Provider value={thumbnailsAllowed}>
     <div className="relative flex flex-1 min-h-0 min-w-0">
       {layout === 'desktop' && <div className="w-70 shrink-0 min-h-0">{tree(openFolder)}</div>}
 
@@ -975,5 +993,6 @@ export function DriveScreen() {
         />
       )}
     </div>
+    </ThumbnailsAllowed.Provider>
   )
 }

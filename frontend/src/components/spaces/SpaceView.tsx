@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence } from 'motion/react'
 import { ArrowLeft, Info, MessagesSquare, Search, UserPlus, CircleAlert, Lock, Upload } from 'lucide-react'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
+import { useEnterSends } from '../../hooks/useModuleSettings'
 import { useWorkspaceType } from '../../hooks/useWorkspaceType'
 import { useConversations } from '../../hooks/useConversations'
 import { usePeople } from '../../hooks/usePeople'
@@ -69,6 +70,7 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
 }) {
   const navigate = useNavigate()
   const { workspaceId } = useActiveWorkspace()
+  const enterSends = useEnterSends(workspaceId)
   const { isPersonal } = useWorkspaceType()
   const { conversations, isLoading: listLoading } = useConversations(workspaceId)
   const people = usePeople(workspaceId)
@@ -502,7 +504,8 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
                 canCreateEvent={conv?.kind === 'space' && !isPersonal}
                 people={people}
                 placeholder={title ? `Tin nhắn cho ${title}` : 'Viết tin nhắn'}
-                hint="Enter để gửi · Shift+Enter xuống dòng"
+                hint={enterSends ? 'Enter để gửi · Shift+Enter xuống dòng' : 'Enter xuống dòng · Shift+Enter để gửi'}
+                enterSends={enterSends}
                 onSend={handleSend}
                 onTyping={() => sendTyping(channelId)}
                 uploads={uploads}

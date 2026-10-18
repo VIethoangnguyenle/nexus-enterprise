@@ -2,30 +2,65 @@ package store
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"ngac-platform/services/approval/internal/domain"
 )
 
-// EnsureSettingsTable creates the approval_user_settings table in the tenant
-// schema if it does not already exist. Safe to call on every request.
-func (s *Store) EnsureSettingsTable(ctx context.Context) error {
-	c, err := s.conn(ctx)
-	if err != nil {
-		return err
-	}
-	defer c.Release()
+// execer is what the tenant-table DDL runs on: the pool, or the transaction
+// that is provisioning the schema.
+type execer interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
 
-	_, err = c.Exec(ctx, `CREATE TABLE IF NOT EXISTS approval_user_settings (
-		user_id       TEXT PRIMARY KEY,
-		default_tab   TEXT NOT NULL DEFAULT 'pending',
-		sort          TEXT NOT NULL DEFAULT 'newest',
+// ensureTenantTables creates, in the given tenant schema, the tables the
+// approval service owns beyond what provision_tenant_schema() makes: today
+// approval_user_settings, each person's approval settings. It is part of
+// provisioning (EnsureSchema, ProvisionSchema, and EnsureTenantTables at start
+// for schemas made before the table existed), never of a settings request.
+// Idempotent.
+func ensureTenantTables(ctx context.Context, q execer, schema string) error {
+	if schema == "" {
+		return fmt.Errorf("ensure tenant tables: no schema")
+	}
+	if _, err := q.Exec(ctx, fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s.approval_user_settings (
+		user_id        TEXT PRIMARY KEY,
+		default_tab    TEXT NOT NULL DEFAULT 'pending',
+		sort           TEXT NOT NULL DEFAULT 'newest',
 		notify_pending BOOLEAN NOT NULL DEFAULT TRUE,
 		notify_result  BOOLEAN NOT NULL DEFAULT TRUE,
-		updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
-	)`)
-	return err
+		updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	)`, pgx.Identifier{schema}.Sanitize())); err != nil {
+		return fmt.Errorf("ensure approval_user_settings in %s: %w", schema, err)
+	}
+	return nil
+}
+
+// EnsureTenantTables brings every active tenant schema up to date with the
+// tables ensureTenantTables makes. The service runs it once when it starts, so
+// a schema provisioned before a table existed gets it before any request needs
+// it. Running it again changes nothing.
+func (s *Store) EnsureTenantTables(ctx context.Context) error {
+	rows, err := s.db.Query(ctx, `
+		SELECT schema_name FROM tenant_schemas
+		WHERE status = 'active' AND schema_name IN (SELECT nspname FROM pg_namespace)
+		ORDER BY schema_name`)
+	if err != nil {
+		return fmt.Errorf("list tenant schemas: %w", err)
+	}
+	schemas, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return fmt.Errorf("list tenant schemas: %w", err)
+	}
+	for _, schema := range schemas {
+		if err := ensureTenantTables(ctx, s.db, schema); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // GetApprovalUserSettings returns the caller's approval settings, or nil when no row exists.

@@ -31,6 +31,18 @@ func TestUnknownChannelAndMessageAreNotFound(t *testing.T) {
 	require.Empty(t, f.read.asked(), "an unknown id is refused before policy is asked")
 }
 
+// A group that is gone by the time it is written (a second disband, a transfer
+// just after one) is not found, not a failure of ours.
+func TestGroupWritesOnAVanishedChannelAreNotFound(t *testing.T) {
+	f := newFixture(t)
+	st := store.NewStore(f.pool)
+	ctx := context.Background()
+
+	require.ErrorIs(t, st.DeleteChannel(ctx, "no-such-channel"), domain.ErrNotFound)
+	require.ErrorIs(t, st.TransferChannelOwnership(ctx, "no-such-channel", f.userID), domain.ErrNotFound)
+	require.ErrorIs(t, st.UpdateChannelSettings(ctx, "no-such-channel", "", "everyone", ""), domain.ErrNotFound)
+}
+
 func TestLookupFailureIsNotReportedAsNotFound(t *testing.T) {
 	f := newFixture(t)
 	down, err := pgxpool.New(context.Background(), "postgres://x:x@127.0.0.1:1/x?connect_timeout=1")

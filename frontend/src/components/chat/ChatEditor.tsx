@@ -76,6 +76,11 @@ interface ChatEditorProps {
    * sent to reply instead, e.g. the conversation's thread list. Without it the notice only explains.
    */
   onReplyInThread?: () => void
+  /**
+   * Whether a plain Enter sends (`useEnterSends`): true sends on Enter and Shift+Enter breaks the line; false
+   * makes Enter the new line and Shift+Enter the send. Ctrl/Cmd+Enter always sends. Sends on Enter when absent.
+   */
+  enterSends?: boolean
 }
 
 /** Whether the formatting bar is open is remembered per person, on this device. */
@@ -93,7 +98,8 @@ interface LinkState { anchor: HTMLElement; text: string; href: string; hasLink: 
  * Message composer (design/mockups/spaces.html §2): a raised box with the
  * formatting bar (when "A" is on), the editor, and a bar of attach, "A", emoji,
  * hint and "Gửi" below. Enter sends (a new line inside a list or a code block;
- * Ctrl/Cmd+Enter sends from there), Shift+Enter breaks the line, "@" opens the
+ * Ctrl/Cmd+Enter sends from there), Shift+Enter breaks the line — the other way
+ * round when `enterSends` is false — "@" opens the
  * member list, ↑ in an empty box edits your last message. With `edit` it is the
  * editor of one message: the "Đang sửa tin" bar, Enter or "Lưu" saves, Esc cancels.
  */
@@ -115,6 +121,7 @@ export function ChatEditor({
   draftKey,
   canCreateEvent,
   onReplyInThread,
+  enterSends = true,
 }: ChatEditorProps) {
   const fileRef = useRef<HTMLInputElement>(null)
   const cameraRef = useRef<HTMLInputElement>(null)
@@ -188,6 +195,9 @@ export function ChatEditor({
 
   const onEditLastRef = useRef(onEditLast)
   onEditLastRef.current = onEditLast
+  // Read by the editor's key handler, which TipTap builds once.
+  const enterSendsRef = useRef(enterSends)
+  enterSendsRef.current = enterSends
   const openLinkRef = useRef<() => void>(() => {})
 
   const editor = useEditor({
@@ -274,10 +284,13 @@ export function ChatEditor({
           onEditLastRef.current()
           return true
         }
-        if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+        // Enter sends and Shift+Enter breaks the line, or the reverse when the person turned "Enter để gửi" off.
+        const enterSendsNow = enterSendsRef.current
+        const sendKey = enterSendsNow ? !event.shiftKey : event.shiftKey || mod
+        if (event.key === 'Enter' && sendKey && !event.isComposing) {
           if (mentionOpen.current && !mod) return false
           // In a list or a code block Enter makes the next line; Ctrl/Cmd+Enter sends from there.
-          const inBlock = ['bulletList', 'orderedList', 'codeBlock'].some((n) => isActiveRef.current(n))
+          const inBlock = enterSendsNow && ['bulletList', 'orderedList', 'codeBlock'].some((n) => isActiveRef.current(n))
           if (inBlock && !mod) return false
           event.preventDefault()
           sendRef.current()

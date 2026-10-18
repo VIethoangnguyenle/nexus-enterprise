@@ -23,7 +23,8 @@ type ProfileUpdateInput struct {
 var validLanguages = map[string]bool{"vi": true, "en": true, "": true}
 
 // UpdateProfile validates and saves the fields that were sent. The first save
-// ends the "tell us who you are" step of sign-in. Nothing is written unless
+// of a profile field (name, title, location) ends the "tell us who you are"
+// step of sign-in; the language alone does not. Nothing is written unless
 // every field sent is valid.
 func (s *Service) UpdateProfile(ctx context.Context, userID string, in ProfileUpdateInput) error {
 	if userID == "" {

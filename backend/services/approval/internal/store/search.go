@@ -27,13 +27,14 @@ func (s *Store) SearchRequests(ctx context.Context, p domain.SearchParams) ([]*d
 
 	// Text search: match on template_name or requester display name.
 	// Uses lower() for case-insensitive matching. The unaccent extension
-	// would be better but may not be available in all environments.
+	// would be better but may not be available in all environments. % and _ in
+	// the query are the characters themselves, not wildcards.
 	textParam := fmt.Sprintf("$%d", argIdx)
 	conditions = append(conditions, fmt.Sprintf(
-		"(lower(ar.template_name) LIKE '%%' || lower(%s) || '%%' OR lower(u.display_name) LIKE '%%' || lower(%s) || '%%')",
+		`(lower(ar.template_name) LIKE '%%' || lower(%s) || '%%' ESCAPE '\' OR lower(u.display_name) LIKE '%%' || lower(%s) || '%%' ESCAPE '\')`,
 		textParam, textParam,
 	))
-	args = append(args, p.Query)
+	args = append(args, escapeLike(p.Query))
 	argIdx++
 
 	// Access control: the caller can see requests they created, are assigned
@@ -71,7 +72,8 @@ func (s *Store) SearchRequests(ctx context.Context, p domain.SearchParams) ([]*d
 		argIdx++
 	}
 	if p.CreatedBy != "" {
-		conditions = append(conditions, fmt.Sprintf("ar.created_by = $%d", argIdx))
+		// The filter names the requester by user ID; a request records their node.
+		conditions = append(conditions, fmt.Sprintf("ar.created_by = (SELECT ngac_node FROM public.users WHERE id = $%d)", argIdx))
 		args = append(args, p.CreatedBy)
 		argIdx++
 	}
@@ -131,4 +133,18 @@ func (s *Store) SearchRequests(ctx context.Context, p domain.SearchParams) ([]*d
 		results = append(results, r)
 	}
 	return results, total, nil
+}
+
+// escapeLike makes LIKE's wildcards (% and _) and its escape character match
+// themselves.
+func escapeLike(s string) string {
+	var out []byte
+	for i := range len(s) {
+		switch s[i] {
+		case '%', '_', '\\':
+			out = append(out, '\\')
+		}
+		out = append(out, s[i])
+	}
+	return string(out)
 }
