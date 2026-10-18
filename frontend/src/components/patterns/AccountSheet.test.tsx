@@ -41,6 +41,7 @@ beforeEach(() => {
   vi.mocked(logoutSession).mockClear()
 })
 afterEach(() => {
+  vi.unstubAllEnvs()
   vi.unstubAllGlobals()
   cleanup()
   resetClient()
@@ -54,6 +55,12 @@ describe('AccountSheet', () => {
     await waitFor(() => expect(sheet).toHaveTextContent(/·\s*Khối Vận hành/))
     expect(within(sheet).getByText('Đang hoạt động')).toBeInTheDocument()
     expect(document.body.textContent).not.toMatch(UUID_RE)
+  })
+
+  it('ends with the build the person is running', async () => {
+    vi.stubEnv('VITE_APP_VERSION', '2026.10.18 · 6368e8e')
+    const { sheet } = await openSheet()
+    expect(within(sheet).getByText('Phiên bản 2026.10.18 · 6368e8e')).toBeInTheDocument()
   })
 
   it('lists the notification settings, the account, Cài đặt and Đăng xuất', async () => {

@@ -47,6 +47,7 @@ jobs:
       tag: ${{ steps.resolve.outputs.tag }}
       build: ${{ steps.resolve.outputs.build }}
       owner: ${{ steps.resolve.outputs.owner }}
+      version: ${{ steps.resolve.outputs.version }}
     steps:
       - id: resolve
         env:
@@ -73,6 +74,8 @@ jobs:
             echo "tag=$tag"
             echo "build=$build"
             echo "owner=${GITHUB_REPOSITORY_OWNER,,}"
+            # What the app shows as its version: build date (Vietnam time) and short commit.
+            echo "version=$(TZ=Asia/Ho_Chi_Minh date +%Y.%m.%d) · ${sha:0:7}"
           } >>"$GITHUB_OUTPUT"
 
   build:
@@ -118,6 +121,7 @@ jobs:
           provenance: false
           build-args: |
             ${{ matrix.image == 'frontend' && format('VITE_ONESIGNAL_APP_ID={0}', vars.VITE_ONESIGNAL_APP_ID || '') || '' }}
+            ${{ matrix.image == 'frontend' && format('VITE_APP_VERSION={0}', needs.meta.outputs.version) || '' }}
           tags: |
             ghcr.io/${{ needs.meta.outputs.owner }}/nexus-${{ matrix.image }}:${{ needs.meta.outputs.sha }}
             ghcr.io/${{ needs.meta.outputs.owner }}/nexus-${{ matrix.image }}:main

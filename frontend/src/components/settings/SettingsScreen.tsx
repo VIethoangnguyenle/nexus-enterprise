@@ -1,4 +1,5 @@
 import { useNavigate, useSearch } from '@tanstack/react-router'
+import { appVersionLabel } from '../../lib/app-version'
 import { SETTINGS_TABS, tabOf, tabSearch, type SettingsSearch, type SettingsTab } from '../../lib/settings-search'
 import { Heading, ScrollFade, TabBar, type TabItem } from '../primitives'
 import { AppearanceTab } from './AppearanceTab'
@@ -46,6 +47,7 @@ export function SettingsScreen() {
         {tab === 'workspace' && <WorkspaceTab />}
         {tab === 'giao-dien' && <AppearanceTab />}
         {tab === 'thong-bao' && <NotificationSettings />}
+        <p className="mt-8 text-xs text-ink-muted select-text">{appVersionLabel()}</p>
       </div>
     </section>
   )

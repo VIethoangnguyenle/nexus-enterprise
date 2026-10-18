@@ -46,6 +46,7 @@ beforeEach(() => {
     : Promise.reject(new Error(`unexpected ${path}`)))
 })
 afterEach(() => {
+  vi.unstubAllEnvs()
   cleanup()
   resetClient()
   switchPreferencesTo(undefined)
@@ -249,6 +250,14 @@ describe('AppSidebar, collapsed rail', () => {
     expect(within(menu).getByText(/Đang hoạt động/)).toBeInTheDocument()
     await user.click(within(menu).getByRole('menuitem', { name: 'Đăng xuất' }))
     expect(logoutSession).toHaveBeenCalled()
+  })
+
+  it('ends the account menu with the build the person is running', async () => {
+    vi.stubEnv('VITE_APP_VERSION', '2026.10.18 · 6368e8e')
+    await renderSidebar()
+    await userEvent.setup().click(await screen.findByRole('button', { name: /^Tài khoản: / }))
+    const menu = await screen.findByRole('menu', { name: 'Tài khoản' })
+    expect(within(menu).getByText('Phiên bản 2026.10.18 · 6368e8e')).toBeInTheDocument()
   })
 
   it('takes the account menu to settings', async () => {
