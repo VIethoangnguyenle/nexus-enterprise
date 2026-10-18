@@ -15,9 +15,10 @@ export function ListPanel({ workspaceId: _workspaceId }: ListPanelProps) {
 
   if (activeModule !== 'messaging') return null
 
-  /* Tin nhắn: the Google-Chat navigator sits on the page tone, no divider (DESIGN.md §4). */
+  /* Tin nhắn: the Google-Chat navigator sits on the page tone, no divider (DESIGN.md §4). Not clipped: the
+   * search surface at the head of the column opens wider than the column. */
   return (
-    <div className="flex-shrink-0 bg-base flex flex-col overflow-hidden h-full">
+    <div className="flex-shrink-0 bg-base flex flex-col h-full">
       <ChatNavigator />
     </div>
   )

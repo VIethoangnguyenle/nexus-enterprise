@@ -92,9 +92,12 @@ export function useSuggestionPanel({
 
   // A new value (typing, or emptying the box again) undoes Esc and forgets the marked row.
   const [prevValue, setPrevValue] = useState(value)
+  // Set by a caller that is about to change the value itself (Esc clearing the box): the list stays shut for that change.
+  const keepShut = useRef(false)
   if (value !== prevValue) {
     setPrevValue(value)
-    setDismissed(false)
+    setDismissed(keepShut.current)
+    keepShut.current = false
     setActiveUid(null)
     setSaid('')
   }
@@ -214,6 +217,8 @@ export function useSuggestionPanel({
     mark: (item: ShownItem) => setActiveUid(item.uid),
     select,
     close,
+    /** Call just before changing `value` yourself: the suggestions do not come back for that change. */
+    holdClosed: () => { keepShut.current = true },
     remove,
     clearAll,
     /** Spread on the element that holds the box and its list: Tab from the box to a button inside it keeps the surface open. */

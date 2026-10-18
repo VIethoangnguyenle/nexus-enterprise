@@ -104,7 +104,9 @@ const Surface = forwardRef<HTMLInputElement, SurfaceProps>(function Surface(
   }
 
   return (
-    <div ref={slotRef} className={`relative ${tall ? 'h-10' : 'h-9'} ${slotClassName}`} style={{ containerType: 'size' }}>
+    // Size containment (for the `cq` units) makes the slot a stacking context of its own, so the slot, not the surface,
+    // is what has to rise above what the screen draws (sticky headers, side panels) and below dialogs.
+    <div ref={slotRef} className={`relative z-backdrop ${tall ? 'h-10' : 'h-9'} ${slotClassName}`} style={{ containerType: 'size' }}>
       <div
         ref={panel.surface.ref}
         onBlur={panel.surface.onBlur}
@@ -112,8 +114,7 @@ const Surface = forwardRef<HTMLInputElement, SurfaceProps>(function Surface(
         // The surface is the control while it rests, so a press on it is a press on the box.
         onMouseDown={(e) => { if (open && !(e.target instanceof HTMLInputElement)) e.preventDefault() }}
         style={style}
-        // Above what the screen under it draws (sticky headers, side panels), below dialogs.
-        className="absolute left-0 -top-1 z-backdrop bg-overlay rounded-overlay"
+        className="absolute left-0 -top-1 bg-overlay rounded-overlay"
       >
         <span aria-hidden="true" className={`absolute inset-0 rounded-[inherit] pointer-events-none ${tone === 'sunk' ? 'bg-sunk' : 'bg-base'}`} style={layer(!open, DURATION.press, 'var(--ease-out)')} />
         <span aria-hidden="true" className="absolute inset-0 rounded-[inherit] pointer-events-none shadow-overlay" style={layer(open, open ? DURATION.base : DURATION.exit, open ? 'var(--ease-out)' : 'var(--ease-in)')} />
@@ -123,7 +124,8 @@ const Surface = forwardRef<HTMLInputElement, SurfaceProps>(function Surface(
             ref={ref}
             bare
             {...field}
-            className={trailing ? 'pr-11' : ''}
+            // The wide box (Chat) is a 16px pill with its magnifier 14px in; the others keep the 14px text of their screen.
+            className={`${wide ? 'pl-3.5 [&_input]:text-16' : ''} ${trailing ? 'pr-11 [&_input::-webkit-search-cancel-button]:hidden' : ''}`}
           />
           {trailing && (
             // At rest it sits at the box's right end; the open surface is wider, so it moves to the surface's.
