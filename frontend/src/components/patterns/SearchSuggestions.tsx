@@ -1,127 +1,203 @@
-import { useCallback, useLayoutEffect, useState, type CSSProperties, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
-import { motion } from 'motion/react'
+import { type ReactNode } from 'react'
+import { AnimatePresence, motion, useIsPresent, type TargetAndTransition } from 'motion/react'
 import { Clock, Search, X } from 'lucide-react'
-import { useMotionPresets } from '../../lib/motion'
+import { DURATION, EASE, useMotionPresets, type MotionPresets } from '../../lib/motion'
 import { IconButton, Pressable } from '../primitives'
 import type { ShownGroup, ShownItem, SuggestionPanel } from '../../hooks/useSuggestionPanel'
+import { Marked } from './Marked'
 
-const GAP = 6
-const MIN_WIDTH = 380
-const MAX_HEIGHT = 480
-/** Space kept between the popover and the window's edges. */
-const EDGE = 12
-
-/**
- * Where the popover sits: under the control around the box, at least as wide as it (and 380), slid left rather than
- * cut by the window's right edge, and no taller than the room below the box.
- */
-function usePlacement(panel: SuggestionPanel): CSSProperties {
-  const { anchorRef, visible, variant } = panel
-  const [pos, setPos] = useState<CSSProperties>({})
-  const place = useCallback(() => {
-    const box = anchorRef.current
-    const a = (box?.closest('label') ?? box)?.getBoundingClientRect()
-    if (!a) return
-    const width = Math.min(Math.max(a.width, MIN_WIDTH), window.innerWidth - 2 * EDGE)
-    const left = Math.max(EDGE, Math.min(a.left, window.innerWidth - EDGE - width))
-    const top = a.bottom + GAP
-    setPos({ top, left, width, maxHeight: Math.min(MAX_HEIGHT, window.innerHeight - top - EDGE) })
-  }, [anchorRef])
-
-  useLayoutEffect(() => {
-    if (!visible || variant !== 'popover') return
-    place()
-    window.addEventListener('resize', place)
-    window.addEventListener('scroll', place, true)
-    return () => {
-      window.removeEventListener('resize', place)
-      window.removeEventListener('scroll', place, true)
-    }
-  }, [visible, variant, place])
-  return pos
-}
+/** Rows past this one enter together with it, so a long list never keeps its tail waiting. */
+const STAGGER_ROWS = 7
+/** The panel's rows start this long after the surface does, and each is this much later than the one above. */
+const ROW_DELAY = 0.06
+const ROW_STEP = 0.02
 
 interface Props {
   panel: SuggestionPanel
-  /** Phone screen only: the one line shown when there is nothing to suggest. */
+  /** Shown when there is nothing to suggest: on a phone screen always, on a desktop surface when it was asked to open empty. */
   emptyText?: string
+  /** A second, quieter line under `emptyText` on a phone. */
+  emptyHint?: string
   label?: string
+  /** Keep drawing the rows although the panel has closed: the surface is still folding back into the box. */
+  keep?: boolean
 }
 
 /** Presses inside never take focus from the box; a row acts on click. */
 const keepFocus = (e: { preventDefault: () => void }) => e.preventDefault()
 
 /**
- * What an empty search box suggests (DESIGN.md "Gợi ý trong ô tìm"). On a desktop, a listbox in a popover under
- * the box, driven from the box by keyboard. On a phone, groups of buttons that cover the list under the box, each
- * recent search with its own ✕ so it can be removed by touch and by a screen reader alike.
+ * How a row comes and goes (DESIGN.md "Gợi ý trong ô tìm"): on opening it slides down 4px and fades in, 160ms
+ * after a short wait and 20ms later than the row above; while words are typed it only fades (120ms); removing it
+ * fades it out and folds its height (160ms) so the rows below glide up. Under reduced motion only fades remain.
  */
-export function SearchSuggestions({ panel, emptyText, label = 'Gợi ý tìm kiếm' }: Props) {
-  const m = useMotionPresets()
-  const pos = usePlacement(panel)
-  if (!panel.visible) return null
+function rowMotion(m: MotionPresets, index: number, typing: boolean, phone: boolean) {
+  const fade = DURATION.reducedFade
+  const exit: TargetAndTransition = m.reduced
+    ? { opacity: 0, transition: { duration: fade } }
+    : { opacity: 0, height: 0, overflow: 'hidden', transition: { duration: DURATION.quick, ease: EASE.in } }
+  if (m.reduced || typing) {
+    return { initial: { opacity: 0 }, animate: { opacity: 1, height: 'auto', transition: { duration: fade, ease: EASE.out } }, exit }
+  }
+  return {
+    // A phone's whole panel slides; its rows only fade, one after another.
+    initial: phone ? { opacity: 0 } : { opacity: 0, y: -4 },
+    // `height: auto` brings a row back to its full height when it returns while folding away (it would otherwise stay as folded as it got).
+    animate: {
+      opacity: 1,
+      y: 0,
+      height: 'auto',
+      transition: { duration: DURATION.quick, ease: EASE.out, delay: ROW_DELAY + Math.min(index, STAGGER_ROWS) * ROW_STEP },
+    },
+    exit,
+  }
+}
 
-  if (panel.variant === 'screen') {
+/**
+ * What an empty search box suggests, and on Chat what the typed words suggest (DESIGN.md "Gợi ý trong ô tìm"). On a
+ * desktop, the rows of a listbox inside the box's own surface (`SearchBox`), driven from the box by keyboard. On a
+ * phone, groups of buttons that cover the list under the box. A recent search has its own ✕ and, from two on, the
+ * group a "Xoá tất cả".
+ */
+export function SearchSuggestions({ panel, emptyText, emptyHint, label = 'Gợi ý tìm kiếm', keep = false }: Props) {
+  const m = useMotionPresets()
+  const phone = panel.variant === 'screen'
+  if (!panel.visible && !keep) return null
+
+  const rowsCount = panel.groups.reduce((n, g) => n + g.items.length, 0)
+  const loading = panel.groups.some((g) => g.loading)
+  const live = <p aria-live="polite" className="sr-only">{panel.said || (loading ? 'Đang tìm…' : `${rowsCount} gợi ý`)}</p>
+
+  if (phone) {
     return (
-      <div className="min-h-0 overflow-y-auto" onMouseDown={keepFocus}>
+      <motion.div
+        // The panel rises 8px as it fades in, a beat after the screen under it has started to fade.
+        initial={m.reduced ? { opacity: 0 } : { opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0, transition: { duration: m.reduced ? DURATION.reducedFade : DURATION.base, ease: EASE.out, delay: m.reduced ? 0 : ROW_DELAY } }}
+        className="min-h-0 overflow-y-auto"
+        onMouseDown={keepFocus}
+      >
+        {live}
         {panel.groups.length === 0 ? (
-          <div className="grid place-items-center gap-2 px-8 py-12 text-center text-ink-muted">
+          <div className="grid justify-items-center gap-2 px-8 py-12 text-center text-ink-muted">
             <Search size={24} strokeWidth={1.75} aria-hidden="true" />
             <p className="m-0 text-sm">{emptyText}</p>
+            {emptyHint && <p className="m-0 text-small">{emptyHint}</p>}
           </div>
         ) : (
           <div role="region" aria-label={label} className="grid pb-6">
-            {panel.groups.map((g) => (
-              <Group key={g.uid} group={g} panel={panel} phone>
-                {g.items.map((item) => <PhoneRow key={item.uid} item={item} recent={!!g.recent} panel={panel} />)}
-              </Group>
-            ))}
+            <Groups panel={panel} m={m} phone />
+            {panel.note && <p className="m-0 px-4 py-3 text-small text-ink-muted">{panel.note}</p>}
           </div>
         )}
-      </div>
+      </motion.div>
     )
   }
 
-  let index = 0
-  const removable = panel.groups.some((g) => g.items.some((it) => it.onRemove))
-  return createPortal(
-    <motion.div
-      {...m.popover}
-      onMouseDown={keepFocus}
-      style={pos}
-      className="fixed z-dropdown overflow-y-auto rounded-overlay bg-overlay shadow-overlay"
-    >
-      <div id={panel.id} role="listbox" aria-label={label} className="grid py-1.5">
-        {panel.groups.map((g) => (
-          <Group key={g.uid} group={g} panel={panel}>
-            {g.items.map((item) => (
-              <Option key={item.uid} item={item} index={index++} recent={!!g.recent} panel={panel} />
-            ))}
-          </Group>
-        ))}
-      </div>
-      <div aria-hidden="true" className="flex flex-wrap gap-x-3.5 mt-1 px-3.5 pt-2 pb-2.5 border-t border-line text-xs text-ink-subtle">
-        <span><Kbd>↑</Kbd> <Kbd>↓</Kbd> chọn</span>
-        <span><Kbd>Enter</Kbd> mở</span>
-        {removable && <span><Kbd>Delete</Kbd> xoá</span>}
-        <span><Kbd>Esc</Kbd> đóng</span>
-      </div>
-    </motion.div>,
-    document.body,
+  return (
+    <>
+      {live}
+      {panel.groups.length === 0 ? (
+        <div className="grid justify-items-center gap-2 px-6 py-8 text-center text-ink-muted">
+          <Search size={24} strokeWidth={1.75} aria-hidden="true" />
+          <p className="m-0 text-sm">{emptyText}</p>
+        </div>
+      ) : (
+        <div id={panel.id} role="listbox" aria-label={label} className="grid py-1.5">
+          <Groups panel={panel} m={m} />
+          {panel.note && <p className="m-0 px-3.5 pt-1.5 pb-1 text-small text-ink-muted">{panel.note}</p>}
+        </div>
+      )}
+    </>
   )
 }
 
-function Group({ group, panel, phone = false, children }: {
-  group: ShownGroup; panel: SuggestionPanel; phone?: boolean; children: ReactNode
-}) {
-  const labelId = `${panel.id}-g${group.uid}`
+/** The groups and their rows. Rows that leave are drawn until they have folded away. */
+function Groups({ panel, m, phone = false }: { panel: SuggestionPanel; m: MotionPresets; phone?: boolean }) {
+  let index = 0
   return (
-    <div role="group" aria-labelledby={labelId} aria-busy={group.loading || undefined} className="grid">
-      <div id={labelId} className={`text-ink-muted font-semibold ${phone ? 'px-4 pt-4 pb-1.5 text-sm' : 'px-3.5 pt-3 pb-1 text-xs'}`}>
+    <AnimatePresence initial>
+      {panel.groups.map((g) => (
+        <GroupShell key={g.uid} m={m} labelId={`${panel.id}-${g.domId}`} busy={g.loading}>
+          <GroupLabel group={g} panel={panel} phone={phone} />
+          {g.items.length === 0 && g.loading ? (
+            [0, 1].map((n) => <SkeletonRow key={n} phone={phone} />)
+          ) : (
+            <AnimatePresence initial>
+              {g.items.map((item) => {
+                const at = index++
+                return (
+                  <RowShell key={item.uid} m={m} index={at} typing={panel.hasText} phone={phone}>
+                    {phone
+                      ? <PhoneRow item={item} recent={!!g.recent} panel={panel} />
+                      : <Option item={item} index={at} recent={!!g.recent} panel={panel} />}
+                  </RowShell>
+                )
+              })}
+            </AnimatePresence>
+          )}
+        </GroupShell>
+      ))}
+    </AnimatePresence>
+  )
+}
+
+/** A group folds away as a whole (label and rows) when its last row is removed. */
+function GroupShell({ m, labelId, busy, children }: { m: MotionPresets; labelId: string; busy?: boolean; children: ReactNode }) {
+  const present = useIsPresent()
+  return (
+    <motion.div
+      role="group"
+      aria-labelledby={labelId}
+      aria-busy={busy || undefined}
+      aria-hidden={!present || undefined}
+      // A group that comes back while folding away returns to its full height, not the one it had got to.
+      animate={{ opacity: 1, height: 'auto' }}
+      exit={m.reduced
+        ? { opacity: 0, transition: { duration: DURATION.reducedFade } }
+        : { opacity: 0, height: 0, overflow: 'hidden', transition: { duration: DURATION.quick, ease: EASE.in } }}
+      className="grid"
+    >
+      {children}
+    </motion.div>
+  )
+}
+
+/** One row's entrance and exit. While it is leaving it is hidden from assistive technology and from clicks. */
+function RowShell({ m, index, typing, phone, children }: {
+  m: MotionPresets; index: number; typing: boolean; phone: boolean; children: ReactNode
+}) {
+  const present = useIsPresent()
+  return (
+    <motion.div
+      role="presentation"
+      aria-hidden={!present || undefined}
+      {...rowMotion(m, index, typing, phone)}
+      style={present ? undefined : { pointerEvents: 'none' }}
+    >
+      {children}
+    </motion.div>
+  )
+}
+
+function GroupLabel({ group, panel, phone }: { group: ShownGroup; panel: SuggestionPanel; phone: boolean }) {
+  const labelId = `${panel.id}-${group.domId}`
+  const clearable = !!group.onClearAll && group.items.length >= 2
+  if (group.hideLabel && !clearable) return <span id={labelId} className="sr-only">{group.label}</span>
+  return (
+    <div className={`flex items-center justify-between gap-2 ${phone ? 'min-h-11 pl-4 pr-1 pt-4' : 'min-h-8 pl-3.5 pr-2 pt-2 pb-0.5'}`}>
+      <div id={labelId} className={`text-ink-muted font-semibold ${phone ? 'text-sm' : 'text-xs'} ${group.hideLabel ? 'sr-only' : ''}`}>
         {group.label}
       </div>
-      {group.items.length === 0 && group.loading ? [0, 1].map((n) => <SkeletonRow key={n} phone={phone} />) : children}
+      {clearable && (
+        <Pressable
+          onClick={() => panel.clearAll(group)}
+          className={`shrink-0 rounded-md font-semibold text-accent hover:bg-accent-wash transition-colors duration-quick
+            ${phone ? 'h-11 px-3 text-[0.8125rem]' : 'h-7 px-2 text-xs'}`}
+        >
+          Xoá tất cả
+        </Pressable>
+      )}
     </div>
   )
 }
@@ -139,7 +215,9 @@ function Lead({ item, recent, phone }: { item: ShownItem; recent: boolean; phone
 function RowText({ item, phone }: { item: ShownItem; phone: boolean }) {
   return (
     <span className="min-w-0">
-      <span className={`block truncate font-medium ${phone ? 'text-[0.9375rem]' : ''}`}>{item.title}</span>
+      <span className={`block truncate ${item.strong ? 'font-semibold' : 'font-medium'} ${phone ? 'text-[0.9375rem]' : ''}`}>
+        <Marked text={item.title} query={item.mark} />
+      </span>
       {item.meta && <span className={`block truncate text-ink-muted ${phone ? 'text-[0.8125rem]' : 'text-xs'}`}>{item.meta}</span>}
     </span>
   )
@@ -153,6 +231,7 @@ function Option({ item, index, recent, panel }: { item: ShownItem; index: number
       id={panel.optionId(index)}
       role="option"
       aria-selected={selected}
+      aria-label={item.label}
       onClick={() => panel.select(item)}
       onMouseEnter={() => panel.mark(item)}
       className={`group grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-3 min-h-11 mx-1.5 pl-2 pr-1.5 py-1
@@ -171,9 +250,9 @@ function Option({ item, index, recent, panel }: { item: ShownItem; index: number
           shape="round"
           onClick={(e) => {
             e.stopPropagation()
-            item.onRemove!()
+            panel.remove(item)
           }}
-          className={selected ? '' : 'opacity-0 group-hover:opacity-100'}
+          className={`transition-opacity duration-quick ease-out motion-reduce:transition-none ${selected ? '' : 'opacity-0 group-hover:opacity-100'}`}
         >
           <X size={16} strokeWidth={1.75} aria-hidden="true" />
         </IconButton>
@@ -189,7 +268,7 @@ function PhoneRow({ item, recent, panel }: { item: ShownItem; recent: boolean; p
   return (
     <div className="flex items-center pr-1">
       <Pressable
-        aria-label={recent ? `Tìm lại ${item.title}` : undefined}
+        aria-label={item.label}
         onClick={() => panel.select(item)}
         className="flex-1 min-w-0 grid grid-cols-[36px_minmax(0,1fr)_auto] items-center gap-3.5 min-h-13 pl-4 pr-2 py-1.5
           text-ink active:bg-hover"
@@ -205,7 +284,7 @@ function PhoneRow({ item, recent, panel }: { item: ShownItem; recent: boolean; p
           shape="round"
           size="lg"
           className="w-11 h-11"
-          onClick={item.onRemove}
+          onClick={() => panel.remove(item)}
         >
           <X size={16} strokeWidth={1.75} aria-hidden="true" />
         </IconButton>
@@ -223,6 +302,7 @@ function SkeletonRow({ phone }: { phone: boolean }) {
   )
 }
 
-function Kbd({ children }: { children: string }) {
+/** A key cap, as the hints of the search surface and the "Xem tất cả" row draw them. */
+export function Kbd({ children }: { children: string }) {
   return <span className="px-1.5 py-0.5 rounded-sm bg-sunk font-mono text-[0.6875rem] font-semibold text-ink-muted">{children}</span>
 }

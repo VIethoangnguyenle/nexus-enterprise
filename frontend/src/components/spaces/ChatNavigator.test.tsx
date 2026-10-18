@@ -40,6 +40,17 @@ describe('ChatNavigator', () => {
     expect(within(spaces).queryByText('Phạm Hải Yến')).toBeNull()
   })
 
+  it('puts the search pill at the head of the column, above "Trò chuyện mới", where "/" also leads', async () => {
+    const user = userEvent.setup()
+    renderWithClient(<ChatNavigator />)
+    const nav = await screen.findByRole('navigation', { name: 'Trò chuyện' })
+    const search = within(nav).getByRole('combobox', { name: 'Tìm trong chat' })
+    const create = within(nav).getByRole('button', { name: /Trò chuyện mới/ })
+    expect(search.compareDocumentPosition(create) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    await user.keyboard('/')
+    expect(search).toHaveFocus()
+  })
+
   it('marks unread conversations bold with a count, and totals them on Trang chủ', async () => {
     renderWithClient(<ChatNavigator />)
     const spaces = await screen.findByRole('list', { name: 'Nhóm' })

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { CalendarView } from '../../lib/calendar-format'
+import { isTypingTarget } from '../../lib/typing-target'
 
 interface Handlers {
   onView: (v: CalendarView) => void
@@ -16,12 +17,6 @@ interface Handlers {
 
 const VIEW_KEYS: Record<string, CalendarView> = { d: 'day', w: 'week', m: 'month', a: 'agenda', x: '3day' }
 
-/** Typing somewhere: the keys belong to it. */
-function isTyping(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false
-  return target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)
-}
-
 /**
  * The calendar's keys, the same as Google's (DESIGN.md §6, Phím tắt): D W M A X change the view, T goes to
  * today, J and K step forward and back, C creates, E edits and Delete removes the open event. Esc is handled
@@ -36,7 +31,7 @@ export function useCalendarShortcuts(handlers: Handlers, enabled: boolean) {
   useEffect(() => {
     if (!enabled) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return
+      if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || isTypingTarget(e.target)) return
       const h = latest.current
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key
       const view = VIEW_KEYS[key]

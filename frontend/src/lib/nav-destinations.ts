@@ -2,6 +2,7 @@ import {
   MessageSquare, Calendar, FolderOpen, Users, Package, ClipboardCheck, Settings, ShieldCheck,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { parseChatSearch, type ChatSearchUrl } from './chat-search'
 import { isConversationPath, validateWorkspaceSearch } from './workspace'
 
 export type ModuleId = 'messaging' | 'calendar' | 'documents' | 'drive' | 'assets' | 'contacts' | 'approval' | 'admin' | 'settings'
@@ -97,7 +98,7 @@ export function isPhoneDetailPath(pathname: string): boolean {
 export const CHAT_TABS = ['home', 'direct', 'sections', 'more'] as const
 export type ChatTab = (typeof CHAT_TABS)[number]
 
-export interface ChannelsSearch {
+export interface ChannelsSearch extends ChatSearchUrl {
   ws?: string
   /** Absent means Trang chủ. */
   tab?: Exclude<ChatTab, 'home'>
@@ -118,6 +119,8 @@ export function validateChannelsSearch(search: Record<string, unknown>): Channel
   const out: ChannelsSearch = { ...validateWorkspaceSearch(search) }
   if (search.tab === 'direct' || search.tab === 'sections' || search.tab === 'more') out.tab = search.tab
   if (search.search === 1 || search.search === '1' || search.search === true) out.search = 1
+  // The words and filters of the search screen (a phone's results live in this address).
+  if (out.search) Object.assign(out, parseChatSearch(search))
   if (search.threads === 'new' || search.threads === 'followed') out.threads = search.threads
   return out
 }

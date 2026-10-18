@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
+import { AnimatePresence } from 'motion/react'
 import { CircleAlert } from 'lucide-react'
 import type { Arrival } from '../../hooks/useArrivals'
 import type { ChatNavigation } from '../../hooks/useChatNavigation'
@@ -107,13 +108,17 @@ export function PhoneChatHome({ nav, workspaceId, fresh }: {
         )}
       </div>
 
-      {overlay?.kind === 'search' && (
-        <ChatSearchScreen
-          conversations={nav.conversations}
-          people={people}
-          onClose={close}
-        />
-      )}
+      {/* Closing runs the opening backwards (☰ back, ring and layer fading), so the layer is drawn until it has. */}
+      <AnimatePresence>
+        {overlay?.kind === 'search' && (
+          <ChatSearchScreen
+            key="search"
+            conversations={nav.conversations}
+            people={people}
+            onClose={close}
+          />
+        )}
+      </AnimatePresence>
       {overlay?.kind === 'threads' && (
         <PhoneThreadsScreen
           initial={overlay.chip}

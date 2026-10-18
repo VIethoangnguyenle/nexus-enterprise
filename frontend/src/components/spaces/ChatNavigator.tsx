@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { AtSign, ChevronDown, Ellipsis, House, Plus, Star } from 'lucide-react'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useChatNavigation } from '../../hooks/useChatNavigation'
+import { usePeople } from '../../hooks/usePeople'
 import { useMentionsUnreadCount } from '../../hooks/useShortcuts'
 import { useWebSocketStore } from '../../stores/websocket.store'
 import { collapseKey, useNavCollapseStore } from '../../stores/nav-collapse.store'
@@ -11,6 +12,7 @@ import { useMotionPresets } from '../../lib/motion'
 import { formatCount } from '../../lib/format'
 import { totalUnread, type Conversation } from '../../lib/conversations'
 import { Button, IconButton, Pressable } from '../primitives'
+import { ChatSearchBox } from './ChatSearchBox'
 import { NewChatMenu } from './NewChatMenu'
 import { ConversationIcon } from './ConversationIcon'
 import { CreateSpaceDialog } from './CreateSpaceDialog'
@@ -20,7 +22,7 @@ import { MentionPill, MutedMark, MutedText } from './ConversationBadges'
 
 /**
  * Left column of Tin nhắn, in the Google Chat model (design/mockups/spaces.html §1):
- * "Trò chuyện mới", Trang chủ with the unread total, the user's own sections,
+ * the search pill (design/mockups/search-gchat.html), "Trò chuyện mới", Trang chủ with the unread total, the user's own sections,
  * the shortcuts Được nhắc tới (with the count of unread mentions) and Đã gắn sao,
  * the system section "Đã gắn sao", the user's own sections, then collapsible
  * "Tin nhắn trực tiếp" and "Nhóm" ("Tạo mục" lives in "Trò chuyện mới").
@@ -31,6 +33,7 @@ export function ChatNavigator() {
   const { workspaceId } = useActiveWorkspace()
   const nav = useChatNavigation(workspaceId)
   const { arranged, unreadTotal, isLoading, isError, refetch, sectionsApi } = nav
+  const people = usePeople(workspaceId)
   const onlineUsers = useWebSocketStore((s) => s.onlineUsers)
   const setCollapsed = useNavCollapseStore((s) => s.setCollapsed)
   const params = useParams({ strict: false }) as { channelId?: string }
@@ -66,7 +69,11 @@ export function ChatNavigator() {
 
   return (
     <nav aria-label="Trò chuyện" className="flex flex-col h-full min-h-0 bg-base">
-      <div className="px-3 pt-4 pb-2">
+      {/* The search pill heads the column (12 from the top and the sides); its surface opens over the content. */}
+      <div className="px-3 pt-3 pb-2">
+        <ChatSearchBox conversations={nav.conversations} people={people} />
+      </div>
+      <div className="px-3 pb-2">
         <NewChatMenu
           onNewSection={(el) => overlays.openCreate(el)}
           className="press inline-flex items-center gap-2.5 h-11 pl-3.5 pr-4.5 rounded-xl bg-accent-wash

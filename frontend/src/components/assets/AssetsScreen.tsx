@@ -27,7 +27,7 @@ import { CountPill } from '../approval/StatusPill'
 import { EmptyState } from '../spaces/EmptyState'
 import { ApproveDialog } from './ApproveDialog'
 import { AssetDetailPanel } from './AssetDetailPanel'
-import { AssetListBody, PAGE } from './AssetListBody'
+import { AssetListBody, PAGE, SEARCH_HINT } from './AssetListBody'
 import { AssetOverview } from './AssetOverview'
 import type { RealtimeTag } from './AssetTable'
 import { NewAssetDialog } from './NewAssetDialog'
@@ -132,6 +132,7 @@ export function AssetsScreen() {
     value: typed,
     variant: phone ? 'screen' : 'popover',
     anchorRef: searchRef,
+    showWhenEmpty: true,
     groups: [
       recent.group(setTyped),
       {
@@ -317,7 +318,8 @@ export function AssetsScreen() {
               }
             },
           }}
-          suggestions={<SearchSuggestions panel={panel} emptyText="Gõ tên tài sản hoặc người giữ để tìm." />}
+          panel={panel}
+          suggestions={<SearchSuggestions panel={panel} emptyText={SEARCH_HINT} />}
           covered={covered}
           onBack={() => {
             panel.close()

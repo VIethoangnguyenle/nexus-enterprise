@@ -80,27 +80,115 @@ func (s *Store) SearchMessages(ctx context.Context, channelID, query string, lim
 	return scanMessages(rows)
 }
 
+// SearchFilters holds optional filters for SearchAllMessages beyond the
+// full-text query and has-file flag. All zero values mean "no filter".
+type SearchFilters struct {
+	From       string     // only messages by this sender
+	ChannelID  string     // restrict to one channel (must be in the readable set)
+	After      *time.Time // created_at >= this (start-of-day in UTC)
+	BeforeDate *time.Time // created_at < this (end-of-day in UTC)
+	HasLink    bool       // content contains http:// or https://
+	MentionsMe bool       // m.mentions @> ARRAY[CallerID]
+	CallerID   string     // the authenticated user, for MentionsMe
+}
+
 // SearchAllMessages searches the given channels — main messages and thread
 // replies — newest first, leaving out deleted ones. hasFile keeps only messages
 // with an attachment. before and beforeID are the send time and id of the last
 // message of the previous page; the id breaks a tie between messages sent at
-// the same instant.
-func (s *Store) SearchAllMessages(ctx context.Context, channelIDs []string, query string, hasFile bool, before *time.Time, beforeID string, limit int) ([]*Message, bool, error) {
-	head, tail, ok := searchTerms(query)
-	if len(channelIDs) == 0 || !ok {
+// the same instant. The filters in sf are combined with AND.
+//
+// When query is empty (filter-only search), the full-text predicate is skipped.
+func (s *Store) SearchAllMessages(ctx context.Context, channelIDs []string, query string, hasFile bool, before *time.Time, beforeID string, limit int, sf SearchFilters) ([]*Message, bool, error) {
+	// When a channel_id filter is set, intersect it with the readable set.
+	if sf.ChannelID != "" {
+		found := false
+		for _, id := range channelIDs {
+			if id == sf.ChannelID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			// The requested channel is not readable: zero results, never an error.
+			return nil, false, nil
+		}
+		channelIDs = []string{sf.ChannelID}
+	}
+
+	if len(channelIDs) == 0 {
 		return nil, false, nil
 	}
-	rows, err := s.db.Query(ctx,
-		`SELECT `+messageCols+`
+
+	// Build the WHERE clause and args dynamically.
+	args := []any{channelIDs} // $1
+	argN := 1
+	next := func(v any) int { argN++; args = append(args, v); return argN }
+
+	var clauses []string
+	clauses = append(clauses, `m.channel_id = ANY($1::text[])`, `m.deleted_at IS NULL`)
+
+	// Full-text search predicate (skipped when query is empty = filter-only).
+	if query != "" {
+		head, tail, ok := searchTerms(query)
+		if !ok {
+			return nil, false, nil
+		}
+		headArg := next(head)
+		tailArg := next(tsTail(tail))
+		clauses = append(clauses, `m.search_vector @@ `+tsQuerySQL(headArg, tailArg))
+	}
+
+	// has_file
+	hasFileArg := next(hasFile)
+	clauses = append(clauses, fmt.Sprintf(`(NOT $%d OR EXISTS (SELECT 1 FROM message_attachments a WHERE a.message_id = m.id)
+		        OR m.linked_entity_type = 'drive_file')`, hasFileArg))
+
+	// from (sender)
+	if sf.From != "" {
+		n := next(sf.From)
+		clauses = append(clauses, fmt.Sprintf(`m.sender_id = $%d`, n))
+	}
+
+	// after (created_at >= start-of-day in UTC)
+	if sf.After != nil {
+		n := next(*sf.After)
+		clauses = append(clauses, fmt.Sprintf(`m.created_at >= $%d`, n))
+	}
+
+	// before_date (created_at < end-of-day in UTC)
+	if sf.BeforeDate != nil {
+		n := next(*sf.BeforeDate)
+		clauses = append(clauses, fmt.Sprintf(`m.created_at < $%d`, n))
+	}
+
+	// has_link
+	if sf.HasLink {
+		clauses = append(clauses, `(m.content ~* 'https?://')`)
+	}
+
+	// mentions_me — same definition as the Mentions feed: m.mentions @> ARRAY[$caller]
+	if sf.MentionsMe && sf.CallerID != "" {
+		n := next(sf.CallerID)
+		clauses = append(clauses, fmt.Sprintf(`m.mentions @> ARRAY[$%d]::text[]`, n))
+	}
+
+	// Pagination cursor
+	beforeArg := next(before)
+	beforeIDArg := next(beforeID)
+	clauses = append(clauses, fmt.Sprintf(`($%d::timestamptz IS NULL OR m.created_at < $%d
+		        OR ($%d <> '' AND m.created_at = $%d AND m.id < $%d))`,
+		beforeArg, beforeArg, beforeIDArg, beforeArg, beforeIDArg))
+
+	limitArg := next(limit + 1)
+
+	sql := `SELECT ` + messageCols + `
 		 FROM messages m LEFT JOIN users u ON m.sender_id = u.id
-		 WHERE m.channel_id = ANY($1::text[]) AND m.deleted_at IS NULL
-		   AND m.search_vector @@ `+tsQuerySQL(2, 3)+`
-		   AND (NOT $4 OR EXISTS (SELECT 1 FROM message_attachments a WHERE a.message_id = m.id)
-		        OR m.linked_entity_type = 'drive_file')
-		   AND ($5::timestamptz IS NULL OR m.created_at < $5
-		        OR ($6 <> '' AND m.created_at = $5 AND m.id < $6))
+		 WHERE ` + strings.Join(clauses, "\n\t\t   AND ") + `
 		 ORDER BY m.created_at DESC, m.id DESC
-		 LIMIT $7`, channelIDs, head, tsTail(tail), hasFile, before, beforeID, limit+1)
+		 LIMIT $` + fmt.Sprint(limitArg)
+
+	rows, err := s.db.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, false, fmt.Errorf("search all messages: %w", err)
 	}

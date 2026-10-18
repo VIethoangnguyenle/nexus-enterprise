@@ -1,4 +1,6 @@
 import type { Conversation } from '../conversations'
+import type { Person } from '../people'
+import { matchesAll } from '../search-text'
 
 /** How many conversations Tìm trong chat suggests at most (DESIGN.md "Gợi ý trong ô tìm"). */
 export const RECENT_CONVERSATIONS = 5
@@ -13,3 +15,32 @@ export function recentConversations(list: Conversation[], limit = RECENT_CONVERS
     .sort((a, b) => b.lastActivity - a.lastActivity)
     .slice(0, limit)
 }
+
+/** How many people, and how many groups and conversations, the suggestions for typed words show. */
+export const TYPED_LIMIT = 3
+
+/**
+ * "Người": the people in the directory whose name or username holds every typed word (case and accents ignored),
+ * never the person asking. The directory is the list the caller may browse, so nobody it hides is offered.
+ */
+export function peopleMatching(people: Person[], query: string, meId: string, limit = TYPED_LIMIT): Person[] {
+  return people
+    .filter((p) => p.userId !== meId && (matchesAll(p.name, query) || matchesAll(p.username, query)))
+    .slice(0, limit)
+}
+
+/**
+ * "Nhóm và trò chuyện": the conversations of the list the server gave the caller whose name holds every typed word.
+ * A direct message with someone already listed under "Người" (`skipPartners`) is not repeated.
+ */
+export function conversationsMatching(
+  list: Conversation[], query: string, skipPartners: ReadonlySet<string> = new Set(), limit = TYPED_LIMIT,
+): Conversation[] {
+  return list
+    .filter((c) => matchesAll(c.title, query) && !(c.partner && skipPartners.has(c.partner.userId)))
+    .slice(0, limit)
+}
+
+/** The second line of a conversation in a list of choices: "Nhóm · 14 thành viên" or "Trò chuyện trực tiếp". */
+export const conversationSub = (c: Pick<Conversation, 'kind' | 'memberCount'>): string =>
+  c.kind === 'space' ? `Nhóm · ${c.memberCount} thành viên` : 'Trò chuyện trực tiếp'

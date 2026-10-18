@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest'
-import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { resetClient } from '../../test/render'
@@ -645,11 +645,27 @@ describe('Danh bạ: suggestions in the empty search box', () => {
     await screen.findByRole('heading', { level: 2, name: 'Khối Vận hành' })
     await user.click(searchBox())
     const list = await screen.findByRole('listbox', { name: 'Gợi ý tìm kiếm' })
-    expect(within(within(list).getByRole('group', { name: 'Tìm gần đây' })).getByRole('option', { name: 'kế toán' })).toBeInTheDocument()
+    expect(within(within(list).getByRole('group', { name: 'Tìm gần đây' })).getByRole('option', { name: 'Tìm lại kế toán' })).toBeInTheDocument()
     const messaged = await within(list).findByRole('group', { name: 'Nhắn gần đây' })
     expect(within(messaged).getAllByRole('option').map((o) => o.querySelector('.font-medium')?.textContent))
       .toEqual(['Phạm Hải Yến', 'Nguyễn Thu Lan'])
     expectNoIds()
+  })
+
+  it('forgets a recent search with Delete, and the rest with Xoá tất cả until Hoàn tác', async () => {
+    const user = userEvent.setup()
+    ;['ba', 'hai', 'một'].forEach((w) => addRecent('contacts', ME.id, w))
+    await renderContacts()
+    await screen.findByRole('heading', { level: 2, name: 'Khối Vận hành' })
+    await user.click(searchBox())
+    await user.keyboard('{ArrowDown}{Delete}')
+    await waitFor(() => expect(readRecent('contacts', ME.id)).toEqual(['hai', 'ba']))
+    await user.click(await screen.findByRole('button', { name: 'Xoá tất cả' }))
+    await waitFor(() => expect(readRecent('contacts', ME.id)).toEqual([]))
+    const [toast] = useToastStore.getState().toasts
+    expect(toast).toMatchObject({ message: 'Đã xoá 2 lần tìm gần đây', action: { label: 'Hoàn tác' } })
+    act(() => toast!.action!.onClick())
+    expect(readRecent('contacts', ME.id)).toEqual(['hai', 'ba'])
   })
 
   it('runs a recent search again', async () => {
@@ -658,7 +674,7 @@ describe('Danh bạ: suggestions in the empty search box', () => {
     await renderContacts()
     await screen.findByRole('heading', { level: 2, name: 'Khối Vận hành' })
     await user.click(searchBox())
-    await user.click(await screen.findByRole('option', { name: 'Thu Lan' }))
+    await user.click(await screen.findByRole('option', { name: 'Tìm lại Thu Lan' }))
     expect(searchBox()).toHaveValue('Thu Lan')
     expect(await screen.findByRole('button', { name: /^Nguyễn Thu Lan/ })).toBeInTheDocument()
   })

@@ -35,6 +35,11 @@ export function routerMockFactory() {
         </a>
       )
     },
+    // A redirect is a spy call plus a marker, so a test can see where the app was sent.
+    Navigate: ({ to, search }: { to: string; search?: unknown }) => {
+      routerState.navigate({ to, search, replace: true, redirect: true })
+      return <span data-testid="redirect" data-to={to} data-search={JSON.stringify(search)} />
+    },
     useNavigate: () => routerState.navigate,
     useCanGoBack: () => routerState.canGoBack,
     useRouter: () => ({ history: routerState.history }),

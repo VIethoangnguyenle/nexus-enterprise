@@ -9,11 +9,12 @@ interface SpaceIconProps {
   hueKey?: string
   /** The space's own picture; the letter shows while there is none or it does not load. */
   src?: string
-  size?: 24 | 32 | 36 | 40 | 44
+  size?: 20 | 24 | 32 | 36 | 40 | 44
   className?: string
 }
 
 const sizeStyles = {
+  20: 'w-5 h-5 rounded-sm text-micro',
   24: 'w-6 h-6 rounded-md text-2xs',
   32: 'w-8 h-8 rounded-md text-small',
   36: 'w-9 h-9 rounded-surface text-16',

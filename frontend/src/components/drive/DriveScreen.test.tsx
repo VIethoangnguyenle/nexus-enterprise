@@ -1107,7 +1107,7 @@ describe('DriveScreen: suggestions in the empty search box', () => {
     expect(calls.some((c) => c.path === '/drive/shared-with-me')).toBe(false)
     await user.click(box())
     const list = await screen.findByRole('listbox', { name: 'Gợi ý tìm kiếm' })
-    expect(within(list).getByRole('option', { name: 'sao kê' })).toBeInTheDocument()
+    expect(within(list).getByRole('option', { name: 'Tìm lại sao kê' })).toBeInTheDocument()
     const edited = within(list).getByRole('group', { name: 'Sửa gần đây trong Đối soát' })
     const names = within(edited).getAllByRole('option').map((o) => o.querySelector('.font-medium')?.textContent)
     expect(names[0]).toBe('doi-soat-08-10.xlsx')
@@ -1115,6 +1115,23 @@ describe('DriveScreen: suggestions in the empty search box', () => {
     const shared = await within(list).findByRole('group', { name: 'Được chia sẻ với tôi' })
     expect(within(shared).getByRole('option', { name: /ke-hoach-quy-4\.xlsx/ })).toBeInTheDocument()
     expect(document.body.textContent).not.toMatch(UUID_RE)
+  })
+
+  it('forgets a recent search with Delete, and the rest with Xoá tất cả until Hoàn tác', async () => {
+    const user = userEvent.setup()
+    const key = `ngac-recent-searches:drive:${U.hoa.id}`
+    localStorage.setItem(key, JSON.stringify(['một', 'hai', 'ba']))
+    await renderDrive(`/drive?folder=${D.doisoat}`)
+    await within(table()).findByText('doi-soat-08-10.xlsx')
+    await user.click(box())
+    await user.keyboard('{ArrowDown}{Delete}')
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(key)!)).toEqual(['hai', 'ba']))
+    await user.click(await screen.findByRole('button', { name: 'Xoá tất cả' }))
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(key)!)).toEqual([]))
+    const [toast] = useToastStore.getState().toasts
+    expect(toast).toMatchObject({ message: 'Đã xoá 2 lần tìm gần đây', action: { label: 'Hoàn tác' } })
+    act(() => toast!.action!.onClick())
+    expect(JSON.parse(localStorage.getItem(key)!)).toEqual(['hai', 'ba'])
   })
 
   it('opens a suggested file of the folder in the viewer, and one shared with me too', async () => {
@@ -1138,7 +1155,7 @@ describe('DriveScreen: suggestions in the empty search box', () => {
     await user.type(box(), 'bien{Enter}')
     expect(JSON.parse(localStorage.getItem(`ngac-recent-searches:drive:${U.hoa.id}`)!)).toEqual(['bien'])
     await user.clear(box())
-    await user.click(await screen.findByRole('option', { name: 'bien' }))
+    await user.click(await screen.findByRole('option', { name: 'Tìm lại bien' }))
     expect(box()).toHaveValue('bien')
   })
 

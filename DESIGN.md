@@ -317,7 +317,7 @@ nằm ở `accept` và câu báo lỗi). Máy không có chuột không có hove
 
 ### Chat: cột điều hướng và mục (mockup `design/mockups/spaces.html` §1)
 
-Thứ tự trong cột: nút "Trò chuyện mới" · lối tắt (Trang chủ, Được nhắc tới, Đã gắn sao) · **mục của bạn** ·
+Thứ tự trong cột: ô tìm (xem "Gợi ý trong ô tìm") · nút "Trò chuyện mới" · lối tắt (Trang chủ, Được nhắc tới, Đã gắn sao) · **mục của bạn** ·
 Tin nhắn trực tiếp · Nhóm · "Duyệt nhóm". ("Tạo mục" nằm trong menu "Trò chuyện mới", không có nút riêng cuối cột —
 người dùng chốt 2026-10-11.)
 
@@ -551,10 +551,11 @@ theo §5 "Điều hướng di động".
   danh sách. Gập/mở dùng chung trạng thái với cột điều hướng máy tính.
 - **Thêm:** tiêu đề "Thêm"; hàng 60: Được nhắc tới (pill số) · Tin đã gắn sao · Thread đang theo dõi ("N có tin mới") ·
   Duyệt nhóm (chỉ khi tính năng có, xem nút +) · divider · Thông báo của Chat. Module khác không lặp ở đây (đã ở menu ☰).
-- **Tìm trong chat:** chạm ô tìm mở màn toàn màn (fade 220ms): ô nhập viên thuốc viền accent 2px, quay lại và xoá; chip
-  lọc Tất cả · Người · Nhóm · Tin nhắn · Có tệp (cao 36, cuộn ngang); kết quả theo nhóm "Nhóm và người", "Tin nhắn"
-  (người gửi · cuộc trò chuyện, đoạn có từ khớp tô `--color-warning-wash`, giờ), khi chưa gõ thì panel gợi ý của Chat
-  ("Tìm gần đây" + "Trò chuyện gần đây", xem "Gợi ý trong ô tìm"). Chỉ trả tin trong cuộc trò chuyện còn quyền đọc.
+- **Tìm trong chat:** chạm viên thuốc thì nó đứng yên và thành ô tìm (☰ xoay thành ←, viền accent 2px, danh sách mờ đi,
+  panel gợi ý dâng lên); chưa gõ: Tìm gần đây (xoá từng mục hoặc Xoá tất cả + Hoàn tác) + Trò chuyện gần đây; gõ: gợi ý Người,
+  Nhóm và trò chuyện, Tin nhắn + "Xem tất cả kết quả"; Enter: kết quả tin nhắn với chip lọc cuộn ngang (cao 36) Người gửi ·
+  Trong · Ngày · Có tệp · Có liên kết · Nhắc đến tôi, chip mở danh sách thành bottom sheet. Chỉ trả tin trong cuộc trò
+  chuyện còn quyền đọc. Chi tiết: "Gợi ý trong ô tìm" (§6, `search-gchat.html` §5, duyệt 2026-10-18).
 - **Luồng:** thanh trên có quay lại, icon nhóm 28, tên + "N thành viên", nút Thread (badge) và Thông tin; bong bóng tối đa
   88%, chữ 16px; hàng tóm tắt thread cao 36. Không hover: chạm tin hiện giờ trong cụm. Tin của bạn không chừa
   cột giờ bên phải: bong bóng cách mép phải bằng khoảng avatar cách mép trái (14); chạm dòng gom cụm thì giờ hiện
@@ -812,38 +813,119 @@ thanh trên không có nút primary.
 - **Quyền hiện ra:** không có quyền thì ẩn hành động, không báo lỗi: không kéo được, popover không Sửa/Xoá, không mục Chia sẻ,
   không dải trả lời; chỉ thấy "Bận" khi không đọc được chi tiết. Quy tắc quyền (NGAC, trên OA của lịch): mục 14 của mockup, sẽ chuyển vào spec của Lịch trong `docs/specs/`.
 
-### Gợi ý trong ô tìm (mockup `design/mockups/search-suggestions.html`, duyệt 2026-10-17)
+### Gợi ý trong ô tìm: ô tìm nở ra, Tìm gần đây, gợi ý khi gõ, bộ lọc Chat (mockup `design/mockups/search-gchat.html`, duyệt 2026-10-18)
 
-Ô tìm chính của Chat, Tài liệu, Danh bạ, Tài sản, Phê duyệt: khi ô **được focus mà còn trống**, hiện "Tìm gần đây" của
-module đó và 1–2 nhóm gợi ý. Gõ một chữ thì gợi ý nhường chỗ cho kết quả như cũ; xoá hết chữ thì gợi ý trở lại.
-- **Máy tính (≥ 1024):** popover neo dưới ô, cách 6, rộng bằng ô (tối thiểu 380), cao tối đa 480 rồi cuộn,
-  `--color-overlay`, radius 12, `--shadow-overlay`; không scrim, danh sách sau vẫn bấm được. Nhãn nhóm 12/600 mờ, không
-  divider giữa nhóm. Hàng cao 44, radius 8, icon 32, tên 14/500, dòng phụ 12 mờ; hàng đang chọn `--color-accent-wash`.
-  Chân popover: gợi ý phím ↑↓ · Enter · Esc (11px mono, mờ). Tối đa 5 "Tìm gần đây" và 3 mục mỗi nhóm khác.
-- **Điện thoại (< 1024):** không có popover. Ô tìm đổi sang viên thuốc 52 viền accent 2px có Quay lại, gợi ý phủ vùng
-  danh sách bên dưới (như Tìm trong chat). Hàng 52, icon 36, tên 15/500; ✕ luôn hiện, vùng chạm 44. Tối đa 8 "Tìm gần
-  đây" và 5 mục mỗi nhóm khác. Quay lại hoặc back: về danh sách, giữ vị trí cuộn.
-- **Nhóm theo module:** Chat: Trò chuyện gần đây (tin cuối, giờ). Danh bạ: Nhắn gần đây (người, chức danh · phòng ban;
-  không có chính mình). Tài liệu: Sửa gần đây trong <thư mục> (không có thư mục) · Được chia sẻ với tôi (chỉ tải khi gợi
-  ý mở lần đầu). Tài sản: Bạn đang giữ · Hoạt động gần đây ("**Tên** việc · thời gian"). Phê duyệt: Chờ bạn duyệt (pill
-  Khẩn khi có) · Đề nghị của bạn. Workspace cá nhân không có Tài sản và Phê duyệt.
-- **Icon hàng:** đồng hồ trên `--color-sunk` cho lần tìm cũ; ô loại tệp theo `file-kind`; Avatar người; ô nhóm vuông.
-  Dòng phụ luôn là tên người và thời gian, không bao giờ là ID.
-- **Chọn:** lần tìm cũ thì điền vào ô và tìm như vừa gõ. Thứ khác thì mở như bấm nó trong danh sách. Esc / bấm ngoài
-  thì đóng, focus ở lại ô.
-- **Tìm gần đây:** lưu chuỗi đã gõ (≥ 2 ký tự) khi người dùng bấm Enter hoặc mở một kết quả; theo người, theo module,
-  trên máy này; trùng khi bỏ hoa thường và dấu thì giữ cái mới; tối đa 8; ✕ (máy tính: hiện khi rê hoặc khi hàng được
-  chọn) hoặc Delete để xoá; đăng xuất thì xoá hết.
-- **Trạng thái:** nhóm đang tải hiện 2 hàng Skeleton; nhóm tải lỗi thì ẩn, không báo lỗi; không có gì để gợi ý thì
-  máy tính không mở popover, điện thoại hiện icon 24 + một câu hướng dẫn. Giảm chuyển động: không trượt, không chạy sáng.
-- **Quyền:** gợi ý chỉ lấy từ dữ liệu màn đã tải về qua kiểm tra quyền, tính lại mỗi lần mở; không nhớ thực thể theo tên
-  hay ID, nên thứ đã mất quyền thì tự biến mất.
-- **A11y:** máy tính: ô tìm là `combobox` (`aria-expanded`, `aria-controls`, `aria-activedescendant`); gợi ý là
-  `listbox` chia `group` theo nhóm có nhãn; focus luôn ở ô; ↑/↓ đi qua mọi mục, Enter chọn, Delete xoá lần tìm cũ (chân
-  popover ghi "Delete xoá"), Esc đóng; ✕ chỉ dành cho chuột (`aria-hidden`), tên của mục là chính chuỗi đã tìm. Điện
-  thoại: ô tìm vẫn là ô tìm thường; mỗi gợi ý là một nút ("Tìm lại …" cho lần tìm cũ) và ✕ là nút riêng có tên
-  ("Xoá “…” khỏi Tìm gần đây"), nên screen reader xoá được. Cất bàn phím không đóng gợi ý; chỉ gõ chữ hoặc Quay lại.
-- **Ô tìm của Phê duyệt (mới):** `SearchField` 240 đầu hàng dưới tab, `moduleSearch`; lọc danh sách của tab đang mở
+Thay bản trước (`search-suggestions.html`, duyệt 2026-10-17; giữ file làm lịch sử). Hướng: như Google Chat.
+Ô tìm là **một bề mặt**: khi focus nó nở ra từ chính viên thuốc, nổi lên bằng bóng overlay và chứa gợi ý bên trong.
+Áp cho ô tìm chính của **Chat, Tài liệu, Danh bạ, Tài sản, Phê duyệt** (bề mặt nở, Tìm gần đây xoá được, chuyển động);
+gợi ý khi gõ và **bộ lọc** đợt này chỉ có ở Chat. Mockup §1–§6.
+
+- **Ô tìm của Chat trên máy tính (mới):** đầu cột danh sách, trên "Trò chuyện mới": viên thuốc 256×40 (cột 280 trừ
+  12 mỗi bên), cách đỉnh 12, nền `--color-sunk`, icon tìm 16 cách trái 14, chữ 16px, placeholder "Tìm trong chat"
+  `--color-ink-muted`, cuối ô gợi ý phím `/` (kbd 11px mono). Phím **/** ở bất cứ đâu trong Chat (trừ khi đang gõ
+  trong ô nhập) focus ô và nhớ phần tử trước đó. Có chữ mà ô không focus: `/` thay bằng ✕ (IconButton 32, "Xoá chữ
+  đã nhập").
+- **Bề mặt khi mở (máy tính, mọi module):** neo đúng mép trái của viên thuốc, đỉnh lệch −4; rộng
+  `min(640px, mép phải viewport − mép trái ô − 16px)` cho Chat, `max(bề rộng ô, 440px)` (cùng giới hạn viewport) cho module
+  khác; bo 12, `--color-overlay`, `--shadow-overlay`, `--z-dropdown`, không scrim, không đẩy gì. Hàng nhập cao 48 (icon
+  và chữ đứng yên đúng chỗ cũ, con trỏ không nhảy); divider 1px `--color-line`; danh sách cao tối đa 448 rồi cuộn; chân
+  36 có divider: ↑ ↓ chọn · Enter mở · Delete xoá lần tìm cũ · Esc đóng (11px mono, mờ). Bấm ra ngoài hoặc Esc: thu lại.
+- **Chuyển động máy tính** (ngoại lệ có chủ đích của §7, chỉ cho bề mặt này: animate `clip-path`, vì `scale` làm méo chữ
+  và bo góc, `width` thì tính lại bố cục; bề mặt dàn sẵn ở kích thước mở, ô nhập là một phần tử nên focus và bộ gõ không
+  bị ngắt):
+  - *Mở:* `clip-path: inset(4px calc(100% − 256px) calc(100% − 44px) 0 round 20px)` → `inset(-24px -24px -56px -24px round
+    12px)` (âm để giữ bóng), 280ms `--ease-out-expo`; lớp nền `--color-sunk` fade ra 100ms `--ease-out` (lộ
+    `--color-overlay`); lớp bóng fade vào 220ms `--ease-out`; hàng gợi ý `translateY(-4px)` + fade 160ms `--ease-out`,
+    bắt đầu sau 60ms, lệch 20ms mỗi hàng, tối đa 8 hàng lệch.
+  - *Đóng:* danh sách và chân fade ra 120ms `--ease-in`, clip về viên thuốc 210ms `--ease-in`, bóng tắt cùng lúc; chữ ở
+    lại trong ô.
+  - *Đổi nhóm khi gõ:* hàng mới fade 120ms, không trượt, không lệch.
+- **Điện thoại (< 1024):** không có popover. Chạm viên thuốc 52 của thanh trên (§5): viên thuốc **đứng yên tại chỗ**, ☰
+  xoay −90° + fade ra và ← xoay 90° → 0 + fade vào (160ms `--ease-out`), avatar fade ra 160ms, viền trong 2px
+  `--color-accent` (lớp riêng) fade vào 160ms, danh sách màn fade ra 120ms `--ease-in`, panel gợi ý `translateY(8px)` +
+  fade 220ms `--ease-out` sau 60ms, hàng lệch 20ms. Focus đồng bộ trong cú chạm để bàn phím mở ngay. ← hoặc back hệ điều
+  hành: ngược lại 160ms, giữ vị trí cuộn. Hàng 52, icon 36, tên 15/500; ✕ luôn hiện, vùng chạm 44. Cất bàn phím không
+  đóng gợi ý.
+- **Ô trống: nhóm gợi ý.** "Tìm gần đây" (tối đa 5 máy tính / 8 điện thoại) rồi nhóm của module (tối đa 3 / 5): Chat:
+  Trò chuyện gần đây (tin cuối, giờ). Danh bạ: Nhắn gần đây (người, chức danh · phòng ban; không có chính mình). Tài liệu:
+  Sửa gần đây trong <thư mục> (không có thư mục) · Được chia sẻ với tôi (chỉ tải khi gợi ý mở lần đầu). Tài sản: Bạn đang
+  giữ · Hoạt động gần đây ("**Tên** việc · thời gian"). Phê duyệt: Chờ bạn duyệt (pill Khẩn khi có) · Đề nghị của bạn.
+  Workspace cá nhân không có Tài sản và Phê duyệt. Nhãn nhóm 12/600 mờ, cao 32, không divider giữa nhóm. Hàng 44, bo 8,
+  icon 32, tên 14/500, dòng phụ 12 mờ; hover `--color-hover`; hàng đang chọn `--color-accent-wash`. Icon: đồng hồ trên
+  `--color-sunk` cho lần tìm cũ; ô loại tệp theo `file-kind`; Avatar người; ô nhóm vuông. Dòng phụ luôn là tên người và
+  thời gian, không bao giờ là ID.
+- **Tìm gần đây:** lưu chuỗi đã gõ (≥ 2 ký tự) khi bấm Enter hoặc mở một kết quả; theo người, theo module, trên máy
+  này; trùng khi bỏ hoa thường và dấu thì giữ cái mới; tối đa 8; đăng xuất thì xoá hết.
+  - *Xoá một mục:* ✕ (IconButton 32; máy tính hiện khi rê hoặc khi hàng được chọn bằng phím, fade 160ms; điện thoại luôn
+    hiện, 44) hoặc Delete khi hàng được chọn và ô trống. Hàng fade + co chiều cao 160ms `--ease-in`, hàng dưới trôi lên;
+    lựa chọn sang hàng kế (hết thì hàng trước). Mục cuối: nhãn nhóm co cùng lúc. Không toast.
+  - *Xoá tất cả:* nút chữ 12/600 `--color-accent` cao 28 (điện thoại 13px, cao 44) bên phải nhãn "Tìm gần đây", chỉ khi
+    có ≥ 2 mục. **Không hỏi xác nhận**: mọi hàng fade + co cùng lúc 160ms, nhóm sau trôi lên, focus về ô; toast "Đã xoá
+    N lần tìm gần đây" + **Hoàn tác** (5s; máy tính đáy phải, điện thoại đáy giữa) khôi phục đúng thứ tự, hàng vào như khi
+    mở. Cùng lý do với "Xoá mục": không mất dữ liệu, hoàn tác được.
+  - *Hết lần tìm cũ:* nhóm biến mất hẳn. Không có gì để gợi ý: máy tính vẫn nở bề mặt và hiện icon 24 + "Tìm tin nhắn,
+    người và nhóm."; điện thoại icon 24 + câu đó + dòng mờ "Sau khi tìm, lọc theo người gửi, cuộc trò chuyện hay ngày."
+- **Gõ chữ (Chat):** từ 1 ký tự không khoảng trắng, nhóm gợi ý nhường chỗ cho ba nhóm khớp (bỏ hoa thường và dấu; phần
+  khớp tô `--color-warning-wash`): **Người** (tối đa 3: Avatar, tên, "chức danh · phòng ban"; không có chính mình; chọn
+  = mở trò chuyện trực tiếp, tạo nếu chưa có) · **Nhóm và trò chuyện** (3: ô nhóm/Avatar, tên, "Nhóm · N thành viên" /
+  "Trò chuyện trực tiếp"; người đã có ở nhóm Người thì không lặp ở đây; chọn = mở) · **Tin nhắn** (3, từ ≥ 2 ký tự, gọi
+  máy chủ sau 250ms ngừng gõ, 2 hàng Skeleton trong lúc chờ: Avatar người gửi, đoạn khớp 1 dòng, "Người gửi · Cuộc trò
+  chuyện · giờ"; chọn = mở cuộc trò chuyện, tin vào giữa, loé viền accent 2,4s). Hàng cuối luôn là **Xem tất cả kết quả
+  cho "…"** (icon tìm, kbd Enter). Không mục nào chọn sẵn: Enter khi chưa chọn = Xem tất cả. Không khớp gì: chỉ hàng đó +
+  dòng mờ "Không có gợi ý. Nhấn Enter để tìm trong mọi tin nhắn." Tin nhắn lỗi: nhóm ẩn, không báo trong gợi ý.
+  Module khác: gõ chữ thì danh sách gợi ý thu lại (bề mặt về viên thuốc) và màn lọc tại chỗ như cũ.
+- **Trang kết quả (Chat):** Enter thu bề mặt, giữ chữ, mở trang kết quả ở cột nội dung; URL `/channels/search?q=…` mang
+  cả bộ lọc (Quay lại về cuộc trò chuyện trước; khoá trong URL không bao giờ lên màn hình). Điện thoại: ngay trong màn tìm
+  toàn màn, dưới viên thuốc.
+  - *Đầu trang* cao 56: IconButton ← "Đóng tìm kiếm" (về cuộc trò chuyện trước, focus về ô tìm), "Kết quả tìm kiếm"
+    display 19/600, phải "N tin nhắn" 14px mờ `tabular-nums` (đổi số fade 160ms; còn trang sau mà chưa biết tổng: "Hơn
+    25 tin nhắn"). Điện thoại: chỉ dòng "N tin nhắn" 13px mờ dưới hàng chip.
+  - *Hàng chip* (`toolbar` "Bộ lọc", cách 8, đệm ngang 20; điện thoại 12, cuộn ngang với `ScrollFade`): **Người gửi ·
+    Trong · Ngày · Có tệp · Có liên kết · Nhắc đến tôi**. Chip cao 32 (điện thoại 36), pill, đệm 0 12, 13/600 (điện thoại
+    14). Mặc định `--color-sunk`, hover `--color-hover`; ba chip đầu có chevron 16 mờ (xoay 180° khi mở, 160ms). Bật: lớp
+    `--color-accent-wash` + viền trong 1px `--color-accent` fade vào 160ms `--ease-out`. Chip bật/tắt (`aria-pressed`)
+    thêm ✓ 16 accent `scale(.6)` → 1 + fade 160ms. Chip giá trị đổi nhãn thành giá trị (Avatar 20 + tên; ô nhóm 20 + tên;
+    "Hôm nay", "7 ngày qua", "01/10 – 15/10") + ✕ 28 ("Bỏ lọc Người gửi: …", focus về chip sau khi bỏ). Chip phía sau dời
+    bằng FLIP 220ms `--ease-out-expo`. Có ≥ 1 chip bật: nút chữ "Xoá bộ lọc" cuối hàng. Chọn là áp dụng ngay; không nút
+    "Tìm", không bảng "Tìm nâng cao". Điện thoại: chip vừa bật cuộn vào tầm nhìn.
+  - *Danh sách chọn* (máy tính: Popover 320, cách chip 6, `translateY(-4px)` + fade 160ms, ra 120ms; điện thoại: bottom
+    sheet theo §5, scrim 220ms, `translateY(100%)` → 0 280ms expo, ra 210ms, bo 24, tay kéo 32×4, cao tối đa 85%).
+    **Người gửi:** ô "Tìm người" (36; sheet: viên thuốc 44, 16px) + "Bạn (tên)" đầu danh sách + người trong workspace
+    (Avatar 32/36, tên, chức danh · phòng ban), một người. **Trong:** ô "Tìm cuộc trò chuyện" + các cuộc còn quyền đọc
+    (ô nhóm/Avatar, tên, "Nhóm · N thành viên" / "Trò chuyện trực tiếp"), một cuộc. **Ngày:** Bất kỳ lúc nào · Hôm nay ·
+    7 ngày qua · 30 ngày qua · divider · Tuỳ chọn khoảng… (mở "Từ ngày" "Đến ngày" 36/44 + Áp dụng). Hàng 44 (sheet 56,
+    radio 36/52), mục đang chọn có ✓ accent. Chọn = áp dụng + đóng. Không bao giờ có ô nhập khoá.
+  - *Bộ lọc → máy chủ* (backend làm sau, mở rộng `GET /api/messages/search`): người gửi, cuộc trò chuyện, khoảng ngày
+    (theo múi giờ người dùng), có tệp, có liên kết, nhắc đến tôi; vẫn chỉ trả tin trong cuộc còn quyền đọc.
+  - *Khối "Nhóm và người"* (chỉ máy tính, chỉ khi chưa bật bộ lọc): tối đa 3 hàng như gợi ý, trên nhãn "Tin nhắn".
+  - *Thẻ kết quả:* ô nhóm/Avatar 20 + tên cuộc 13/600 mờ; Avatar 32 + tên người gửi 15/600 + giờ 12 mờ ("09:12", "Hôm qua
+    16:05", "Thứ Năm 10:41", "02/10"); nội dung 15/23 (điện thoại 16/24) tối đa 3 dòng, từ khớp `--color-warning-wash`,
+    @tên theo mẫu nhắc tên; tệp/liên kết: chip 36 `--color-sunk`. Đệm 12 (điện thoại 12/16, tràn mép), bo 10, hover
+    `--color-hover`, divider 1px `--color-line`. Bấm = mở cuộc trò chuyện tại tin (loé viền 2,4s). Mới nhất trước, 25 mỗi
+    trang, tải thêm khi cuộn tới cuối.
+  - *Chuyển động:* lần đầu có kết quả: thẻ `translateY(8px)` + fade 220ms `--ease-out`, lệch 30ms, tối đa 8. Đổi bộ lọc:
+    danh sách cũ còn 50% opacity trong 160ms (`aria-busy`), kết quả mới thay bằng fade 160ms, không trượt. Trang sau: như
+    lần đầu.
+  - *Trạng thái:* tải lần đầu 4 thẻ Skeleton cùng hình. Không kết quả có bộ lọc: icon 24 + "Không có tin nhắn nào khớp
+    "…" với các bộ lọc này." + **Xoá bộ lọc**; không bộ lọc: "Không có tin nhắn nào khớp "…". Thử từ khác hoặc viết ngắn
+    hơn." Lỗi: icon 24 + "Chưa tìm được. Kiểm tra kết nối rồi thử lại." + **Thử lại**.
+- **Giảm chuyển động:** bề mặt đổi ngay rồi fade 120ms; không `transform`, không lệch hàng, không FLIP; xoá hàng chỉ fade
+  120ms; ☰/← đổi ngay; sheet chỉ fade ≤ 120ms; Skeleton không chạy sáng.
+- **Bàn phím (máy tính):** ↑/↓ đi qua mọi hàng mọi nhóm (vòng), focus vẫn ở ô; Enter chọn hàng hoặc Xem tất cả; Delete xoá
+  lần tìm cũ đang chọn (chỉ khi ô trống); Tab tới "Xoá tất cả" (thứ duy nhất Tab tới được trong bề mặt), Tab lần nữa
+  rời và đóng, Esc ở đó về ô; **Esc** lần 1 thu bề mặt giữ chữ, lần 2 xoá chữ, lần 3 rời ô và trả focus về chỗ trước `/`
+  (mở bằng chuột thì ở lại ô). Trong danh sách chọn của chip: focus vào ô tìm, ↑↓ Enter, Esc đóng và trả focus về chip.
+  Trang kết quả: Esc không đóng trang; ←/→ đi giữa chip.
+- **A11y:** máy tính: ô tìm là `combobox` (`aria-expanded`, `aria-controls`, `aria-autocomplete="list"`,
+  `aria-activedescendant`); gợi ý là `listbox` chia `group` có nhãn; option có tên đầy đủ ("Tìm lại …", "Trần Lan Anh, Kế
+  toán viên", "Tin của … trong …: …"); ✕ máy tính là của chuột (`aria-hidden`, `tabindex=-1`). Một vùng
+  `aria-live="polite"`: "N gợi ý", "Đã xoá … khỏi Tìm gần đây", "Đang tìm…", "N tin nhắn" / "Không có kết quả". Chip mở
+  danh sách: `aria-haspopup="dialog"` + `aria-expanded`, tên gồm cả giá trị ("Người gửi: Trần Lan Anh"); chip bật/tắt:
+  `aria-pressed`. Trang kết quả: `region` "Kết quả tìm kiếm", `aria-busy` khi tải, danh sách link. Điện thoại: ô tìm
+  thường; mỗi gợi ý là nút ("Tìm lại …"), ✕ là nút riêng ("Xoá "…" khỏi Tìm gần đây"); sheet là modal đầy đủ.
+- **Quyền:** gợi ý chỉ lấy từ dữ liệu đã qua kiểm tra quyền, tính lại mỗi lần mở; không nhớ thực thể theo tên hay ID, nên
+  thứ đã mất quyền tự biến mất. Danh sách chọn Trong chỉ có cuộc còn quyền đọc.
+- **Ô tìm của Phê duyệt:** `SearchField` 240 đầu hàng dưới tab, `moduleSearch`; lọc danh sách của tab đang mở
   (đã tải) theo tiêu đề, người gửi, tên mẫu; bỏ hoa thường và dấu, mọi từ phải khớp, từ khớp tô `--color-warning-wash`;
   bên cạnh ghi "N trong M đề nghị"; giữ trong URL `?q=`, đổi tab thì xoá.
 

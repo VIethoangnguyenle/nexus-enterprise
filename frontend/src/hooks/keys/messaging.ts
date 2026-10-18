@@ -1,3 +1,4 @@
+import type { MessageSearchFilters } from '../../api/messaging'
 /**
  * Messaging query keys. Channel lists are per workspace; everything inside a
  * conversation is addressed by its channel or message id, which is already
@@ -34,7 +35,8 @@ export const messagingKeys = {
   /** Threads the signed-in user follows, across every conversation they read. */
   followedThreads: () => ['followed-threads'] as const,
   /** Search across every conversation the signed-in user reads. */
-  searchAll: (query: string, hasFile = false) => ['search-all', query, hasFile] as const,
+  /** `filters` is the whole set of narrowings, so a change of any of them is another search; `limit` keeps a few-rows peek apart from a full page. */
+  searchAll: (query: string, filters: MessageSearchFilters = {}, limit = 25) => ['search-all', query, filters, limit] as const,
   search: (channelId: string, query: string) => ['search', channelId, query] as const,
   tasksAll: () => ['tasks'] as const,
   /** Prefix of a channel's task lists, whatever the status filter. */

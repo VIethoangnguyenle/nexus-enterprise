@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  toDate, formatTime, formatDate, formatRelative, formatListTime, formatFeedTime, formatBytes, formatMoney, formatCount,
+  toDate, formatTime, formatDate, formatRelative, formatListTime, formatFeedTime, formatMessageTime, formatBytes, formatMoney, formatCount,
 } from './format'
 
 // Local-time constructor so the tests read the same in any timezone.
@@ -103,5 +103,22 @@ describe('formatFeedTime', () => {
   })
   it('is empty for an unknown time', () => {
     expect(formatFeedTime(0, NOW)).toBe('')
+  })
+})
+
+describe('formatMessageTime', () => {
+  // NOW is Friday 9 Oct 2026, 15:00.
+  it('writes today as the time, yesterday with the word, and the days since by name', () => {
+    expect(formatMessageTime(at(2026, 10, 9, 9, 12), NOW)).toBe('09:12')
+    expect(formatMessageTime(at(2026, 10, 8, 16, 5), NOW)).toBe('Hôm qua 16:05')
+    expect(formatMessageTime(at(2026, 10, 7, 10, 41), NOW)).toBe('Thứ Tư 10:41')
+    expect(formatMessageTime(at(2026, 10, 4, 8, 0), NOW)).toBe('Chủ nhật 08:00')
+  })
+  it('then falls back to the date', () => {
+    expect(formatMessageTime(at(2026, 10, 2, 8, 0), NOW)).toBe('02/10')
+    expect(formatMessageTime(at(2025, 12, 31, 8, 0), NOW)).toBe('31/12/2025')
+  })
+  it('is empty for an unreadable time', () => {
+    expect(formatMessageTime(null, NOW)).toBe('')
   })
 })

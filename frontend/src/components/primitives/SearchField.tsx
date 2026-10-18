@@ -1,5 +1,7 @@
 import { forwardRef, type InputHTMLAttributes, type ReactNode } from 'react'
+import { motion } from 'motion/react'
 import { Search } from 'lucide-react'
+import { DURATION, EASE, useMotionPresets } from '../../lib/motion'
 
 interface SearchFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {
   /** Accessible name; also the placeholder unless one is given. */
@@ -13,14 +15,36 @@ interface SearchFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, '
    * and `trailing` (a clear button) beside a 16px box and no magnifier.
    */
   pill?: boolean
+  /**
+   * No fill, no corners, no focus outline of its own: the box sits inside a surface that draws all three
+   * (`SearchBox`) and fills it, so the input does not move when the surface opens.
+   */
+  bare?: boolean
   leading?: ReactNode
   trailing?: ReactNode
 }
 
+/** The accent ring of the full-screen search's pill: 2px, fading in over 160ms (120ms under reduced motion). */
+function PillRing() {
+  const m = useMotionPresets()
+  return (
+    <motion.span
+      aria-hidden="true"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: m.reduced ? DURATION.reducedFade : DURATION.quick, ease: EASE.out }}
+      className="absolute inset-0 rounded-full ring-2 ring-inset ring-accent pointer-events-none"
+    />
+  )
+}
+
 /** Search box: magnifier + bare input in a 36px control, focus shown as a ring. */
 export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(
-  ({ label, tone = 'base', moduleSearch, pill, leading, trailing, className = '', placeholder, ...props }, ref) => pill ? (
-    <div className={`flex items-center gap-1 h-13 pl-1 pr-2 rounded-full bg-sunk ring-2 ring-inset ring-accent ${className}`}>
+  ({ label, tone = 'base', moduleSearch, pill, bare, leading, trailing, className = '', placeholder, ...props }, ref) => pill ? (
+    <div className={`relative flex items-center gap-1 h-13 pl-1 pr-2 rounded-full bg-sunk ${className}`}>
+      {/* The ring is its own layer so it can fade in when the pill turns into the search box. */}
+      <PillRing />
       {leading}
       <input
         ref={ref}
@@ -36,7 +60,9 @@ export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(
     </div>
   ) : (
     <label
-      className={`flex items-center gap-2 h-9 px-3 rounded-md text-ink-muted cursor-text
+      className={bare
+        ? `flex items-center gap-2 h-full w-full px-3 text-ink-muted cursor-text ${className}`
+        : `flex items-center gap-2 h-9 px-3 rounded-md text-ink-muted cursor-text
         focus-within:outline-2 focus-within:outline-focus focus-within:outline-offset-2
         ${tone === 'sunk' ? 'bg-sunk' : 'bg-base'} ${className}`}
     >

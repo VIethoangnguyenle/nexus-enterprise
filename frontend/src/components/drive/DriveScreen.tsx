@@ -34,7 +34,7 @@ import { DriveDetailPanel } from './DriveDetailPanel'
 import { DriveGallery, GallerySkeleton } from './DriveGallery'
 import { DriveAddSheet, DriveItemMenu, DriveItemSheet, type MenuTarget } from './DriveItemMenu'
 import { DriveTable, type RowActions } from './DriveTable'
-import { DriveToolbar } from './DriveToolbar'
+import { DriveToolbar, SEARCH_HINT } from './DriveToolbar'
 import { DriveTree } from './DriveTree'
 import { DriveTreeDrawer } from './DriveTreeDrawer'
 import { MoveItemDialog } from './MoveItemDialog'
@@ -330,6 +330,7 @@ export function DriveScreen() {
     value: query,
     variant: phone ? 'screen' : 'popover',
     anchorRef: searchRef,
+    showWhenEmpty: true,
     groups: [
       recent.group(setQuery),
       { label: shared ? 'Sửa gần đây' : `Sửa gần đây trong ${title ?? 'thư mục'}`, loading, items: recentlyEdited(all).map(suggestFile) },
@@ -415,6 +416,7 @@ export function DriveScreen() {
             query={query}
             onQuery={setQuery}
             searchRef={searchRef}
+            suggestPanel={panel}
             searchProps={{
               ...panel.inputProps,
               onFocus: () => {
@@ -460,12 +462,11 @@ export function DriveScreen() {
           {burst && <DriveBurstBanner burst={burst} people={people} row={m.row} />}
         </AnimatePresence>
 
-        {!phone && <SearchSuggestions panel={panel} />}
         <div className="relative flex-1 min-h-0 flex flex-col">
         {covered && (
           // The files stay mounted under the phone's suggestions, so Quay lại finds them where they were scrolled.
           <div className="absolute inset-0 z-sticky grid bg-base">
-            <SearchSuggestions panel={panel} emptyText="Gõ tên tệp hoặc thư mục để tìm." />
+            <SearchSuggestions panel={panel} emptyText={SEARCH_HINT} />
           </div>
         )}
         <div

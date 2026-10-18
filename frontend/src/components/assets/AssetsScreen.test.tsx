@@ -1069,7 +1069,7 @@ describe('AssetsScreen: suggestions in the empty search box', () => {
     await within(table('Tài sản')).findByText(MAC7)
     await user.click(box())
     const list = await screen.findByRole('listbox', { name: 'Gợi ý tìm kiếm' })
-    expect(within(list).getByRole('option', { name: 'macbook' })).toBeInTheDocument()
+    expect(within(list).getByRole('option', { name: 'Tìm lại macbook' })).toBeInTheDocument()
     const held = await within(list).findByRole('group', { name: 'Bạn đang giữ' })
     expect(within(held).getAllByRole('option').map((o) => o.querySelector('.font-medium')?.textContent)).toEqual(['Màn hình Dell 24 inch, kho'])
     expect(calls.some((c) => c.query.get('assigned_to') === U.hoa.id)).toBe(true)
@@ -1078,6 +1078,23 @@ describe('AssetsScreen: suggestions in the empty search box', () => {
       .toEqual([ASSETS[A.mac4]!.name, MAC7, 'Máy in HP LaserJet tầng 3'])
     expect(within(lately).getByText(/Trần Minh Đức đã thu hồi từ/)).toBeInTheDocument()
     noIds()
+  })
+
+  it('forgets a recent search with Delete, and the rest with Xoá tất cả until Hoàn tác', async () => {
+    const user = userEvent.setup()
+    const key = RECENT_KEY
+    localStorage.setItem(key, JSON.stringify(['một', 'hai', 'ba']))
+    await renderAssets('/assets?section=list')
+    await within(table('Tài sản')).findByText(MAC7)
+    await user.click(box())
+    await user.keyboard('{ArrowDown}{Delete}')
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(key)!)).toEqual(['hai', 'ba']))
+    await user.click(await screen.findByRole('button', { name: 'Xoá tất cả' }))
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(key)!)).toEqual([]))
+    const [toast] = useToastStore.getState().toasts
+    expect(toast).toMatchObject({ message: 'Đã xoá 2 lần tìm gần đây', action: { label: 'Hoàn tác' } })
+    act(() => toast!.action!.onClick())
+    expect(JSON.parse(localStorage.getItem(key)!)).toEqual(['hai', 'ba'])
   })
 
   it('asks for what I hold only once the box is focused', async () => {
@@ -1095,7 +1112,7 @@ describe('AssetsScreen: suggestions in the empty search box', () => {
     await user.click(await screen.findByRole('option', { name: /Máy in HP LaserJet tầng 3/ }))
     await waitFor(() => expect(search(router).asset).toBe(A.printer))
     await user.click(box())
-    await user.click(await screen.findByRole('option', { name: 'vinh' }))
+    await user.click(await screen.findByRole('option', { name: 'Tìm lại vinh' }))
     await waitFor(() => expect(search(router).q).toBe('vinh'))
   })
 

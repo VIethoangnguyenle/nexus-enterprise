@@ -74,6 +74,29 @@ export function removeRecent(module: SearchModule, userId: string, query: string
   return write(module, userId, readRecent(module, userId).filter((x) => x !== query))
 }
 
+/** Forgets every search of one module for this person and hands back what it held, so it can be taken back. */
+export function clearRecent(module: SearchModule, userId: string): string[] {
+  const held = readRecent(module, userId)
+  write(module, userId, [])
+  return held
+}
+
+/**
+ * Takes back searches that were cleared: they go behind anything searched since, in their old order, without
+ * repeating a search that differs only in case or accents. Returns the new list.
+ */
+export function restoreRecent(module: SearchModule, userId: string, held: string[]): string[] {
+  const merged: string[] = []
+  const seen = new Set<string>()
+  for (const q of [...readRecent(module, userId), ...held]) {
+    const key = fold(q)
+    if (seen.has(key)) continue
+    seen.add(key)
+    merged.push(q)
+  }
+  return write(module, userId, merged.slice(0, MAX_RECENT))
+}
+
 /** Forgets every person's recent searches in every module on this device; run at sign-out so the next person on a shared device cannot read them. */
 export function clearAllRecent(): void {
   try {

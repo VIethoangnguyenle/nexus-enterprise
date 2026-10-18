@@ -27,7 +27,8 @@ import { workspaceDisplayName } from '../../lib/workspace'
 import { stashTicket } from '../../stores/call.store'
 import { useAuthStore } from '../../stores/auth.store'
 import { useWebSocketStore } from '../../stores/websocket.store'
-import { Avatar, FilterChip, IconButton, SearchField, toast } from '../primitives'
+import { Avatar, FilterChip, IconButton, toast } from '../primitives'
+import { SearchBox } from '../patterns/SearchBox'
 import { SearchSuggestions } from '../patterns/SearchSuggestions'
 import type { MyDepartment } from './CategoryItem'
 import { ContactProfile, type ProfileMode } from './ContactProfile'
@@ -40,6 +41,9 @@ import { PhoneBackBar, PhoneLayer, phonePush } from './ContactsPhone'
 import { PathTrail } from './PathTrail'
 import { categoriesOf, colleaguesOf, nameOf, parentPathLabel, pathSegments, roleLine } from './contacts-model'
 import { phoneBarOf } from './phone-bar'
+
+/** What the open search says while there is nothing to suggest. */
+const SEARCH_HINT = 'Gõ tên, chức danh hoặc email để tìm người.'
 
 /** The category the address names, if it names one this workspace has. */
 function namedCategory(search: ContactsSearch, isPersonal: boolean): ContactsCat | undefined {
@@ -283,6 +287,7 @@ export function ContactsScreen() {
     value: query,
     variant: bottomBar ? 'screen' : 'popover',
     anchorRef: searchRef,
+    showWhenEmpty: true,
     groups: [
       recent.group((q) => setQuery(q)),
       {
@@ -325,6 +330,12 @@ export function ContactsScreen() {
   const showTools = view.kind !== 'roles' && view.kind !== 'groups'
   // While the suggestions cover the list of a phone or a tablet, filters would change a list that cannot be seen.
   const covering = bottomBar && panel.visible
+  const clearButton = (
+    <IconButton aria-label="Xoá tìm kiếm" title="Xoá tìm kiếm" size="sm" onClick={clearSearch}
+      className={bottomBar ? 'absolute right-1 top-1/2 -translate-y-1/2' : ''}>
+      <X size={16} strokeWidth={1.75} aria-hidden="true" />
+    </IconButton>
+  )
   const tools = showTools ? (
     <div className={`flex items-center gap-2 min-w-0 ${phone ? 'flex-wrap' : ''}`}>
       {covering && cat !== 'search' && (
@@ -335,8 +346,9 @@ export function ContactsScreen() {
       )}
       {/* A phone gives the box the whole row and the chip the one below (mockup §7). */}
       <div className={`relative flex-1 min-w-0 [&_input::-webkit-search-cancel-button]:hidden ${bottomBar ? '' : 'max-w-85'} ${phone && !covering ? 'basis-full' : ''}`}>
-        <SearchField
+        <SearchBox
           ref={searchRef}
+          panel={panel}
           label={searchLabel}
           placeholder="Tên, chức danh hoặc email"
           moduleSearch
@@ -363,15 +375,12 @@ export function ContactsScreen() {
             }
           }}
           onChange={(e) => setQuery(e.target.value)}
+          slotClassName="w-full"
           className={`w-full ${bottomBar ? 'h-11' : ''} ${query ? 'pr-9' : ''}`}
+          trailing={query && !bottomBar ? clearButton : undefined}
+          emptyText={SEARCH_HINT}
         />
-        {query && (
-          <IconButton aria-label="Xoá tìm kiếm" title="Xoá tìm kiếm" size="sm" onClick={clearSearch}
-            className="absolute right-1 top-1/2 -translate-y-1/2">
-            <X size={16} strokeWidth={1.75} aria-hidden="true" />
-          </IconButton>
-        )}
-        {!bottomBar && <SearchSuggestions panel={panel} />}
+        {query && bottomBar && clearButton}
       </div>
       {!covering && (
         <FilterChip pressed={onlineOnly} onClick={() => setOnlineOnly((on) => !on)}>
@@ -383,7 +392,7 @@ export function ContactsScreen() {
       )}
     </div>
   ) : null
-  const cover = covering ? <SearchSuggestions panel={panel} emptyText="Gõ tên, chức danh hoặc email để tìm người." /> : null
+  const cover = covering ? <SearchSuggestions panel={panel} emptyText={SEARCH_HINT} /> : null
 
   const browser = (variant: 'column' | 'phone') => (
     <ContactsBrowser

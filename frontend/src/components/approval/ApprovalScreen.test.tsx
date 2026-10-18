@@ -930,13 +930,30 @@ describe('ApprovalScreen: the search box', () => {
     expect(calls.some((c) => c.path === '/approval/my-requests')).toBe(false)
     await user.click(box())
     const list = await screen.findByRole('listbox', { name: 'Gợi ý tìm kiếm' })
-    expect(within(list).getByRole('option', { name: 'công tác' })).toBeInTheDocument()
+    expect(within(list).getByRole('option', { name: 'Tìm lại công tác' })).toBeInTheDocument()
     const waiting = within(list).getByRole('group', { name: 'Chờ bạn duyệt' })
     expect(within(waiting).getAllByRole('option')[0]).toHaveTextContent('Tạm ứng công tác phí tháng 10')
     const mine = await within(list).findByRole('group', { name: 'Đề nghị của bạn' })
     await user.click(within(mine).getByRole('option', { name: /Mua văn phòng phẩm/ }))
     await waitFor(() => expect(search(router).request).toBe(R.vpp))
     noIds()
+  })
+
+  it('forgets a recent search with Delete, and the rest with Xoá tất cả until Hoàn tác', async () => {
+    const user = userEvent.setup()
+    const key = RECENT_KEY
+    localStorage.setItem(key, JSON.stringify(['một', 'hai', 'ba']))
+    await renderApproval()
+    await within(table()).findByText('Tạm ứng công tác phí tháng 10')
+    await user.click(box())
+    await user.keyboard('{ArrowDown}{Delete}')
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(key)!)).toEqual(['hai', 'ba']))
+    await user.click(await screen.findByRole('button', { name: 'Xoá tất cả' }))
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(key)!)).toEqual([]))
+    const [toast] = useToastStore.getState().toasts
+    expect(toast).toMatchObject({ message: 'Đã xoá 2 lần tìm gần đây', action: { label: 'Hoàn tác' } })
+    act(() => toast!.action!.onClick())
+    expect(JSON.parse(localStorage.getItem(key)!)).toEqual(['hai', 'ba'])
   })
 
   it('approves in a batch only the ticked requests the search shows', async () => {

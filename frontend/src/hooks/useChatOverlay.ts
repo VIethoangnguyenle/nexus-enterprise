@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 import { useNavigate, useRouter, useRouterState, useSearch } from '@tanstack/react-router'
+import { CHAT_SEARCH_KEYS } from '../lib/chat-search'
 import { chatOverlayOf, validateChannelsSearch, type ChannelsSearch, type ChatOverlay } from '../lib/nav-destinations'
 import type { ThreadsChip } from '../components/spaces/PhoneThreadsScreen'
 
@@ -17,6 +18,9 @@ declare module '@tanstack/history' {
  * closing goes back when that mark is on the current entry, and otherwise (the page was
  * opened on the address) replaces it with the same address minus the layer.
  */
+/** The address keys of the search screen's words and filters, all unset: a layer that closes takes them along. */
+const NO_SEARCH_WORDS = Object.fromEntries(CHAT_SEARCH_KEYS.map((k) => [k, undefined]))
+
 export function useChatOverlay() {
   const navigate = useNavigate()
   const router = useRouter()
@@ -24,12 +28,12 @@ export function useChatOverlay() {
   const pushed = useRouterState({ select: (s) => !!s.location.state?.chatOverlay })
 
   const open = useCallback((layer: Pick<ChannelsSearch, 'search' | 'threads'>) => {
-    void navigate({ to: '/channels', search: { ...search, search: undefined, threads: undefined, ...layer }, state: { chatOverlay: true } })
+    void navigate({ to: '/channels', search: { ...search, ...NO_SEARCH_WORDS, search: undefined, threads: undefined, ...layer }, state: { chatOverlay: true } })
   }, [navigate, search])
 
   const close = useCallback(() => {
     if (pushed) router.history.back()
-    else void navigate({ to: '/channels', search: { ...search, search: undefined, threads: undefined }, replace: true })
+    else void navigate({ to: '/channels', search: { ...search, ...NO_SEARCH_WORDS, search: undefined, threads: undefined }, replace: true })
   }, [pushed, router, navigate, search])
 
   return {

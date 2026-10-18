@@ -86,6 +86,19 @@ export function formatListTime(value: unknown, now: Date = new Date()): string {
   return formatDate(d)
 }
 
+const WEEKDAYS = ['Chủ nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy']
+
+/** When a message was sent, for a search result: `09:12`, "Hôm qua 16:05", "Thứ Năm 10:41" within the week, then `02/10`. */
+export function formatMessageTime(value: unknown, now: Date = new Date()): string {
+  const d = toDate(value)
+  if (!d) return ''
+  const days = dayDiff(d, now)
+  if (days === 0) return formatTime(d)
+  if (days === 1) return `Hôm qua ${formatTime(d)}`
+  if (days > 1 && days < 7) return `${WEEKDAYS[d.getDay()]} ${formatTime(d)}`
+  return formatListTime(d, now)
+}
+
 /** The time on a Trang chủ row: "1 phút", "09:02", "Hôm qua", `07/10`. `ms` is epoch milliseconds; 0 is unknown. */
 export function formatFeedTime(ms: number, now: Date = new Date()): string {
   if (!ms) return ''
