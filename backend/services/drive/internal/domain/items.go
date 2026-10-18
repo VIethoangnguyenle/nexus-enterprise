@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -219,15 +220,31 @@ func (s *Service) reparent(ctx context.Context, childOA, fromOA, toOA string) er
 	return nil
 }
 
-// CopyItem copies a file into a folder of the same workspace; the folder may be
-// in another of that workspace's drives (a channel drive, say).
+// copyPrefix starts the name a copy takes when its own name is already used in
+// the destination, as Google Drive's "Copy of".
+const copyPrefix = "Bản sao của "
+
+// maxCopyNames bounds the "(n)" suffixes tried before a copy is refused.
+const maxCopyNames = 100
+
+// cleanupTimeout bounds the work that undoes a failed copy. It runs on a context
+// the caller cannot cancel, so a client that hangs up mid-copy still leaves
+// nothing behind.
+const cleanupTimeout = 10 * time.Second
+
+// CopyItem copies a file into a folder of the same workspace, or to the top
+// level of a drive of that workspace; the destination may be in another of the
+// workspace's drives (a channel drive, say). No destination means the top level
+// of the source's own drive, and a drive root as destination means the top level
+// of that drive, the way uploads and moves place top-level items.
 //
 // A copy writes a new file into the destination, so it takes what an upload
-// there takes: read on the source, write on the destination folder, and room in
-// the quota, which it is charged against like a confirmed upload. Where the copy
-// lands (workspace, drive) comes from the destination folder and never from the
+// there takes: read on the source, write on the destination, and room in the
+// quota, which it is charged against like a confirmed upload. Where the copy
+// lands (workspace, drive) comes from the destination and never from the
 // request: a caller naming another workspace would otherwise place a file there,
-// or, as REST sends none, leave it with no workspace at all.
+// or, as REST sends none, leave it with no workspace at all. A name already used
+// in the destination becomes "Bản sao của <name>", then "… (2)" and on.
 func (s *Service) CopyItem(ctx context.Context, req *pb.CopyItemRequest) (*pb.DriveItem, error) {
 	callerNode := grpcauth.CallerFrom(ctx).NGACNodeID
 	src, err := s.store.GetItem(ctx, req.ItemId)
@@ -237,12 +254,102 @@ func (s *Service) CopyItem(ctx context.Context, req *pb.CopyItemRequest) (*pb.Dr
 	if src.ItemType != "file" {
 		return nil, invalid("only files can be copied")
 	}
+	if src.ObjectKey == nil {
+		return nil, notFound("source not found")
+	}
 	if err := s.checkAccess(ctx, callerNode, src.NGACNodeID, ngac.OpRead); err != nil {
 		return nil, err
 	}
 
 	// Everything that can be refused is refused before anything is stored.
-	dest, err := s.store.GetItem(ctx, req.DestParentId)
+	place, err := s.copyDestination(ctx, src, req.DestParentId, callerNode)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.checkAccess(ctx, callerNode, place.nodeID, ngac.OpWrite); err != nil {
+		return nil, err
+	}
+	var size int64
+	if src.SizeBytes != nil {
+		size = *src.SizeBytes
+	}
+	// As for an upload, the quota is checked only once the caller may write.
+	ok, err := s.store.CheckQuota(ctx, place.workspaceID, size)
+	if err != nil {
+		return nil, fmt.Errorf("check quota: %w", err)
+	}
+	if !ok {
+		return nil, quotaExceeded("storage quota exceeded")
+	}
+	name, err := s.freeCopyName(ctx, place, src.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	newID := uuid.New().String()
+	newKey := fmt.Sprintf("drive/%s/%s", newID, name)
+	copied, err := s.docStorage.CopyObject(ctx, &docpb.CopyObjectRequest{
+		SrcWorkspaceId: src.WorkspaceID, SrcObjectKey: *src.ObjectKey,
+		DstWorkspaceId: place.workspaceID, DstObjectKey: newKey,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("copy object: %w", err)
+	}
+	// The size the store reports for the new object is the one charged.
+	if copied.GetSizeBytes() > 0 {
+		size = copied.GetSizeBytes()
+	}
+
+	newItem := &store.DriveItem{
+		ID: newID, WorkspaceID: place.workspaceID,
+		DriveContext: place.driveContext, DriveContextID: place.driveContextID,
+		ParentID: place.parentID, ItemType: "file", Name: name,
+		MimeType: src.MimeType, SizeBytes: &size, ObjectKey: &newKey,
+		// Files inherit the destination's OA node — no NGAC node created.
+		NGACNodeID: place.nodeID, ScopeOAID: place.scopeOAID,
+		OwnerID: grpcauth.CallerFrom(ctx).UserID, Status: "pending",
+	}
+	if err := s.store.InsertItem(ctx, newItem); err != nil {
+		s.abandonCopy(ctx, "", place.workspaceID, newKey)
+		return nil, fmt.Errorf("insert copy: %w", err)
+	}
+	// Publish and charge in one step, the way ConfirmFile does: a file is never
+	// active without being counted.
+	if err := s.store.ActivateFile(ctx, newID, place.workspaceID, size); err != nil {
+		s.abandonCopy(ctx, newID, place.workspaceID, newKey)
+		if errors.Is(err, store.ErrNameTaken) {
+			// Another item took the name between the check and now.
+			return nil, conflict("an item with that name already exists")
+		}
+		return nil, fmt.Errorf("publish copy: %w", err)
+	}
+	newItem.Status = "active"
+	s.announce(ctx, realtime.KindCreated, newItem)
+	return itemToProto(newItem), nil
+}
+
+// copyPlace is where a copy lands: under a folder, or at a drive's top level
+// (parentID nil), with the OA it inherits.
+type copyPlace struct {
+	workspaceID, driveContext, driveContextID string
+	parentID                                  *string
+	nodeID, scopeOAID                         string
+}
+
+// copyDestination resolves the destination of a copy. It refuses a destination
+// that is gone, not a folder, or in another workspace than the source.
+func (s *Service) copyDestination(ctx context.Context, src *store.DriveItem, destID, callerNode string) (*copyPlace, error) {
+	if destID == "" {
+		root, err := s.ensureRoot(ctx, src.WorkspaceID, src.DriveContext, src.DriveContextID, callerNode)
+		if err != nil {
+			return nil, err
+		}
+		return &copyPlace{
+			workspaceID: src.WorkspaceID, driveContext: src.DriveContext, driveContextID: src.DriveContextID,
+			nodeID: root.NGACNodeID, scopeOAID: root.ScopeOAID,
+		}, nil
+	}
+	dest, err := s.store.GetItem(ctx, destID)
 	if err != nil {
 		return nil, fmt.Errorf("load destination: %w", err)
 	}
@@ -255,67 +362,62 @@ func (s *Service) CopyItem(ctx context.Context, req *pb.CopyItemRequest) (*pb.Dr
 	if dest.WorkspaceID != src.WorkspaceID {
 		return nil, invalid("a file can only be copied within its own workspace")
 	}
-	if err := s.checkAccess(ctx, callerNode, dest.NGACNodeID, ngac.OpWrite); err != nil {
-		return nil, err
+	place := &copyPlace{
+		workspaceID: dest.WorkspaceID, driveContext: dest.DriveContext, driveContextID: dest.DriveContextID,
+		nodeID: dest.NGACNodeID, scopeOAID: dest.ScopeOAID,
 	}
-	var size int64
-	if src.SizeBytes != nil {
-		size = *src.SizeBytes
-	}
-	// As for an upload, the quota is checked only once the caller may write.
-	ok, err := s.store.CheckQuota(ctx, dest.WorkspaceID, size)
-	if err != nil {
-		return nil, fmt.Errorf("check quota: %w", err)
-	}
-	if !ok {
-		return nil, quotaExceeded("storage quota exceeded")
-	}
-
-	newID := uuid.New().String()
-	newKey := fmt.Sprintf("drive/%s/%s", newID, src.Name)
-	copied, err := s.docStorage.CopyObject(ctx, &docpb.CopyObjectRequest{
-		SrcWorkspaceId: src.WorkspaceID, SrcObjectKey: *src.ObjectKey,
-		DstWorkspaceId: dest.WorkspaceID, DstObjectKey: newKey,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("copy object: %w", err)
-	}
-	// The size the store reports for the new object is the one charged.
-	if copied.GetSizeBytes() > 0 {
-		size = copied.GetSizeBytes()
-	}
-
-	destParent := dest.ID
-	newItem := &store.DriveItem{
-		ID: newID, WorkspaceID: dest.WorkspaceID,
-		DriveContext: dest.DriveContext, DriveContextID: dest.DriveContextID,
-		ParentID: &destParent, ItemType: "file", Name: src.Name,
-		MimeType: src.MimeType, SizeBytes: &size, ObjectKey: &newKey,
-		// Files inherit the destination folder's OA node — no NGAC node created.
-		NGACNodeID: dest.NGACNodeID, ScopeOAID: dest.ScopeOAID,
-		OwnerID: grpcauth.CallerFrom(ctx).UserID, Status: "pending",
-	}
-	if err := s.store.InsertItem(ctx, newItem); err != nil {
-		s.dropCopiedObject(ctx, dest.WorkspaceID, newKey)
-		return nil, fmt.Errorf("insert copy: %w", err)
-	}
-	// Publish and charge in one step, the way ConfirmFile does: a file is never
-	// active without being counted.
-	if err := s.store.ActivateFile(ctx, newID, dest.WorkspaceID, size); err != nil {
-		if derr := s.store.DeleteItem(ctx, newID); derr != nil {
-			slog.Error("unpublished copy's row not removed", "item", newID, "err", derr)
+	if dest.ParentID == nil {
+		root, err := s.store.FindRootByContext(ctx, dest.WorkspaceID, dest.DriveContext, dest.DriveContextID)
+		if err != nil {
+			return nil, fmt.Errorf("find drive root: %w", err)
 		}
-		s.dropCopiedObject(ctx, dest.WorkspaceID, newKey)
-		return nil, fmt.Errorf("publish copy: %w", err)
+		if root != nil && root.ID == dest.ID {
+			// The root is the drive's top level, not a folder to sit under. It
+			// stores the workspace ID as its context; a workspace drive's items
+			// store none.
+			if dest.DriveContext == "workspace" {
+				place.driveContextID = ""
+			}
+			return place, nil
+		}
 	}
-	newItem.Status = "active"
-	s.announce(ctx, realtime.KindCreated, newItem)
-	return itemToProto(newItem), nil
+	parent := dest.ID
+	place.parentID = &parent
+	return place, nil
 }
 
-// dropCopiedObject removes the object a copy stored when the copy then failed,
-// so a refused or broken copy leaves nothing behind in storage.
-func (s *Service) dropCopiedObject(ctx context.Context, workspaceID, objectKey string) {
+// freeCopyName returns name if no active item in place uses it, otherwise the
+// first free "Bản sao của <name>" / "Bản sao của <name> (n)".
+func (s *Service) freeCopyName(ctx context.Context, place *copyPlace, name string) (string, error) {
+	for n := 0; n <= maxCopyNames; n++ {
+		candidate := name
+		switch {
+		case n == 1:
+			candidate = copyPrefix + name
+		case n > 1:
+			candidate = fmt.Sprintf("%s%s (%d)", copyPrefix, name, n)
+		}
+		used, err := s.store.NameInUse(ctx, place.workspaceID, place.driveContext, place.driveContextID, place.parentID, candidate)
+		if err != nil {
+			return "", fmt.Errorf("check name: %w", err)
+		}
+		if !used {
+			return candidate, nil
+		}
+	}
+	return "", conflict("too many copies with this name in the destination")
+}
+
+// abandonCopy undoes a copy that failed after its object was stored: the row
+// (when one was inserted) and the object, so a broken copy leaves nothing behind.
+func (s *Service) abandonCopy(callCtx context.Context, rowID, workspaceID, objectKey string) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(callCtx), cleanupTimeout)
+	defer cancel()
+	if rowID != "" {
+		if err := s.store.DeleteItem(ctx, rowID); err != nil {
+			slog.Error("failed copy's row not removed", "item", rowID, "err", err)
+		}
+	}
 	if _, err := s.docStorage.DeleteObject(ctx, &docpb.DeleteObjectRequest{
 		WorkspaceId: workspaceID, ObjectKey: objectKey,
 	}); err != nil {

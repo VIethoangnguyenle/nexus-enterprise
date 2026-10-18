@@ -87,3 +87,37 @@ Whether the caller may write comes first: a caller without write on the destinat
 #### Scenario: Two moves of one item
 - **WHEN** two requests move the same item at once
 - **THEN** the loser is told 409 `item_changed` and may retry
+
+### Requirement: A copy takes what an upload to its destination takes
+`POST /api/drive/items/{itemId}/copy` (gRPC `CopyItem`) SHALL copy an active file only when the caller has `read`
+on the source and `write` on the destination, in that order, then room in the quota; the copy is charged to the
+quota when it is published, exactly like a confirmed upload. The destination is a folder of the **same workspace**
+as the source (any of its drives, e.g. a channel drive); an empty `target_folder_id` or a drive root means the top
+level of that drive (no parent, the drive's own context). Where the copy lands — workspace, drive, parent, OA — is
+taken from the destination and never from the request. A name already used in the destination becomes
+"Bản sao của <name>", then "Bản sao của <name> (2)" and on; a name taken by a concurrent request at publish time is
+409. A copy that fails after its object was stored removes the object and the row, even when the client has hung up.
+
+#### Scenario: No write on the destination
+- **WHEN** a member who may read the file but not write the destination folder asks to copy it there
+- **THEN** the answer is 403 and nothing is stored or charged
+
+#### Scenario: Destination in another workspace
+- **WHEN** the destination folder belongs to another workspace, whatever rights the caller holds
+- **THEN** the answer is 400 and nothing lands in that folder
+
+#### Scenario: Request names another workspace
+- **WHEN** a gRPC caller sets `dest_workspace_id` or `dest_drive_context` to something else
+- **THEN** they are ignored and the copy belongs to the destination folder's workspace and drive
+
+#### Scenario: Copy over the quota
+- **WHEN** the copy would take the workspace past its quota
+- **THEN** the answer is 413 `quota_exceeded`, after the rights checks, and nothing is stored
+
+#### Scenario: Copy into the same folder
+- **WHEN** a file is copied into the folder that already holds it
+- **THEN** the copy is called "Bản sao của <name>", and a second copy "Bản sao của <name> (2)"
+
+#### Scenario: Gone or wrong destination and source
+- **WHEN** the destination is trashed or missing, or the source is trashed or still pending
+- **THEN** the answer is 404; a destination that is a file is 400

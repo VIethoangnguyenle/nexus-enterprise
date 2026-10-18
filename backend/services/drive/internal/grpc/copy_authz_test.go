@@ -186,3 +186,67 @@ func TestCopyItem_AllowedWithReadOnSourceAndWriteOnDestination(t *testing.T) {
 	assert.Equal(t, f.file.Name, out.Name)
 	assert.Equal(t, oaOf(f.other), out.NgacNodeId, "a file inherits the destination folder's node")
 }
+
+func TestCopyItem_PendingSourceIsNotFound(t *testing.T) {
+	f := newCopyFixture(t)
+	pending, err := f.srv.CreateFile(asCaller("u", actor), &pb.CreateFileRequest{
+		WorkspaceId: f.wsID, Name: "half.txt", MimeType: "text/plain", SizeBytes: 1, ParentId: f.b.Id,
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { cleanDriveItems(t, f.pool, pending.FileId) })
+	_, err = f.srv.CopyItem(asCaller("u", actor), &pb.CopyItemRequest{ItemId: pending.FileId, DestParentId: f.other.Id})
+	assert.Equal(t, codes.NotFound, status.Code(err), "an upload that is not confirmed is not there to copy")
+}
+
+// workspaceRoot is the drive root row of the fixture's workspace drive.
+func (f *copyFixture) workspaceRoot(t *testing.T) string {
+	t.Helper()
+	var id string
+	require.NoError(t, f.pool.QueryRow(context.Background(),
+		`SELECT id FROM drive_items WHERE workspace_id = $1 AND drive_context = 'workspace' AND is_root AND status = 'active'`,
+		f.wsID).Scan(&id))
+	return id
+}
+
+func TestCopyItem_EmptyDestinationIsTheTopOfTheSourcesDrive(t *testing.T) {
+	f := newCopyFixture(t)
+	out, err := f.copyAs(t, "")
+	require.NoError(t, err)
+	assert.Empty(t, out.ParentId, "top-level items have no parent row")
+	assert.Equal(t, f.file.DriveContext, out.DriveContext)
+	assert.Equal(t, f.file.DriveContextId, out.DriveContextId, "a top-level file carries its drive's context like an upload does")
+	assert.Equal(t, f.wsID, out.WorkspaceId)
+}
+
+func TestCopyItem_IntoTheDriveRootLandsAtTheTopLevel(t *testing.T) {
+	f := newCopyFixture(t)
+	out, err := f.copyAs(t, f.workspaceRoot(t))
+	require.NoError(t, err)
+	assert.Empty(t, out.ParentId, "the root is the top level, not a folder to sit under")
+	assert.Equal(t, f.file.DriveContextId, out.DriveContextId, "not the root's own context id")
+}
+
+func TestCopyItem_DuplicateNameGetsACopyName(t *testing.T) {
+	f := newCopyFixture(t)
+	first, err := f.copyAs(t, f.b.Id)
+	require.NoError(t, err)
+	assert.Equal(t, "Bản sao của report.txt", first.Name)
+	second, err := f.copyAs(t, f.b.Id)
+	require.NoError(t, err)
+	assert.Equal(t, "Bản sao của report.txt (2)", second.Name)
+
+	// Into a folder where the name is free, the copy keeps it.
+	third, err := f.copyAs(t, f.other.Id)
+	require.NoError(t, err)
+	assert.Equal(t, "report.txt", third.Name)
+}
+
+func TestCopyItem_DuplicateNameAtTheTopLevelGetsACopyName(t *testing.T) {
+	f := newCopyFixture(t)
+	first, err := f.copyAs(t, "")
+	require.NoError(t, err)
+	second, err := f.copyAs(t, "")
+	require.NoError(t, err)
+	assert.Equal(t, "report.txt", first.Name)
+	assert.Equal(t, "Bản sao của report.txt", second.Name, "top-level siblings are siblings too")
+}

@@ -75,3 +75,21 @@ func (s *Store) GetChannelWorkspaceID(ctx context.Context, channelID string) (st
 	}
 	return wsID, err
 }
+
+// NameInUse reports whether an active item called name already sits in the
+// given place: under parentID, or at the top level of the drive when parentID is
+// nil. The unique index only covers items with a parent (NULLs are distinct), so
+// top-level siblings are checked here; the drive root itself is not a sibling.
+func (s *Store) NameInUse(ctx context.Context, workspaceID, driveContext, driveContextID string, parentID *string, name string) (bool, error) {
+	var used bool
+	err := s.db.QueryRow(ctx,
+		`SELECT EXISTS (
+			SELECT 1 FROM drive_items
+			 WHERE status = 'active' AND name = $5
+			   AND CASE WHEN $4::text IS NULL
+			            THEN workspace_id = $1 AND drive_context = $2 AND COALESCE(drive_context_id,'') = $3
+			                 AND parent_id IS NULL AND NOT is_root
+			            ELSE parent_id = $4 END)`,
+		workspaceID, driveContext, driveContextID, parentID, name).Scan(&used)
+	return used, err
+}
