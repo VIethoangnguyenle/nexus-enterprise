@@ -1080,6 +1080,23 @@ describe('AssetsScreen: suggestions in the empty search box', () => {
     noIds()
   })
 
+  it('forgets a recent search with Delete, and the rest with Xoá tất cả until Hoàn tác', async () => {
+    const user = userEvent.setup()
+    const key = RECENT_KEY
+    localStorage.setItem(key, JSON.stringify(['một', 'hai', 'ba']))
+    await renderAssets('/assets?section=list')
+    await within(table('Tài sản')).findByText(MAC7)
+    await user.click(box())
+    await user.keyboard('{ArrowDown}{Delete}')
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(key)!)).toEqual(['hai', 'ba']))
+    await user.click(await screen.findByRole('button', { name: 'Xoá tất cả' }))
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(key)!)).toEqual([]))
+    const [toast] = useToastStore.getState().toasts
+    expect(toast).toMatchObject({ message: 'Đã xoá 2 lần tìm gần đây', action: { label: 'Hoàn tác' } })
+    act(() => toast!.action!.onClick())
+    expect(JSON.parse(localStorage.getItem(key)!)).toEqual(['hai', 'ba'])
+  })
+
   it('asks for what I hold only once the box is focused', async () => {
     await renderAssets('/assets?section=list')
     await within(table('Tài sản')).findByText(MAC7)

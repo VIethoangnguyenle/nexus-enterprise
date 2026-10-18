@@ -1117,6 +1117,23 @@ describe('DriveScreen: suggestions in the empty search box', () => {
     expect(document.body.textContent).not.toMatch(UUID_RE)
   })
 
+  it('forgets a recent search with Delete, and the rest with Xoá tất cả until Hoàn tác', async () => {
+    const user = userEvent.setup()
+    const key = `ngac-recent-searches:drive:${U.hoa.id}`
+    localStorage.setItem(key, JSON.stringify(['một', 'hai', 'ba']))
+    await renderDrive(`/drive?folder=${D.doisoat}`)
+    await within(table()).findByText('doi-soat-08-10.xlsx')
+    await user.click(box())
+    await user.keyboard('{ArrowDown}{Delete}')
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(key)!)).toEqual(['hai', 'ba']))
+    await user.click(await screen.findByRole('button', { name: 'Xoá tất cả' }))
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(key)!)).toEqual([]))
+    const [toast] = useToastStore.getState().toasts
+    expect(toast).toMatchObject({ message: 'Đã xoá 2 lần tìm gần đây', action: { label: 'Hoàn tác' } })
+    act(() => toast!.action!.onClick())
+    expect(JSON.parse(localStorage.getItem(key)!)).toEqual(['hai', 'ba'])
+  })
+
   it('opens a suggested file of the folder in the viewer, and one shared with me too', async () => {
     const user = userEvent.setup()
     await renderDrive(`/drive?folder=${D.doisoat}`)
