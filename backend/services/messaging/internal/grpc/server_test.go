@@ -374,14 +374,14 @@ func TestGetChannel_NotFound(t *testing.T) {
 
 func TestGetChannel_WithNullColumns(t *testing.T) {
 	srv, pool := setupTestServer(t)
-	chID := insertTestChannel(t, pool, "test_null_cols", "dm", "")
+	chID := insertTestChannel(t, pool, "test_null_cols", "private", "")
 	t.Cleanup(func() { cleanTestData(t, pool, chID) })
 
 	ch, err := srv.GetChannel(context.Background(), &pb.GetChannelRequest{ChannelId: chID})
 
 	require.NoError(t, err, "GetChannel must not crash on NULL columns")
 	assert.Equal(t, chID, ch.Id)
-	assert.Equal(t, "dm", ch.ChannelType)
+	assert.Equal(t, "private", ch.ChannelType)
 	assert.Equal(t, "", ch.WorkspaceId, "NULL should scan as empty string")
 	assert.Equal(t, "", ch.NgacOaId, "NULL should scan as empty string")
 	assert.Equal(t, "", ch.NgacUaId, "NULL should scan as empty string")
@@ -524,14 +524,26 @@ func (w sameWorkspaceWriter) IsAssigned(context.Context, *policypb.IsAssignedReq
 	return &policypb.BoolResponse{Value: true}, nil
 }
 
+// A DM with no workspace is in no workspace: it is not found, whoever asks.
+func TestGetChannel_ADMWithNoWorkspaceIsNotFound(t *testing.T) {
+	srv, pool := setupTestServer(t)
+	chID := insertTestChannel(t, pool, "test_dm_no_ws", "dm", "")
+	t.Cleanup(func() { cleanTestData(t, pool, chID) })
+
+	_, err := srv.GetChannel(asCallerIn("user-1", "ngac-user-1", "any-workspace"), &pb.GetChannelRequest{ChannelId: chID})
+
+	assert.Equal(t, codes.NotFound, status.Code(err))
+}
+
 func TestCreateDM_HappyPath(t *testing.T) {
 	pool := testPool(t)
-	svc := domain.NewService(store.NewStore(pool), &mockPolicyReadClient{},
-		sameWorkspaceWriter{mockPolicyWriteClient: &mockPolicyWriteClient{pool: pool}, ws: "dm-happy-ws"}, &dbAuth{pool: pool}, nil)
-	srv := grpcserver.NewMessagingServer(svc, nil, nil)
 	// channels.created_by is a foreign key onto users, so the participants have
 	// to be real rows rather than invented ids.
 	userA, userB := getTwoTestUserIDs(t, pool)
+	ws, _ := testutil.CreateWorkspace(t, pool, userA)
+	svc := domain.NewService(store.NewStore(pool), &mockPolicyReadClient{},
+		sameWorkspaceWriter{mockPolicyWriteClient: &mockPolicyWriteClient{pool: pool}, ws: ws}, &dbAuth{pool: pool}, nil)
+	srv := grpcserver.NewMessagingServer(svc, nil, nil)
 
 	var createdID string
 	t.Cleanup(func() {
@@ -542,16 +554,17 @@ func TestCreateDM_HappyPath(t *testing.T) {
 
 	// The target's node is the auth service's word, not the request's: a node sent
 	// that is not theirs is refused, and one left out is filled in.
-	_, err := srv.CreateDM(asCaller(userA, "ngac-user-1"), &pb.CreateDMRequest{TargetUserId: userB, TargetNgacNodeId: "ngac-user-2"})
+	_, err := srv.CreateDM(asCallerIn(userA, "ngac-user-1", ws), &pb.CreateDMRequest{TargetUserId: userB, TargetNgacNodeId: "ngac-user-2"})
 	require.Equal(t, codes.InvalidArgument, status.Code(err), "a node that is not the target's")
 
-	ch, err := srv.CreateDM(asCaller(userA, "ngac-user-1"), &pb.CreateDMRequest{TargetUserId: userB})
+	ch, err := srv.CreateDM(asCallerIn(userA, "ngac-user-1", ws), &pb.CreateDMRequest{TargetUserId: userB})
 	if ch != nil {
 		createdID = ch.Id
 	}
 
 	require.NoError(t, err)
 	assert.Equal(t, "dm", ch.ChannelType)
+	assert.Equal(t, ws, ch.WorkspaceId, "the DM belongs to the workspace the caller is signed in to")
 	// The title is built from display names, not identifiers — the mock auth
 	// client resolves both participants to "testuser".
 	assert.Equal(t, "testuser, testuser", ch.Name)
@@ -679,6 +692,10 @@ func TestAddMember_RejectedOnDirectMessage(t *testing.T) {
 
 // asCaller returns a context carrying the caller the interceptor would have
 // put there from request metadata.
+func asCallerIn(userID, nodeID, tenantID string) context.Context {
+	return grpcauth.WithCaller(context.Background(), grpcauth.Caller{UserID: userID, NGACNodeID: nodeID, TenantID: tenantID})
+}
+
 func asCaller(userID, nodeID string) context.Context {
 	return grpcauth.WithCaller(context.Background(), grpcauth.Caller{UserID: userID, NGACNodeID: nodeID})
 }

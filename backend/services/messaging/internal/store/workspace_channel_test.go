@@ -122,7 +122,7 @@ func TestDeleteChannelMembersInWorkspace_DropsOnlyThatPersonInThatWorkspace(t *t
 	general := wsChannel(t, pool, st, wsA, owner, "general", "workspace", time.Time{}, "leaver", "stayer")
 	group := wsChannel(t, pool, st, wsA, owner, "design", "private", time.Time{}, "leaver")
 	elsewhere := wsChannel(t, pool, st, wsB, owner, "design", "private", time.Time{}, "leaver")
-	dm := wsChannel(t, pool, st, "", owner, "dm", "dm", time.Time{}, "leaver", "stayer")
+	dm := wsChannel(t, pool, st, wsA, owner, "dm", "dm", time.Time{}, "leaver", "stayer")
 
 	n, err := st.DeleteChannelMembersInWorkspace(ctx, wsA, "leaver")
 
@@ -137,7 +137,7 @@ func TestDeleteChannelMembersInWorkspace_DropsOnlyThatPersonInThatWorkspace(t *t
 	assert.False(t, has(group, "leaver"))
 	assert.True(t, has(general, "stayer"), "another person keeps theirs")
 	assert.True(t, has(elsewhere, "leaver"), "another workspace is untouched")
-	assert.True(t, has(dm, "leaver"), "a DM belongs to no workspace")
+	assert.True(t, has(dm, "leaver"), "a DM hangs under PC_Global, so leaving the workspace strips nobody from it")
 }
 
 // Once migration 060 has enforced one workspace-wide channel per workspace, the type

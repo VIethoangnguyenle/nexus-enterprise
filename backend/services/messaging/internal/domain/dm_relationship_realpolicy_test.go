@@ -396,9 +396,10 @@ func TestRealPolicy_DMWritesNeedASharedWorkspace(t *testing.T) {
 	}
 }
 
-// The relationship is the existence of a shared workspace, not one in particular,
-// and it is judged now: coming back to a workspace in common restores the DM.
-func TestRealPolicy_DMSurvivesOnAnyOtherSharedWorkspace(t *testing.T) {
+// The relationship is both people being in the DM's own workspace, judged now:
+// sharing some other workspace does not keep the DM writable, and coming back
+// to its workspace restores it.
+func TestRealPolicy_ADMIsWrittenToOnlyWhileBothAreInItsOwnWorkspace(t *testing.T) {
 	w := newDMWorld(t)
 	dm := w.mustDM(w.creator, w.member)
 	w.mustSend(w.creator, dm.Id, "before")
@@ -411,11 +412,11 @@ func TestRealPolicy_DMSurvivesOnAnyOtherSharedWorkspace(t *testing.T) {
 	testutil.Assign(t, w.write, w.creator.node, other.Members)
 	testutil.Assign(t, w.write, w.member.node, other.Members)
 	_, err = w.send(w.creator, dm.Id, "in the other workspace")
-	require.NoError(t, err, "they now share another workspace")
+	assert.ErrorIs(t, err, domain.ErrAccessDenied, "they share another workspace, but the DM is not its")
 
-	testutil.Unassign(t, w.write, w.member.node, other.Members)
-	_, err = w.send(w.creator, dm.Id, "gone again")
-	assert.ErrorIs(t, err, domain.ErrAccessDenied)
+	testutil.Assign(t, w.write, w.member.node, w.g.Members)
+	_, err = w.send(w.creator, dm.Id, "back in its workspace")
+	assert.NoError(t, err, "both are in the DM's workspace again")
 }
 
 // --- Calls in progress ---

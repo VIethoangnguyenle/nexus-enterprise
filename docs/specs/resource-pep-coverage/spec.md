@@ -27,11 +27,28 @@ the REST edge and from the signed identity token between services (see "Caller i
 | Create the workspace-wide channel (`ProvisionWorkspaceChannel`) | service identity `auth` only; the creator also needs `create_channel` | the workspace Channels OA |
 | Put a member in the workspace-wide channel (`JoinWorkspaceChannel`, also done for the caller when they list the workspace's channels) | service identity `auth` or `workspace` only (the handler checks the name again); the person must be under the workspace's Members UA | the channel's Members UA |
 
-#### Scenario: A direct conversation needs a shared workspace for any write
-- **WHEN** one of the two people of a direct message no longer shares a workspace with the other and sends a message of any type, votes, reacts, pins, edits, deletes, creates a poll or task, or starts, joins, rings or invites into a call
+#### Requirement: A direct message belongs to exactly one workspace
+
+A direct message (`channel_type` `dm`) SHALL carry the workspace it was started in (`channels.workspace_id`). The same two people have one DM per workspace both are members of, never one DM shared across workspaces. The DM's graph nodes are unchanged (Content OA and Members UA under `PC_Global`); only the row, the lists and the doors are scoped. A DM whose `workspace_id` is NULL (one that predates this rule and that migration `066_dm_workspace.sql` could not place) belongs to no workspace: it is in no list and behind no door.
+
+- `POST /api/dms` (gRPC `CreateDM`) starts or finds the DM in the workspace the session is signed in to (the caller's verified tenant). Both people SHALL be members of that workspace (`policyclient.SharedWorkspaces` must contain it); otherwise 403, and a session with no tenant is refused. The existing DM is looked up in that workspace only.
+- Every list that carries DMs is the signed-in workspace's alone: `GET /api/dms` (gRPC `ListDMs`), the chat state, unread counts, conversation activity, mentions and their count, starred conversations and messages, followed and unread threads, and search. They are all built from one set of readable conversations (`readableChannelIDs`), so a DM of another workspace is in none of them.
+- Opening a DM by its channel id (read, send, react, pin, thread, star, call, members, live subscription) while signed in to another workspace, or to none, is answered as not found, the way a conversation the caller is not in is. Writing to a DM also needs both people to be members of the DM's own workspace.
+- Realtime events about a DM carry the DM's workspace, and chat-state versions are bumped for that workspace, so a session of another workspace is told nothing.
+- Leaving a workspace does not strip the leaver's `channel_members` rows from DMs (a DM's Members UA is not under the workspace).
+
+#### Scenario: A person in two workspaces has a DM in each
+- **WHEN** a person who is a member of workspaces A and B opens a DM with a colleague who is in both, once signed in to A and once to B
+- **THEN** two distinct DMs are made, each stamped with its workspace, and asking again in either finds that one
+- **AND** `GET /api/dms` signed in to A lists the A DM only, and signed in to B the B DM only
+- **AND** a colleague who is a member of A only cannot be messaged from B (403, nothing created)
+- **AND** the A DM's messages, threads, reactions, pins, search hits, mentions, stars and unread counts do not appear from B, and opening the A DM by id from B is 404
+
+#### Scenario: A direct conversation needs both people in its workspace for any write
+- **WHEN** one of the two people of a direct message is no longer a member of the DM's workspace (they may still share another) and sends a message of any type, votes, reacts, pins, edits, deletes, creates a poll or task, or starts, joins, rings or invites into a call
 - **THEN** the answer is 403, though the graph still grants them `write` on the conversation's OA
-- **AND** reading the history is unchanged, and the same requests succeed while they share a workspace
-- **AND** opening a direct message (`POST /api/dms`) names the other person by user id, takes their node from the auth service, and is refused (403) unless they are a user node sharing a workspace with the caller; a node sent that is not theirs is 400
+- **AND** reading the history is unchanged, and the same requests succeed while both are in the DM's workspace
+- **AND** opening a direct message (`POST /api/dms`) names the other person by user id, takes their node from the auth service, and is refused (403) unless they are a user node and both are members of the workspace the caller is signed in to; a node sent that is not theirs is 400
 - **AND** backing out stays possible for them: declining or cancelling a call, deleting their own message, taking back a reaction or a vote check the graph alone
 - **AND** setting a task's status or handing it to someone else in a direct message needs the relationship too, though its owner holds only `read`
 - **AND** a message of type `system` sent by a client needs `write` like any other message (it used to skip the check), in a group as in a direct message; the service's own notices (a manager's "deleted a message" line) are stored directly and need no `write`

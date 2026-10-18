@@ -204,8 +204,11 @@ func (s *Service) GetUnreadCounts(ctx context.Context, userID, userNodeID, works
 }
 
 // readableChannelIDs lists the channels the sidebar shows the user: the
-// workspace's channels and the DMs the user is in, each kept only when the user holds read on
-// its content OA (one batch check, failing closed like the channel list).
+// workspace's channels and the workspace's DMs the user is in, each kept only
+// when the user holds read on its content OA (one batch check, failing closed
+// like the channel list). The DMs of another workspace are not in it: every feed
+// built on this (unread counts, previews, mentions, stars, threads, search) is
+// the workspace's alone.
 func (s *Service) readableChannelIDs(ctx context.Context, workspaceID, userNodeID string) ([]string, error) {
 	var candidates []*store.Channel
 	if workspaceID != "" {
@@ -215,7 +218,7 @@ func (s *Service) readableChannelIDs(ctx context.Context, workspaceID, userNodeI
 		}
 		candidates = append(candidates, channels...)
 	}
-	dms, err := s.store.ListDMsOf(ctx, userNodeID)
+	dms, err := s.store.ListDMsOf(ctx, workspaceID, userNodeID)
 	if err != nil {
 		return nil, fmt.Errorf("list DMs: %w", err)
 	}

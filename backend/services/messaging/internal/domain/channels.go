@@ -29,7 +29,9 @@ const (
 	// ChannelTypeWorkspace is the one channel (#general) a workspace has that
 	// every member of the workspace is in. Only ProvisionWorkspaceChannel makes it.
 	ChannelTypeWorkspace = "workspace"
-	// ChannelTypeDM is a conversation between two people, outside any workspace.
+	// ChannelTypeDM is a conversation between two people inside one workspace: the
+	// same two people have one for each workspace they share. Its graph nodes hang
+	// under PC_Global, not under the workspace.
 	ChannelTypeDM = "dm"
 )
 
@@ -136,7 +138,11 @@ func (s *Service) createChannel(ctx context.Context, in CreateChannelInput, pcID
 	}
 	prov.Done()
 
-	s.createChannelDrive(ctx, in.WorkspaceID, chID, in.Name, contentOA.Id, membersUA.Id)
+	// A DM has no drive: its nodes are not under the workspace the drive's OA
+	// would hang from.
+	if in.ChannelType != ChannelTypeDM {
+		s.createChannelDrive(ctx, in.WorkspaceID, chID, in.Name, contentOA.Id, membersUA.Id)
+	}
 
 	// A channel is readable by its Members UA, which holds the creator and any
 	// extra participants (a DM's other person) when it is born: they are the

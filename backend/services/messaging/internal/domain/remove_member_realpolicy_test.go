@@ -179,14 +179,14 @@ func TestRealPolicy_ListDMsLooksAtTheCallersDMsOnly(t *testing.T) {
 	rec := &batchRecorder{PolicyReadServiceClient: w.read}
 	svc := domain.NewService(store.NewStore(w.pool), rec, w.write, rpDBAuth{pool: w.pool}, nil)
 
-	list, err := svc.ListDMs(w.as(w.creator), w.creator.node)
+	list, err := svc.ListDMs(w.as(w.creator), w.g.WorkspaceID, w.creator.node)
 	require.NoError(t, err)
 	require.Len(t, list, 1)
 	assert.Equal(t, mine.Id, list[0].Id)
 	require.Len(t, rec.asked, 1)
 	assert.Equal(t, []string{mine.NgacOaId}, rec.asked[0], "only the caller's DM was put to the policy")
 
-	list, err = svc.ListDMs(w.as(w.owner), w.owner.node)
+	list, err = svc.ListDMs(w.as(w.owner), w.g.WorkspaceID, w.owner.node)
 	require.NoError(t, err)
 	require.Len(t, list, 1)
 	assert.Equal(t, theirs.Id, list[0].Id, "and the other pair's list is theirs")

@@ -67,7 +67,7 @@ func validateLinkedEntity(linkedType, linkedID string) error {
 
 // SendMessage sends a message after access checking.
 func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) (*pb.Message, error) {
-	ch, err := s.loadChannel(ctx, in.ChannelID)
+	ch, err := s.loadChannelFor(ctx, in.ChannelID)
 	if err != nil {
 		return nil, err
 	}

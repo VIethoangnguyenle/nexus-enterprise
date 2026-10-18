@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -178,37 +179,125 @@ func TestInsertTaskWithMessage_StoresBothOrNeither(t *testing.T) {
 	assert.Equal(t, 0, count(t, `SELECT count(*) FROM messages WHERE id = $1`, badMsg.ID), "no announcement for a task that was not stored")
 }
 
-func TestListDMsOf_ListsOnlyTheDMsTheNodeIsIn(t *testing.T) {
+// dmFixture makes DM and non-DM channels for the store tests and removes them.
+type dmFixture struct {
+	t    *testing.T
+	pool *pgxpool.Pool
+	st   *store.Store
+	user string
+}
+
+func newDMFixture(t *testing.T) *dmFixture {
+	t.Helper()
 	pool := testutil.SetupTestDB(t)
-	st := store.NewStore(pool)
-	ctx := context.Background()
 	user, _ := testutil.CreateUser(t, pool)
+	return &dmFixture{t: t, pool: pool, st: store.NewStore(pool), user: user}
+}
 
-	makeChannel := func(kind string, members ...string) *store.Channel {
-		oa, ua := "oa-"+uuid.NewString(), "ua-"+uuid.NewString()
-		for _, n := range [][2]string{{oa, "OA"}, {ua, "UA"}} {
-			_, err := pool.Exec(ctx, `INSERT INTO ngac_nodes (id, name, node_type) VALUES ($1, $1, $2)`, n[0], n[1])
-			require.NoError(t, err)
-		}
-		ch := &store.Channel{ID: "ch-" + uuid.NewString(), Name: kind, ChannelType: kind, NGACOaID: oa, NGACUaID: ua, CreatedBy: user}
-		require.NoError(t, st.InsertChannelWithMembers(ctx, ch, members...))
-		t.Cleanup(func() {
-			pool.Exec(ctx, `DELETE FROM channels WHERE id = $1`, ch.ID)
-			pool.Exec(ctx, `DELETE FROM ngac_nodes WHERE id IN ($1, $2)`, oa, ua)
-		})
-		return ch
+func (d *dmFixture) workspace() string {
+	id, _ := testutil.CreateWorkspace(d.t, d.pool, d.user)
+	return id
+}
+
+func (d *dmFixture) channel(kind, workspaceID string, members ...string) *store.Channel {
+	d.t.Helper()
+	ctx := context.Background()
+	oa, ua := "oa-"+uuid.NewString(), "ua-"+uuid.NewString()
+	for _, n := range [][2]string{{oa, "OA"}, {ua, "UA"}} {
+		_, err := d.pool.Exec(ctx, `INSERT INTO ngac_nodes (id, name, node_type) VALUES ($1, $1, $2)`, n[0], n[1])
+		require.NoError(d.t, err)
 	}
+	ch := &store.Channel{ID: "ch-" + uuid.NewString(), Name: kind, ChannelType: kind, WorkspaceID: workspaceID, NGACOaID: oa, NGACUaID: ua, CreatedBy: d.user}
+	require.NoError(d.t, d.st.InsertChannelWithMembers(ctx, ch, members...))
+	d.t.Cleanup(func() {
+		d.pool.Exec(ctx, `DELETE FROM channels WHERE id = $1`, ch.ID)
+		d.pool.Exec(ctx, `DELETE FROM ngac_nodes WHERE id IN ($1, $2)`, oa, ua)
+	})
+	return ch
+}
+
+func channelIDs(chs []*store.Channel) []string {
+	out := make([]string, 0, len(chs))
+	for _, c := range chs {
+		out = append(out, c.ID)
+	}
+	return out
+}
+
+func TestListDMsOf_ListsOnlyTheDMsTheNodeIsInWithinTheWorkspace(t *testing.T) {
+	d := newDMFixture(t)
+	ctx := context.Background()
+	wsA, wsB := d.workspace(), d.workspace()
+
 	me := "node-" + uuid.NewString()
-	mine := makeChannel("dm", me, "node-"+uuid.NewString())
-	makeChannel("dm", "node-"+uuid.NewString(), "node-"+uuid.NewString())
-	makeChannel("workspace", me)
+	other := "node-" + uuid.NewString()
+	inA := d.channel("dm", wsA, me, other)
+	inB := d.channel("dm", wsB, me, other)
+	d.channel("dm", wsA, "node-"+uuid.NewString(), "node-"+uuid.NewString())
+	d.channel("workspace", wsA, me)
 
-	got, err := st.ListDMsOf(ctx, me)
+	got, err := d.st.ListDMsOf(ctx, wsA, me)
 	require.NoError(t, err)
-	require.Len(t, got, 1, "another pair's DM and a non-DM channel are not candidates")
-	assert.Equal(t, mine.ID, got[0].ID)
+	assert.Equal(t, []string{inA.ID}, channelIDs(got), "another pair's DM, a non-DM channel and the same pair's DM of another workspace are not candidates")
 
-	none, err := st.ListDMsOf(ctx, "node-"+uuid.NewString())
+	got, err = d.st.ListDMsOf(ctx, wsB, me)
+	require.NoError(t, err)
+	assert.Equal(t, []string{inB.ID}, channelIDs(got))
+
+	none, err := d.st.ListDMsOf(ctx, wsA, "node-"+uuid.NewString())
 	require.NoError(t, err)
 	assert.Empty(t, none)
+}
+
+// A DM with no workspace (one written before DMs belonged to a workspace and
+// that no migration could place) is in no list, and asking for "no workspace"
+// does not find it either.
+func TestListDMsOf_ADMWithNoWorkspaceIsInNoList(t *testing.T) {
+	d := newDMFixture(t)
+	ctx := context.Background()
+	ws := d.workspace()
+	me := "node-" + uuid.NewString()
+	d.channel("dm", "", me, "node-"+uuid.NewString())
+
+	got, err := d.st.ListDMsOf(ctx, ws, me)
+	require.NoError(t, err)
+	assert.Empty(t, got)
+	got, err = d.st.ListDMsOf(ctx, "", me)
+	require.NoError(t, err)
+	assert.Empty(t, got, "an empty workspace id names no workspace")
+}
+
+func TestFindDMByMembers_FindsThePairsDMInThatWorkspaceOnly(t *testing.T) {
+	d := newDMFixture(t)
+	ctx := context.Background()
+	wsA, wsB, wsC := d.workspace(), d.workspace(), d.workspace()
+	a, b, c := "node-"+uuid.NewString(), "node-"+uuid.NewString(), "node-"+uuid.NewString()
+	inA := d.channel("dm", wsA, a, b)
+	inB := d.channel("dm", wsB, a, b)
+	d.channel("dm", wsA, a, c)
+	d.channel("dm", "", a, c)
+
+	got, err := d.st.FindDMByMembers(ctx, wsA, a, b)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, inA.ID, got.ID)
+	assert.Equal(t, wsA, got.WorkspaceID)
+
+	got, err = d.st.FindDMByMembers(ctx, wsB, b, a)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, inB.ID, got.ID, "either order finds it")
+
+	got, err = d.st.FindDMByMembers(ctx, wsC, a, b)
+	require.NoError(t, err)
+	assert.Nil(t, got, "the pair has no DM in a workspace they have not used")
+
+	got, err = d.st.FindDMByMembers(ctx, wsA, a, c)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.NotEmpty(t, got.WorkspaceID, "the DM with no workspace is not the one found")
+
+	got, err = d.st.FindDMByMembers(ctx, "", a, c)
+	require.NoError(t, err)
+	assert.Nil(t, got, "an empty workspace id names no workspace")
 }

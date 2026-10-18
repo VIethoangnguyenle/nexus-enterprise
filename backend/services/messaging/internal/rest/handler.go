@@ -405,7 +405,7 @@ func (h *Handler) ListDMs(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	dms, err := h.svc.ListDMs(c.Request().Context(), claims.NGACNodeID)
+	dms, err := h.svc.ListDMs(c.Request().Context(), claims.TenantID, claims.NGACNodeID)
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}

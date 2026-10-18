@@ -65,7 +65,7 @@ func (s *Service) ChatState(ctx context.Context, workspaceID string, c Caller) (
 		}()
 	}
 	part(func() (err error) { out.Channels, err = s.ListChannels(ctx, workspaceID, c.NodeID); return })
-	part(func() (err error) { out.DMs, err = s.ListDMs(ctx, c.NodeID); return })
+	part(func() (err error) { out.DMs, err = s.ListDMs(ctx, workspaceID, c.NodeID); return })
 	part(func() (err error) { out.Unread, err = s.GetUnreadCounts(ctx, c.UserID, c.NodeID, workspaceID); return })
 	part(func() (err error) {
 		out.Activity, err = s.ConversationActivity(ctx, c.UserID, c.NodeID, workspaceID)

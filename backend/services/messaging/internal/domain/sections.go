@@ -76,13 +76,13 @@ func (s *Service) ownSection(ctx context.Context, workspaceID string, c Caller, 
 }
 
 // placeable checks a conversation may sit in a section of this workspace: the
-// caller reads it, and it is a channel of this workspace or a direct message.
+// caller reads it, and it is a channel or a direct message of this workspace.
 func (s *Service) placeable(ctx context.Context, workspaceID string, c Caller, channelID string) error {
 	ch, err := s.authorizeChannel(ctx, channelID, c.NodeID, ngac.OpRead)
 	if err != nil {
 		return err
 	}
-	if ch.ChannelType != "dm" && ch.WorkspaceID != workspaceID {
+	if ch.WorkspaceID != workspaceID {
 		return fmt.Errorf("%w: the conversation belongs to another workspace", ErrInvalidInput)
 	}
 	return nil

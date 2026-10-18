@@ -51,7 +51,7 @@ type pushWorld struct {
 func newPushWorld(t *testing.T, dm bool) *pushWorld {
 	t.Helper()
 	k := newTalk(t, "push")
-	ctx := context.Background()
+	ctx := k.f.callerCtx()
 	other, otherNode := testutil.CreateUser(t, k.f.pool)
 	k.f.read.allow[grant{otherNode, k.oaID, ngac.OpRead}] = true
 	if dm {
@@ -71,11 +71,11 @@ func newPushWorld(t *testing.T, dm bool) *pushWorld {
 
 func (w *pushWorld) send(t *testing.T, content string, mentions ...string) string {
 	t.Helper()
-	msg, err := w.f.svc.SendMessage(context.Background(), domain.SendMessageInput{
+	msg, err := w.f.svc.SendMessage(w.f.callerCtx(), domain.SendMessageInput{
 		ChannelID: w.chID, SenderID: w.f.userID, SenderNodeID: userNode, Content: content, Mentions: mentions,
 	})
 	require.NoError(t, err)
-	w.f.svc.PushForMessage(context.Background(), msg)
+	w.f.svc.PushForMessage(w.f.callerCtx(), msg)
 	return msg.Id
 }
 
@@ -92,7 +92,7 @@ func TestPush_DirectMessageReachesTheOtherSideOnly(t *testing.T) {
 
 func TestPush_MentionAndTheDenyCases(t *testing.T) {
 	w := newPushWorld(t, false)
-	ctx := context.Background()
+	ctx := w.f.callerCtx()
 
 	id := w.send(t, "hello", w.other)
 	require.Len(t, w.sender.all(), 1, "a mention in a group is pushed")
@@ -117,7 +117,7 @@ func TestPush_MentionAndTheDenyCases(t *testing.T) {
 
 func TestPush_NotWhileViewingNorInQuietHours(t *testing.T) {
 	w := newPushWorld(t, true)
-	ctx := context.Background()
+	ctx := w.f.callerCtx()
 
 	w.view[w.other+"/"+w.chID] = true
 	w.send(t, "đang xem")
@@ -159,7 +159,7 @@ func TestPush_GathersMessagesOfOneConversation(t *testing.T) {
 // A reply reaches the thread's followers, not someone who unfollowed it.
 func TestPush_AReplyReachesTheThreadsFollowers(t *testing.T) {
 	k := newThreadTalk(t) // root by the caller, a reply by the replier
-	ctx := context.Background()
+	ctx := k.f.callerCtx()
 	sender := &recordingSender{}
 	k.f.svc.SetPush(sender, viewing{})
 
@@ -187,7 +187,7 @@ func TestPush_AReplyReachesTheThreadsFollowers(t *testing.T) {
 
 func TestSavePushPreferences_RejectsNonsense(t *testing.T) {
 	w := newPushWorld(t, false)
-	ctx := context.Background()
+	ctx := w.f.callerCtx()
 	p := store.DefaultPushPreferences
 	p.QuietStart = 2000
 	require.ErrorIs(t, w.f.svc.SavePushPreferences(ctx, w.other, p), domain.ErrInvalidInput)
@@ -213,12 +213,12 @@ func TestPush_DeliveryEndsWithTheCallersDeadline(t *testing.T) {
 	w := newPushWorld(t, true)
 	hang := &hangingSender{}
 	w.f.svc.SetPush(hang, w.view)
-	msg, err := w.f.svc.SendMessage(context.Background(), domain.SendMessageInput{
+	msg, err := w.f.svc.SendMessage(w.f.callerCtx(), domain.SendMessageInput{
 		ChannelID: w.chID, SenderID: w.f.userID, SenderNodeID: userNode, Content: "alo",
 	})
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	ctx, cancel := context.WithTimeout(w.f.callerCtx(), 200*time.Millisecond)
 	defer cancel()
 	start := time.Now()
 	w.f.svc.PushForMessage(ctx, msg)
@@ -317,6 +317,7 @@ func TestPush_FollowsTheNotificationLevel(t *testing.T) {
 
 	t.Run("a direct message is on or off", func(t *testing.T) {
 		w := newPushWorld(t, true)
+		ctx := w.f.callerCtx()
 		require.ErrorIs(t, w.f.svc.SetNotificationLevel(ctx, w.chID, w.other, w.otherNode, domain.NotifyAll), domain.ErrInvalidInput)
 		require.NoError(t, w.f.svc.SetNotificationLevel(ctx, w.chID, w.other, w.otherNode, domain.NotifyOff))
 		w.send(t, "chào", w.other)

@@ -101,13 +101,14 @@ func (s *Store) HasWorkspaceTypeChannel(ctx context.Context, workspaceID string)
 // DeleteChannelMembersInWorkspace drops the member-cache rows of one person for
 // every channel of the workspace, and returns how many there were. A person who
 // leaves a workspace is stripped from every channel's Members UA in the graph;
-// this keeps the cache (member_count, push recipients) in step. DMs belong to no
-// workspace and are untouched.
+// this keeps the cache (member_count, push recipients) in step. A DM is not a
+// channel of the workspace's graph tree: its Members UA hangs under PC_Global, so
+// leaving strips nobody from it and its cache rows stay.
 func (s *Store) DeleteChannelMembersInWorkspace(ctx context.Context, workspaceID, ngacNodeID string) (int64, error) {
 	tag, err := s.db.Exec(ctx,
 		`DELETE FROM channel_members
 		 WHERE ngac_node_id = $2
-		   AND channel_id IN (SELECT id FROM channels WHERE workspace_id = $1)`,
+		   AND channel_id IN (SELECT id FROM channels WHERE workspace_id = $1 AND channel_type <> 'dm')`,
 		workspaceID, ngacNodeID)
 	if err != nil {
 		return 0, fmt.Errorf("forget workspace member: %w", err)

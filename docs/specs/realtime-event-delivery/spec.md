@@ -158,7 +158,7 @@ A thread reply SHALL reach the channel's subscribers as a `thread_reply` frame c
 new summary: reply count, last reply time and the users of the three most recent distinct repliers — the same for
 every viewer, and nothing a channel reader could not already see. Each user who follows the thread SHALL receive a
 `thread_state` frame with their own follow state and unread count on the user-addressed route: every session of
-that user's NGAC node in the channel's workspace (for a direct message, the tenant the reply was sent from), on
+that user's NGAC node in the channel's workspace (for a direct message, the workspace the DM belongs to), on
 every hub instance, and no other session. Following is not access: each recipient SHALL be checked for `read` on the
 channel's content OA when the frame is built, and one who fails the check — a mentioned non-member, a member since
 removed — or whose check cannot be answered SHALL receive nothing. Each state carries the time it was read

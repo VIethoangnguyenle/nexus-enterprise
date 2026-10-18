@@ -10,7 +10,7 @@ A hit is message text, so it follows exactly the read access that unread counts,
 ### Requirement: Search across every readable conversation
 `GET /api/messages/search?q=&limit=&before=&before_id=&has_file=` SHALL return `{"messages": [...], "has_more": bool}`:
 the live (not deleted) messages whose text matches `q`, newest first, in the conversations the caller reads in the
-workspace of their session (tenant from the token) and in their direct messages. Main-stream messages and thread
+workspace of their session (tenant from the token) and in their direct messages of that workspace. Main-stream messages and thread
 replies are both searched; a reply carries `parent_message_id`, the root of its thread. A page holds 25 messages
 unless `limit` (at most 50) asks for another size. `before` (RFC 3339 send time) and `before_id` (id of the last message of
 the previous page) continue after that message; messages sent at the same instant are ordered by id, so a page

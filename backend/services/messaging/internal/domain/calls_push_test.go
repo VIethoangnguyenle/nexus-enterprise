@@ -42,7 +42,7 @@ func TestCallPush_RingsTheCalleeThenMissedReplacesIt(t *testing.T) {
 	assert.Equal(t, []push.Button{{ID: "answer", Text: "Trả lời", URL: "/calls/" + id + "?answer=video"}}, ring.Buttons,
 		"the notification answers from its own button")
 
-	_, err := w.f.svc.ExpireRingingCalls(context.Background(), time.Now().Add(time.Minute))
+	_, err := w.f.svc.ExpireRingingCalls(w.f.callerCtx(), time.Now().Add(time.Minute))
 	require.NoError(t, err)
 	sent = w.pushed(sender)
 	require.Len(t, sent, 2)
@@ -57,7 +57,7 @@ func TestCallPush_RingsTheCalleeThenMissedReplacesIt(t *testing.T) {
 func TestCallPush_CancelledLeavesAMissedCallDeclinedNothing(t *testing.T) {
 	w := newCallWorld(t)
 	w.asDM(t)
-	ctx := context.Background()
+	ctx := w.f.callerCtx()
 	sender, _ := w.withPush()
 
 	id := w.start(t, "audio")
@@ -77,9 +77,8 @@ func TestCallPush_CancelledLeavesAMissedCallDeclinedNothing(t *testing.T) {
 // hours, while they have the conversation open (the app rings), or for a
 // group call (which rings nobody).
 func TestCallPush_Deny(t *testing.T) {
-	ctx := context.Background()
-
 	w := newCallWorld(t)
+	ctx := w.f.callerCtx()
 	w.asDM(t)
 	sender, view := w.withPush()
 	prefs := store.DefaultPushPreferences
