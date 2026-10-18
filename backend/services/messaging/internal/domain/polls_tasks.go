@@ -109,7 +109,12 @@ func (s *Service) CreatePoll(ctx context.Context, in CreatePollInput) (*pb.Poll,
 // it, so a caller can tell live sessions about it (a reply in a thread needs
 // the thread's summary pushed like any reply).
 func (s *Service) CreatePollMessage(ctx context.Context, in CreatePollInput) (*pb.Poll, *pb.Message, error) {
-	if _, err := s.authorizeChannel(ctx, in.ChannelID, in.UserNodeID, ngac.OpWrite); err != nil {
+	ch, err := s.authorizeChannel(ctx, in.ChannelID, in.UserNodeID, ngac.OpWrite)
+	if err != nil {
+		return nil, nil, err
+	}
+	// A poll with no parent is a top-level post.
+	if err := s.checkTopLevelPost(ctx, ch, in.UserNodeID, in.ParentMessageID); err != nil {
 		return nil, nil, err
 	}
 	if strings.TrimSpace(in.Question) == "" || len(in.Options) < 2 || len(in.Options) > maxPollOptions {
@@ -222,18 +227,24 @@ func (s *Service) RemoveVote(ctx context.Context, pollID, optionID, userNodeID, 
 }
 
 // ClosePoll closes a poll before its end: its creator may (with write on the
-// channel), and so may anyone who manages the channel.
+// channel), a group owner or manager may, and so may anyone who manages the channel.
 func (s *Service) ClosePoll(ctx context.Context, pollID, userID, userNodeID string) (*pb.Poll, error) {
-	poll, _, err := s.authorizePoll(ctx, pollID, userNodeID, ngac.OpRead)
+	poll, _, ch, err := s.authorizePollIn(ctx, pollID, userNodeID, ngac.OpRead)
 	if err != nil {
 		return nil, err
 	}
-	op := ngac.OpManage
-	if poll.CreatedBy == userID {
-		op = ngac.OpWrite
-	}
-	if _, err := s.authorizeChannel(ctx, poll.ChannelID, userNodeID, op); err != nil {
-		return nil, err
+	if poll.CreatedBy != userID {
+		// Group owner/manager or workspace manage.
+		if !s.isGroupOwnerOrManager(ctx, ch, userNodeID) {
+			if _, err := s.authorizeChannel(ctx, poll.ChannelID, userNodeID, ngac.OpManage); err != nil {
+				return nil, err
+			}
+		}
+	} else {
+		// Creator needs write on the channel.
+		if _, err := s.authorizeChannel(ctx, poll.ChannelID, userNodeID, ngac.OpWrite); err != nil {
+			return nil, err
+		}
 	}
 	if err := s.store.ClosePoll(ctx, pollID, userID); err != nil {
 		return nil, err
@@ -279,6 +290,10 @@ func (s *Service) CreateTaskMessage(ctx context.Context, in CreateTaskInput) (*p
 	}
 	ch, err := s.authorizeChannel(ctx, in.ChannelID, in.UserNodeID, ngac.OpWrite)
 	if err != nil {
+		return nil, nil, err
+	}
+	// A task with no parent is a top-level post.
+	if err := s.checkTopLevelPost(ctx, ch, in.UserNodeID, in.ParentMessageID); err != nil {
 		return nil, nil, err
 	}
 	if in.ParentMessageID != "" {
@@ -388,7 +403,12 @@ func (s *Service) UpdateTask(ctx context.Context, in UpdateTaskInput) (*pb.ChatT
 		}
 	}
 	isOwner := in.UserID != "" && (in.UserID == t.AssigneeID || in.UserID == t.CreatedBy)
-	manages := func() error { return s.authorizeChannelOp(ctx, ch, in.UserNodeID, ngac.OpManage) }
+	manages := func() error {
+		if s.isGroupOwnerOrManager(ctx, ch, in.UserNodeID) {
+			return nil
+		}
+		return s.authorizeChannelOp(ctx, ch, in.UserNodeID, ngac.OpManage)
+	}
 
 	if in.Status != "" && !isOwner {
 		if err := manages(); err != nil {

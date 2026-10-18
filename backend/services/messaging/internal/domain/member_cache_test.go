@@ -3,12 +3,15 @@ package domain
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"ngac-platform/ngac"
 	policypb "ngac-platform/proto/policy"
@@ -39,6 +42,9 @@ func (allowAll) GetAncestors(context.Context, *policypb.GetAncestorsRequest, ...
 }
 
 func (allowAll) FindNodeByName(_ context.Context, r *policypb.FindNodeByNameRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+	if r.NodeType == ngac.TypeUA && strings.HasSuffix(r.Name, "_Managers") {
+		return nil, status.Error(codes.NotFound, "no managers UA") // these channels have no managers
+	}
 	if r.NodeType == ngac.TypeUA {
 		return &policypb.NGACNode{Id: "ua-members", Name: r.Name, NodeType: r.NodeType}, nil
 	}
@@ -47,6 +53,12 @@ func (allowAll) FindNodeByName(_ context.Context, r *policypb.FindNodeByNameRequ
 
 func (allowAll) CheckAccess(context.Context, *policypb.CheckAccessRequest, ...grpc.CallOption) (*policypb.AccessDecision, error) {
 	return &policypb.AccessDecision{Decision: ngac.DecisionAllow}, nil
+}
+
+// GetChildren returns an empty list so findChannelManagersUA (used by group
+// management) does not panic on the embedded nil interface.
+func (allowAll) GetChildren(context.Context, *policypb.GetChildrenRequest, ...grpc.CallOption) (*policypb.NodeList, error) {
+	return &policypb.NodeList{}, nil
 }
 
 type graphLog struct {

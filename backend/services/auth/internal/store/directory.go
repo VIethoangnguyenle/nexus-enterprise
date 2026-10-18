@@ -14,6 +14,7 @@ type ProfileChanges struct {
 	DisplayName *string
 	Title       *string
 	Location    *string
+	Language    *string
 }
 
 // UpdateProfile writes only the fields in ch and marks the profile as
@@ -35,6 +36,7 @@ func (s *Store) UpdateProfile(ctx context.Context, userID string, ch ProfileChan
 		         display_name = COALESCE($2, display_name),
 		         title        = COALESCE($3, title),
 		         location     = COALESCE($4, location),
+		         language     = COALESCE($5, language),
 		         profile_completed_at = COALESCE(profile_completed_at, NOW())
 		     WHERE id = $1
 		     RETURNING id
@@ -45,7 +47,7 @@ func (s *Store) UpdateProfile(ctx context.Context, userID string, ch ProfileChan
 		        AND w.name = old.display_name AND old.display_name IS DISTINCT FROM $2
 		 )
 		 SELECT EXISTS (SELECT 1 FROM upd)`,
-		userID, ch.DisplayName, ch.Title, ch.Location).Scan(&updated)
+		userID, ch.DisplayName, ch.Title, ch.Location, ch.Language).Scan(&updated)
 	if err != nil {
 		return fmt.Errorf("update profile: %w", err)
 	}

@@ -57,7 +57,7 @@ func (s *Service) UserDisplayName(ctx context.Context, userID string) string {
 
 // PushCalendar sends a calendar push to a person's devices. It does nothing when
 // push is off, when the person turned off pushes addressed to them (the same
-// switch as direct messages) or while it is their quiet hours. It returns at
+// switch as direct messages) while it is their quiet hours or while they paused notifications. It returns at
 // once; the push is sent in the background.
 func (s *Service) PushCalendar(ctx context.Context, userID string, p CalendarPush) {
 	if s.push == nil || userID == "" || p.EventID == "" {
@@ -65,7 +65,7 @@ func (s *Service) PushCalendar(ctx context.Context, userID string, p CalendarPus
 	}
 	s.later(ctx, func(ctx context.Context) {
 		prefs, err := s.store.GetPushPreferences(ctx, userID)
-		if err != nil || !prefs.Direct || inQuietHours(prefs, s.pushNow()) {
+		if err != nil || !prefs.Direct || silenced(prefs, s.pushNow(), false) {
 			return
 		}
 		s.send(ctx, calendarPushMessage(userID, p, prefs.TimeZone))

@@ -5,9 +5,9 @@ Lets the owner and managers of a group chat decide who may post, add people and 
 managers, hand the group over and disband it, without giving anyone who is not in the group a way in.
 
 ## Status
-Specified ahead of code (2026-10-19, plan `plans/261018-1742-mobile-ux-overhaul`, phase 07). Until it lands, the rules in
-`tenant-ngac-init` ("Any member of the group may add people"; "Only the person, the creator or a holder of `manage`
-removes someone") are what the code does.
+Implemented (phase 07 of `plans/261018-1742-mobile-ux-overhaul`). The code lives in
+`backend/services/messaging/internal/domain/group_management.go`, `backend/services/messaging/internal/domain/members.go`
+and `backend/ngac/channel_management.go`.
 
 ## Requirements
 
@@ -92,8 +92,8 @@ Changing a setting SHALL require manager authority and SHALL go through the EPP 
 - **WHEN** posting is restricted and a member sends a top-level message
 - **THEN** it is refused; the same member's reply in a thread, reaction and edit of their own reply succeed
 
-Starting a poll, a task or an approval card counts as a top-level post: it is refused for a non-manager when posting is
-restricted. Voting in a poll and closing one's own poll stay open to every member.
+Starting a poll, a task or an approval card counts as a top-level post (`checkTopLevelPost`): it is refused for a non-manager when posting is
+restricted. Replies inside a thread, voting in a poll and closing one's own poll stay open to every member.
 
 #### Scenario: Restricted posting starts a card
 - **WHEN** posting is restricted and a member starts a poll, a task or an approval card in the group's main stream
@@ -137,9 +137,12 @@ the group can be appointed.
 - **THEN** the first succeeds and the person stays a member; the second is denied and nothing is written
 
 ### Requirement: Ownership moves and groups end only by the owner
-Only the owner SHALL transfer ownership (to another member, who becomes a manager) or disband the group. After a
-transfer, the former owner stays a manager but SHALL hold no owner power, including the creator's right to remove
-people. The owner SHALL NOT leave the group before transferring ownership.
+Only the owner SHALL transfer ownership (to another current member of the group, who becomes a manager) or disband the
+group. The target's user ID is resolved from the node ID server-side (`store.UserIDByNode`). Both the new and old owner
+are assigned to the Managers UA before `channels.created_by` moves, so a failure leaves the owner where they were and a
+retry finishes the job. After a transfer, the former owner stays a manager but SHALL hold no owner power, including the
+creator's right to remove people. The owner SHALL NOT leave the group before transferring ownership.
+Transferring to oneself is refused.
 
 #### Scenario: Transfer
 - **WHEN** the owner transfers the group to a member, and separately a non-owner tries to transfer it
@@ -147,7 +150,10 @@ people. The owner SHALL NOT leave the group before transferring ownership.
 
 #### Scenario: Disband
 - **WHEN** the owner disbands the group, and separately a manager tries to
-- **THEN** the first succeeds; the second is denied and the group stays
+- **THEN** the first succeeds: the channel row is deleted (cascades to the members cache), and the Managers UA, the Members
+  UA and the Content OA are removed from the graph through the policy writer (`cleanupChannelGraph`); a node that cannot
+  be deleted is logged and left, granting nothing once its channel no longer exists. The second attempt is denied and the
+  group stays
 
 #### Scenario: Former owner after a transfer
 - **WHEN** ownership has moved from A to B and A tries to remove B or disband the group
@@ -164,7 +170,9 @@ has no creator shortcut. Direct messages and the workspace-wide channel keep ref
 
 #### Scenario: Owner or manager removes a member
 - **WHEN** the owner, or a manager, removes a member
-- **THEN** the member's Members edge and any Managers edge are withdrawn in one write and they can no longer read the group
+- **THEN** the member's Managers edge is withdrawn first, then the Members edge; a failure in between leaves the person a
+  member (and still a manager), the call reports the error and repeating it finishes the removal; once both are removed,
+  the person can no longer read the group
 
 #### Scenario: Plain member removes someone
 - **WHEN** a member who is not a manager removes another member
@@ -180,13 +188,30 @@ has no creator shortcut. Direct messages and the workspace-wide channel keep ref
 
 ### Requirement: Existing groups keep working when roles arrive
 Existing groups SHALL get settings "Mọi thành viên" and an owner: `created_by` if that user is currently assigned to the
-group's Members UA, otherwise the earliest currently assigned member. The backfill SHALL write through the policy writer
-so decisions are invalidated.
+group's Members UA, otherwise the earliest currently assigned member (by `channel_members.joined_at`, then
+`users.created_at`, then `users.id`). A group with nobody assigned keeps its creator column and gets no owner node.
+
+The backfill is the standalone command `backfill-managers` (`backend/services/messaging/cmd/backfill-managers/`). It
+lists every private channel oldest first, applies the owner rule, creates the Managers UA (`Ch_{id}_Managers`) beside
+Members under the workspace's policy class, grants `ChannelManagerOps` (invite) on the group's Content OA, and assigns
+the owner to the Managers UA. Graph writes go through the policy writer so decisions are invalidated. A group whose
+creator left before the backfill gets a different owner. Rerunning is safe (idempotent); failed groups are listed and
+make the command exit non-zero. The command supports `--dry-run` to print what would change without applying.
 
 #### Scenario: Creator who left before the backfill
 - **WHEN** a group's creator had left before roles arrived
 - **THEN** another current member becomes owner and the creator still cannot read the group
 
+#### Scenario: Backfill rerun
+- **WHEN** the backfill runs again on a group that already has its Managers UA
+- **THEN** the existing UA is reused, the owner's assignment is idempotent, and no second copy is created
+
 ### Requirement: Clients learn about role changes at once
-A change of roles or settings SHALL publish a realtime event that makes clients refresh their cached permissions for that
-group; an action refused because the client's permission was stale SHALL read "Bạn không còn quyền làm việc này".
+A change of roles or settings SHALL publish a realtime event (`management_changed`) that makes clients refresh their
+cached permissions for that group; an action refused because the client's permission was stale SHALL read "Bạn không còn
+quyền làm việc này".
+
+### Requirement: Appoint, remove-manager and transfer take user IDs resolved server-side
+The `appoint-manager`, `remove-manager` and `transfer` endpoints accept user IDs (the IDs the roster gives each member).
+The server resolves these to NGAC node IDs through `store.UserNode` (for the owner check) and `store.UserIDByNode` (for
+the transfer target), so the client never needs to know node IDs.

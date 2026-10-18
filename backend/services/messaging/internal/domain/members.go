@@ -9,7 +9,6 @@ import (
 	"log/slog"
 
 	"ngac-platform/ngac"
-	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/policyclient"
 	"ngac-platform/pkg/realtime"
 	authpb "ngac-platform/proto/auth"
@@ -76,6 +75,12 @@ func (s *Service) AddMember(ctx context.Context, channelID, requesterNodeID, tar
 		}
 		return fmt.Errorf("add member: %w", err)
 	}
+	// The person joins at the level they chose as their default for new groups.
+	if userID, err := s.store.UserIDByNode(ctx, targetNodeID); err != nil {
+		slog.Warn("default notification level not applied", "channel", channelID, "error", err)
+	} else {
+		s.seedNotificationLevel(ctx, userID, ch.WorkspaceID, channelID)
+	}
 	s.announceMembership(ctx, realtime.KindMemberAdded, ch, targetNodeID)
 	return nil
 }
@@ -125,9 +130,12 @@ func (s *Service) announceMembership(ctx context.Context, kind string, ch *store
 
 // RemoveMember takes a person out of a group's Members UA.
 //
-// Invite, which every member holds, is what lets people in; it does not let them
-// put others out. Removal is for the person themselves (leaving), for the person
-// who made the group, and for a holder of manage on it (the workspace's owners).
+// Who may remove whom:
+//   - the person themselves (leaving), but the owner must transfer first (409)
+//   - the group owner
+//   - a group manager
+//   - a holder of manage on the channel's content OA (workspace owners)
+//
 // A direct message is a fixed pair and #general's people are the workspace's, so
 // neither loses anyone this way.
 //
@@ -137,6 +145,15 @@ func (s *Service) announceMembership(ctx context.Context, kind string, ch *store
 // node that merely exists. The graph is the membership: it is changed first, and
 // the channel_members copy follows; a copy that cannot be deleted is reported after
 // the live feed has been cut and the roster announced, and a repeat is harmless.
+//
+// Nobody but a workspace owner removes the group's owner; the owner leaves only
+// after handing the group over.
+//
+// Removing someone withdraws every group edge they hold. The policy writer has
+// no batch call, so the Managers edge goes first and the Members edge second: a
+// failure in between leaves the person a member (and still a manager), the call
+// reports the error and repeating it finishes the removal. The reverse order
+// could leave someone outside Members but still in Managers.
 func (s *Service) RemoveMember(ctx context.Context, channelID, requesterNodeID, targetNodeID string) error {
 	if channelID == "" || targetNodeID == "" {
 		return ErrInvalidInput
@@ -156,14 +173,37 @@ func (s *Service) RemoveMember(ctx context.Context, channelID, requesterNodeID, 
 	if ch.ChannelType == ChannelTypeDM || ch.ChannelType == ChannelTypeWorkspace {
 		return fmt.Errorf("%w: people cannot be removed from a direct message or the workspace channel", ErrInvalidInput)
 	}
-	if requesterNodeID != targetNodeID && !s.isChannelCreator(ctx, ch, requesterNodeID) && !manages {
-		if err := s.checkAccess(ctx, requesterNodeID, ch.NGACOaID, ngac.OpManage); err != nil {
-			return fmt.Errorf("%w: only the person themselves, the group's creator or a manager removes someone", ErrAccessDenied)
+	targetIsOwner := s.isGroupOwner(ctx, ch, targetNodeID)
+	// Owner cannot leave without transferring ownership first.
+	if requesterNodeID == targetNodeID && targetIsOwner {
+		return fmt.Errorf("%w: the owner must transfer ownership before leaving", ErrAlreadyExists)
+	}
+	// Authority: self, owner, manager, or workspace manager (manage on OA).
+	if requesterNodeID != targetNodeID && !manages {
+		holdsManage := s.checkAccess(ctx, requesterNodeID, ch.NGACOaID, ngac.OpManage) == nil
+		switch {
+		case holdsManage:
+		case targetIsOwner:
+			return fmt.Errorf("%w: the group's owner cannot be removed", ErrAccessDenied)
+		case !s.isGroupOwnerOrManager(ctx, ch, requesterNodeID):
+			return fmt.Errorf("%w: only the person themselves, the owner, a manager or a workspace manager removes someone", ErrAccessDenied)
 		}
 	}
 	if err := s.requireInChannel(ctx, ch, targetNodeID); err != nil {
 		return err
 	}
+	managersUA, err := s.findChannelManagersUA(ctx, ch)
+	if err != nil {
+		return fmt.Errorf("remove member from managers: %w", err)
+	}
+	if managersUA != "" {
+		if _, err := s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
+			ChildId: targetNodeID, ParentId: managersUA,
+		}); err != nil {
+			return fmt.Errorf("remove member from managers: %w", err)
+		}
+	}
+	// Remove from Members UA.
 	if _, err := s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
 		ChildId: targetNodeID, ParentId: ch.NGACUaID,
 	}); err != nil {
@@ -185,13 +225,6 @@ func (s *Service) RemoveMember(ctx context.Context, channelID, requesterNodeID, 
 		return fmt.Errorf("remove member: %w", cacheErr)
 	}
 	return nil
-}
-
-// isChannelCreator reports whether the requester made the channel. The creator is
-// recorded by user id; the verified caller on ctx links that to the node asking.
-func (s *Service) isChannelCreator(ctx context.Context, ch *store.Channel, requesterNodeID string) bool {
-	who := grpcauth.CallerFrom(ctx)
-	return ch.CreatedBy != "" && who.UserID == ch.CreatedBy && who.NGACNodeID == requesterNodeID
 }
 
 // requireInChannel confirms the target is a person sitting directly under the
@@ -239,7 +272,7 @@ func (s *Service) MemberRoster(ctx context.Context, channelID, userNodeID string
 		return nil, err
 	}
 	canRemove := ch.ChannelType != ChannelTypeDM && ch.ChannelType != ChannelTypeWorkspace &&
-		(s.isChannelCreator(ctx, ch, userNodeID) || s.checkAccess(ctx, userNodeID, ch.NGACOaID, ngac.OpManage) == nil)
+		(s.isGroupOwnerOrManager(ctx, ch, userNodeID) || s.checkAccess(ctx, userNodeID, ch.NGACOaID, ngac.OpManage) == nil)
 	return &Roster{Members: members, CanRemove: canRemove}, nil
 }
 

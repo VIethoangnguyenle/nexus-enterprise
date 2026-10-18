@@ -96,6 +96,8 @@ type UserInfo struct {
 	EmailVerified bool
 	// NeedsProfile: the person has not yet been asked for the name colleagues see.
 	NeedsProfile bool
+	// Language is the UI language: "vi", "en" or "" (app default).
+	Language string
 }
 
 // Service orchestrates auth business logic.

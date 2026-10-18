@@ -98,9 +98,17 @@ func TestRealPolicy_RemovingAGroupMember(t *testing.T) {
 	assert.False(t, w.inChannel(w.latecomer, g))
 	assert.False(t, w.cached(w.latecomer, g.Id))
 
-	// Allow: the creator may leave their own group.
+	// Refused: the owner leaves only after handing the group over.
+	err = w.svc.RemoveMember(ctx, g.Id, w.creator.node, w.creator.node)
+	assert.ErrorIs(t, err, domain.ErrAlreadyExists, "the owner must transfer before leaving")
+	assert.True(t, w.inChannel(w.creator, g))
+
+	// Allow: once someone else owns it, the former owner leaves, Managers edge and all.
+	require.NoError(t, w.svc.AddMember(ctx, g.Id, w.creator.node, bystander.node))
+	require.NoError(t, w.svc.TransferOwnership(ctx, g.Id, w.creator.node, bystander.node))
 	require.NoError(t, w.svc.RemoveMember(ctx, g.Id, w.creator.node, w.creator.node))
 	assert.False(t, w.inChannel(w.creator, g))
+	assert.False(t, w.assigned(w.creator.node, w.managersUA(g.Id)), "no Managers edge left behind")
 }
 
 // A group's creator is protected from other members, not from a manage holder:

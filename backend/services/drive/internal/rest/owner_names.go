@@ -5,6 +5,7 @@ import (
 	"log/slog"
 
 	pb "ngac-platform/proto/drive"
+	"ngac-platform/services/drive/internal/domain"
 )
 
 // OwnerNameResolver turns the owner keys stored on drive items into the
@@ -51,6 +52,62 @@ func (o *ownerNamed) GetSharedWithMe(ctx context.Context, req *pb.GetSharedWithM
 		o.fill(ctx, list.GetItems()...)
 	}
 	return list, err
+}
+
+func (o *ownerNamed) SearchItems(ctx context.Context, workspaceID, query string, limit int) (*pb.DriveItemList, error) {
+	list, err := o.DriveService.SearchItems(ctx, workspaceID, query, limit)
+	if err == nil {
+		o.fill(ctx, list.GetItems()...)
+	}
+	return list, err
+}
+
+func (o *ownerNamed) ListStarredItems(ctx context.Context, workspaceID string) (*pb.DriveItemList, error) {
+	list, err := o.DriveService.ListStarredItems(ctx, workspaceID)
+	if err == nil {
+		o.fill(ctx, list.GetItems()...)
+	}
+	return list, err
+}
+
+func (o *ownerNamed) RecentFiles(ctx context.Context, workspaceID string) (*pb.DriveItemList, error) {
+	list, err := o.DriveService.RecentFiles(ctx, workspaceID)
+	if err == nil {
+		o.fill(ctx, list.GetItems()...)
+	}
+	return list, err
+}
+
+// QuickAccessItems names each file's owner and, on a shared one, the person who
+// shared it. A sharer who cannot be named gets no name; the client then shows
+// the reason without one.
+func (o *ownerNamed) QuickAccessItems(ctx context.Context, workspaceID string) ([]*domain.QuickAccessEntry, error) {
+	entries, err := o.DriveService.QuickAccessItems(ctx, workspaceID)
+	if err != nil || len(entries) == 0 {
+		return entries, err
+	}
+	items := make([]*pb.DriveItem, 0, len(entries))
+	var sharers []string
+	for _, e := range entries {
+		items = append(items, e.Item)
+		if e.SharedBy != "" {
+			sharers = append(sharers, e.SharedBy)
+		}
+	}
+	o.fill(ctx, items...)
+	if len(sharers) > 0 {
+		names, err := o.names.DisplayNames(ctx, sharers)
+		if err != nil {
+			slog.Warn("resolve drive sharer names", "error", err)
+			return entries, nil
+		}
+		for _, e := range entries {
+			if e.SharedBy != "" {
+				e.SharedByName = names[e.SharedBy]
+			}
+		}
+	}
+	return entries, nil
 }
 
 // fill sets OwnerName on each item whose owner is a known person.

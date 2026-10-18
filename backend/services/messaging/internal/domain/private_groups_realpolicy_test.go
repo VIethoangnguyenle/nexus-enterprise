@@ -184,7 +184,12 @@ func TestRealPolicy_PrivateGroupIsClosedToWorkspaceMembersOutsideIt(t *testing.T
 	require.NoError(t, err, "owners hold manage on every group")
 	_, err = w.svc.UpdateChannel(w.as(w.member), g.Id, w.member.node, "renamed by a member")
 	assert.ErrorIs(t, err, domain.ErrAccessDenied)
-	_, err = w.svc.UpdateChannel(w.as(w.creator), g.Id, w.creator.node, "renamed by a group member")
+	// The group's owner renames it as a manager of the group, not through manage;
+	// a plain member of the group does not.
+	_, err = w.svc.UpdateChannel(w.as(w.creator), g.Id, w.creator.node, "renamed by its owner")
+	require.NoError(t, err, "the group's owner renames it")
+	require.NoError(t, w.svc.AddMember(w.as(w.creator), g.Id, w.creator.node, w.member.node))
+	_, err = w.svc.UpdateChannel(w.as(w.member), g.Id, w.member.node, "renamed by a group member")
 	assert.ErrorIs(t, err, domain.ErrAccessDenied, "being in the group does not confer manage")
 }
 

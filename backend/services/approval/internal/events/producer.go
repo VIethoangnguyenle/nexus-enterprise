@@ -35,7 +35,15 @@ type ApprovalEventPayload struct {
 	// in a per-tenant schema and a tenant is a workspace, so it equals TenantID.
 	WorkspaceID string `json:"workspace_id,omitempty"`
 	Comment     string `json:"comment,omitempty"`
-	Timestamp   int64  `json:"timestamp"`
+	// NotifyResult is the requester's switch for the result of their request
+	// (approval settings notify_result); omitted means on. The consumer tells
+	// the requester of an approval or rejection only when it is on.
+	NotifyResult *bool `json:"notify_result,omitempty"`
+	// PendingNotifyOff lists the approvers in AssigneeNodeIDs who turned
+	// "đề nghị chờ bạn" (notify_pending) off; the consumer tells every other
+	// approver the request waits on.
+	PendingNotifyOff []string `json:"pending_notify_off,omitempty"`
+	Timestamp        int64    `json:"timestamp"`
 }
 
 // Producer publishes approval lifecycle events to Kafka.

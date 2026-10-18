@@ -17,37 +17,12 @@ type WorkspaceDetailsService interface {
 	WorkspaceDetails(ctx context.Context, callerNodeID, wsID string) (*domain.WorkspaceDetails, error)
 	UpdateWorkspaceDetails(ctx context.Context, callerNodeID, wsID string, name, description *string) (*domain.WorkspaceDetails, error)
 	LeaveWorkspace(ctx context.Context, callerNodeID, wsID string) error
-	ConvertToOrganization(ctx context.Context, callerNodeID, wsID string) (*domain.Conversion, error)
 }
 
 func (h *AdminHandler) registerWorkspaceDetailsRoutes(api *echo.Group) {
 	api.GET("/workspaces/:id/details", h.GetWorkspaceDetails)
 	api.PATCH("/workspaces/:id/details", h.UpdateWorkspaceDetails)
 	api.POST("/workspaces/:id/leave", h.LeaveWorkspace)
-	api.POST("/workspaces/:id/convert-to-organization", h.ConvertToOrganization)
-}
-
-// ConvertToOrganization handles POST /api/workspaces/:id/convert-to-organization:
-// the owner turns a personal workspace into an organization, for good. The
-// caller is always the one in the verified claims; the body is ignored. A
-// workspace that already is one answers 409 with reason "already_organization".
-func (h *AdminHandler) ConvertToOrganization(c echo.Context) error {
-	claims, err := httputil.RequireClaims(c)
-	if err != nil {
-		return err
-	}
-	conv, err := h.domain.ConvertToOrganization(c.Request().Context(), claims.NGACNodeID, c.Param("id"))
-	if err != nil {
-		if errors.Is(err, domain.ErrAlreadyOrganization) {
-			return c.JSON(http.StatusConflict, map[string]string{"reason": "already_organization"})
-		}
-		return detailsError(c, err)
-	}
-	return c.JSON(http.StatusOK, map[string]string{
-		"type":              domain.TypeOrganization,
-		"converted_by_name": conv.ConvertedByName,
-		"converted_at":      conv.ConvertedAt.UTC().Format(time.RFC3339),
-	})
 }
 
 // LeaveWorkspace handles POST /api/workspaces/:id/leave. The person leaving is

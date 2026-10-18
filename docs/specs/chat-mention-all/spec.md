@@ -4,16 +4,21 @@
 Lets someone in a group reach everyone in it with one mention, `@Tất cả`, under the group's rule for who may do so.
 
 ## Status
-Specified ahead of code (2026-10-19, plan `plans/261018-1742-mobile-ux-overhaul`, phase 07). No `@Tất cả` exists today;
-mentions are lists of user ids.
+Implemented (phase 07 of `plans/261018-1742-mobile-ux-overhaul`). The enforcement lives in
+`backend/services/messaging/internal/domain/group_management.go` (`checkGroupPostingRestrictions`,
+`checkEditMentionAllRestriction`); the push expansion is in `push.go` (`mentionedPeople`).
 
 ## Requirements
 
 ### Requirement: @Tất cả notifies every member of the group
-A message in a group MAY carry the mention `@Tất cả`. It SHALL notify every current member of the group (except the sender)
-as if each were mentioned by name, following each member's notification level for the group the way a name mention does.
+A message in a group MAY carry the mention `@Tất cả` (the canonical string `MentionAll`). The `mentionedPeople` function
+expands it to every current member of the conversation (`store.ChannelPeople`), so each of them is notified as if
+mentioned by name (the sender is excluded by the caller). The member count is not capped — only explicit name mentions
+are capped at `MaxMentionPushes` (20). Quiet hours let mentions through: `silenced` returns false when the recipient is
+mentioned (by name or through `@Tất cả`). The notification level `off` silences the conversation, but in a group a
+mention (including `@Tất cả`) still gets through.
 It SHALL NOT be available in direct messages.
-In the workspace-wide channel only workspace administrators (the workspace admin check) MAY use it, because everyone in the
+In the workspace-wide channel only workspace administrators (the `isWorkspaceAdmin` check) MAY use it, because everyone in the
 workspace is a member there and has no group owner or managers.
 
 #### Scenario: Mention everyone

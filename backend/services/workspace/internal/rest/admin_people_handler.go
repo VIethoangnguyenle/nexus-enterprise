@@ -195,6 +195,8 @@ func (h *AdminHandler) GetRole(c echo.Context) error {
 		"role":        toRoleJSON(&d.RoleSummary),
 		"members":     members,
 		"permissions": grants,
+		// The workspace's rule for who creates groups, so the Channels area can show the lock.
+		"locks": map[string]string{"group_creation": d.GroupCreation},
 	})
 }
 
@@ -209,6 +211,10 @@ func (h *AdminHandler) DeleteRole(c echo.Context) error {
 	}
 	return c.NoContent(http.StatusNoContent)
 }
+
+// ReasonGroupCreationLocked is the `reason` of the 409 that refuses to grant
+// create_channel on Channels while group creation is locked to administrators.
+const ReasonGroupCreationLocked = "group_creation_locked"
 
 // SetRolePermissions handles PUT /api/workspaces/:id/roles/:roleId/permissions/:area.
 // The body is the whole set of operations the role holds on that area.
@@ -226,6 +232,12 @@ func (h *AdminHandler) SetRolePermissions(c echo.Context) error {
 	g, err := h.domain.SetRolePermissions(c.Request().Context(), claims.NGACNodeID, c.Param("id"), c.Param("roleId"),
 		ngac.Area(c.Param("area")), body.Operations)
 	if err != nil {
+		if errors.Is(err, domain.ErrGroupCreationLocked) {
+			return c.JSON(http.StatusConflict, map[string]string{
+				"message": "Quản trị viên đã khoá việc tạo nhóm: chỉ quản trị viên được tạo nhóm",
+				"reason":  ReasonGroupCreationLocked,
+			})
+		}
 		return httputil.MapDomainError(err)
 	}
 	ops := g.Operations

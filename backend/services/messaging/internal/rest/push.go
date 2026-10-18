@@ -9,6 +9,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"ngac-platform/pkg/httputil"
+	"ngac-platform/services/messaging/internal/domain"
 	"ngac-platform/services/messaging/internal/store"
 )
 
@@ -29,6 +30,9 @@ type pushPreferencesJSON struct {
 		End      string `json:"end"`
 		TimeZone string `json:"time_zone"`
 	} `json:"quiet_hours"`
+	// PauseUntil is "Tạm dừng thông báo": an RFC 3339 time, or null for not
+	// paused. Left out of a PUT, it stays as it is; null resumes.
+	PauseUntil domain.Nullable[time.Time] `json:"pause_until"`
 }
 
 func clock(minutes int) string { return fmt.Sprintf("%02d:%02d", minutes/60, minutes%60) }
@@ -56,6 +60,7 @@ func (h *Handler) GetPushPreferences(c echo.Context) error {
 	out.Kinds.IncomingCall = &p.IncomingCall
 	out.QuietHours.Enabled, out.QuietHours.TimeZone = p.QuietEnabled, p.TimeZone
 	out.QuietHours.Start, out.QuietHours.End = clock(p.QuietStart), clock(p.QuietEnd)
+	out.PauseUntil = domain.Nullable[time.Time]{Set: true, Value: p.PauseUntil}
 	return c.JSON(http.StatusOK, out)
 }
 
@@ -81,18 +86,29 @@ func (h *Handler) PutPushPreferences(c echo.Context) error {
 		Direct: in.Kinds.Direct, Mention: in.Kinds.Mention, ThreadReply: in.Kinds.ThreadReply,
 		QuietEnabled: in.QuietHours.Enabled, QuietStart: start, QuietEnd: end, TimeZone: in.QuietHours.TimeZone,
 	}
-	if in.Kinds.IncomingCall != nil {
-		p.IncomingCall = *in.Kinds.IncomingCall
-	} else {
+	// What the request leaves out stays as it is.
+	if in.Kinds.IncomingCall == nil || !in.PauseUntil.Set {
 		current, err := h.svc.GetPushPreferences(c.Request().Context(), claims.UserID)
 		if err != nil {
 			return httputil.MapDomainError(err)
 		}
-		p.IncomingCall = current.IncomingCall
-		in.Kinds.IncomingCall = &p.IncomingCall
+		p.IncomingCall, p.PauseUntil = current.IncomingCall, current.PauseUntil
+	}
+	if in.Kinds.IncomingCall != nil {
+		p.IncomingCall = *in.Kinds.IncomingCall
+	}
+	if in.PauseUntil.Set {
+		p.PauseUntil = in.PauseUntil.Value
 	}
 	if err := h.svc.SavePushPreferences(c.Request().Context(), claims.UserID, p); err != nil {
 		return httputil.MapDomainError(err)
 	}
+	// Echo what is stored: an ended pause reads as cleared.
+	saved, err := h.svc.GetPushPreferences(c.Request().Context(), claims.UserID)
+	if err != nil {
+		return httputil.MapDomainError(err)
+	}
+	in.Kinds.IncomingCall = &saved.IncomingCall
+	in.PauseUntil = domain.Nullable[time.Time]{Set: true, Value: saved.PauseUntil}
 	return c.JSON(http.StatusOK, in)
 }

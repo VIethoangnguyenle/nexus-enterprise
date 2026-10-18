@@ -78,6 +78,7 @@ func userInfo(u *store.User) *UserInfo {
 		Email: u.Email, UnionID: u.UnionID, DisplayName: u.DisplayName,
 		Title: u.Title, Location: u.Location, AvatarURL: u.AvatarURL,
 		EmailVerified: u.EmailVerified, NeedsProfile: !u.ProfileCompleted,
+		Language: u.Language,
 	}
 }
 

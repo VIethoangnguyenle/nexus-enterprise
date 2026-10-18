@@ -176,6 +176,17 @@ func (h *Handler) publishEvent(ctx context.Context, claims *httputil.Claims, req
 		evt.CreatedBy = aud.Request.CreatedBy
 		evt.ScopeOaID = aud.Request.ScopeOAID
 		evt.AssigneeNodeIDs = aud.AssigneeNodeIDs
+
+		// Each person's own switch decides their notification. Settings that
+		// cannot be read leave everyone notified, as before the switches existed.
+		if off, serr := h.svc.NotifyOptOuts(ctx, aud); serr != nil {
+			slog.Warn("approval notification settings unavailable; notifying everyone",
+				"request_id", requestID, "error", serr)
+		} else {
+			result := !off.ResultOff
+			evt.NotifyResult = &result
+			evt.PendingNotifyOff = off.PendingOff
+		}
 	}
 	h.producer.Publish(ctx, evt)
 }

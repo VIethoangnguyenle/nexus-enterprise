@@ -82,12 +82,20 @@ func RetryAfter(err error) (time.Duration, bool) {
 var avatarToken = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
 // authorizeAvatarChange loads the group and checks the caller may change what
-// every member sees of it: manage on its content OA, the check a rename takes.
-// A direct message has no picture of its own.
+// every member sees of it: manage on its content OA, or being the group's
+// owner or manager. A direct message has no picture of its own.
 func (s *Service) authorizeAvatarChange(ctx context.Context, channelID, userNodeID string) (*store.Channel, error) {
+	// Workspace owners hold manage on the Channels OA (no read when not a member).
+	// Group owners and managers hold read through membership. Try manage first.
 	ch, err := s.authorizeChannel(ctx, channelID, userNodeID, ngac.OpManage)
 	if err != nil {
-		return nil, err
+		ch, err = s.authorizeChannel(ctx, channelID, userNodeID, ngac.OpRead)
+		if err != nil {
+			return nil, err
+		}
+		if !s.isGroupOwnerOrManager(ctx, ch, userNodeID) {
+			return nil, fmt.Errorf("%w: only the owner, a manager or a workspace administrator may change the group picture", ErrAccessDenied)
+		}
 	}
 	if ch.ChannelType == "dm" {
 		return nil, fmt.Errorf("%w: a direct message has no group picture", ErrInvalidInput)

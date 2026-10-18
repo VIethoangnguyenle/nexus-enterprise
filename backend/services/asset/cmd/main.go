@@ -93,7 +93,7 @@ func main() {
 
 	// REST server (client-facing)
 	e := httputil.NewEcho("asset", echomw.Logger())
-	restHandler := rest.NewHandler(assets, assetTypes, assetRequests)
+	restHandler := rest.NewHandler(assets, assetTypes, assetRequests).WithSettings(assets)
 	restHandler.RegisterRoutes(e, jwtSecret)
 
 	// Start both servers

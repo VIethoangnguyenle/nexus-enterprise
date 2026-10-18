@@ -101,7 +101,10 @@ func TestCreateChannel_RollsBackWhenTheRowIsRefused(t *testing.T) {
 	_, err := f.svc.CreateChannel(context.Background(), in)
 
 	require.Error(t, err)
-	assert.Equal(t, 6, w.Calls(), "every graph write happened before the row was refused")
+	// Content OA, Members UA, two assignments, the members association, the
+	// creator's edge; then the Managers UA, its PC edge, its association and the
+	// owner's Managers edge.
+	assert.Equal(t, 10, w.Calls(), "every graph write happened before the row was refused")
 	assert.Empty(t, w.LiveNodes())
 	assert.Equal(t, reversed(created(w.Log())), deleted(w.Log()))
 }

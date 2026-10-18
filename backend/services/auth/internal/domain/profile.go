@@ -16,7 +16,11 @@ type ProfileUpdateInput struct {
 	DisplayName *string
 	Title       *string
 	Location    *string
+	Language    *string
 }
+
+// validLanguages are the accepted values for the language field.
+var validLanguages = map[string]bool{"vi": true, "en": true, "": true}
 
 // UpdateProfile validates and saves the fields that were sent. The first save
 // ends the "tell us who you are" step of sign-in. Nothing is written unless
@@ -47,6 +51,12 @@ func (s *Service) UpdateProfile(ctx context.Context, userID string, in ProfileUp
 	}
 	if err := text(&ch.Location, in.Location, maxProfileFieldRunes, false); err != nil {
 		return err
+	}
+	if in.Language != nil {
+		if !validLanguages[*in.Language] {
+			return ErrInvalidInput
+		}
+		ch.Language, sent = in.Language, true
 	}
 	if !sent {
 		// An empty update would still mark the profile done.

@@ -64,6 +64,8 @@ func TestRegisterRoutes_MountsTheThreadRoutes(t *testing.T) {
 		"PATCH /api/messages/:msgId",
 		"DELETE /api/messages/:msgId",
 		"POST /api/messages/:msgId/unread",
+		"GET /api/workspaces/:id/chat-settings",
+		"PUT /api/workspaces/:id/chat-settings",
 		"GET /api/workspaces/:id/chat-sections",
 		"POST /api/workspaces/:id/chat-sections",
 		"PATCH /api/workspaces/:id/chat-sections/:sectionId",

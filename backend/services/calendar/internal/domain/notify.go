@@ -78,6 +78,8 @@ func (s *Service) buildNotice(ctx context.Context, typ string, ws *store.Workspa
 			}
 		}
 	}
+	// Gate recipients by their per-user notification settings.
+	recipients = s.filterByNotifySettings(ctx, ws.ID, typ, recipients)
 	if len(recipients) == 0 && !x.announce {
 		return events.Notice{}, false
 	}
@@ -103,6 +105,52 @@ func (s *Service) buildNotice(ctx context.Context, typ string, ws *store.Workspa
 		n.Start, n.End = x.start.UTC().Format(time.RFC3339), x.end.UTC().Format(time.RFC3339)
 	}
 	return n, true
+}
+
+// filterByNotifySettings removes recipients who have the relevant notification
+// switch turned off. TypeInvited and TypeShared are gated by NotifyInvites,
+// TypeUpdated and TypeCancelled by NotifyChanges, and TypeReminder by
+// NotifyReminders. TypeCreated (announcements) and TypeRsvp are never filtered.
+func (s *Service) filterByNotifySettings(ctx context.Context, wsID, typ string, recipients []events.Recipient) []events.Recipient {
+	if len(recipients) == 0 {
+		return recipients
+	}
+	// Only gate types that have a matching switch.
+	var needsInvites, needsChanges, needsReminders bool
+	switch typ {
+	case events.TypeInvited, events.TypeShared:
+		needsInvites = true
+	case events.TypeUpdated, events.TypeCancelled:
+		needsChanges = true
+	case events.TypeReminder:
+		needsReminders = true
+	default:
+		return recipients // TypeCreated, TypeRsvp — always sent
+	}
+	nodes := make([]string, len(recipients))
+	for i, r := range recipients {
+		nodes[i] = r.NodeID
+	}
+	settings, err := s.store.Settings(ctx, wsID, nodes)
+	if err != nil {
+		slog.Warn("could not load notification settings for filtering; sending to all",
+			"type", typ, "error", err)
+		return recipients
+	}
+	filtered := recipients[:0]
+	for _, r := range recipients {
+		st := settings[r.NodeID] // defaults when missing
+		switch {
+		case needsInvites && !st.NotifyInvites:
+			continue
+		case needsChanges && !st.NotifyChanges:
+			continue
+		case needsReminders && !st.NotifyReminders:
+			continue
+		}
+		filtered = append(filtered, r)
+	}
+	return filtered
 }
 
 func eventID(e *store.Event) string {

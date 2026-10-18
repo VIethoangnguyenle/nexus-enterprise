@@ -46,6 +46,10 @@ type RoleDetail struct {
 	// Members is a sample for the avatars; MemberCount is the whole.
 	Members []*PersonRef
 	Grants  []AreaGrant
+	// GroupCreation is the workspace's rule for who creates groups
+	// (ngac.GroupCreationEveryone or ngac.GroupCreationAdmins), so the screen can
+	// show the lock beside the Channels area.
+	GroupCreation string
 }
 
 // roleSampleSize is how many holders of a role a detail lists by name.
@@ -218,6 +222,9 @@ func (s *Service) GetRoleDetail(ctx context.Context, callerNodeID, wsID, roleID 
 		return nil, err
 	}
 	detail.Grants = grantsByArea(assocs.GetAssociations(), oas)
+	if detail.GroupCreation, err = s.groupCreationRuleOf(ctx, ws); err != nil {
+		return nil, err
+	}
 	return detail, nil
 }
 
@@ -229,7 +236,28 @@ func (s *Service) GetRoleDetail(ctx context.Context, callerNodeID, wsID, roleID 
 // role already has needs nothing more. The OA is resolved from the area inside
 // this workspace, never taken from the request, and only the administrator's
 // own roles can be changed: Owners and Members are not editable.
+//
+// While group creation is locked to administrators, create_channel on Channels
+// is refused with ErrGroupCreationLocked (taking it away stays possible).
 func (s *Service) SetRolePermissions(ctx context.Context, callerNodeID, wsID, roleID string, area ngac.Area, ops []string) (*AreaGrant, error) {
+	if area != ngac.AreaChannels {
+		return s.setRolePermissions(ctx, callerNodeID, wsID, roleID, area, ops)
+	}
+	// The lock decides what this write may grant, so the two are serialised; only
+	// an administrator gets to queue for it.
+	if _, err := s.authorizeAdmin(ctx, callerNodeID, wsID, ngac.OpManage); err != nil {
+		return nil, err
+	}
+	var grant *AreaGrant
+	err := s.withChannelsLock(ctx, wsID, func(ctx context.Context) error {
+		var err error
+		grant, err = s.setRolePermissions(ctx, callerNodeID, wsID, roleID, area, ops)
+		return err
+	})
+	return grant, err
+}
+
+func (s *Service) setRolePermissions(ctx context.Context, callerNodeID, wsID, roleID string, area ngac.Area, ops []string) (*AreaGrant, error) {
 	ws, err := s.authorizeAdmin(ctx, callerNodeID, wsID, ngac.OpManage)
 	if err != nil {
 		return nil, err
@@ -251,6 +279,16 @@ func (s *Service) SetRolePermissions(ctx context.Context, callerNodeID, wsID, ro
 	oaID, ok := oas[area]
 	if !ok {
 		return nil, fmt.Errorf("%w: this workspace has no %s area", ErrNotFound, area)
+	}
+
+	if area == ngac.AreaChannels && slices.Contains(want, ngac.OpCreateChannel) {
+		rule, err := s.groupCreationRuleOf(ctx, ws)
+		if err != nil {
+			return nil, err
+		}
+		if rule == ngac.GroupCreationAdmins {
+			return nil, ErrGroupCreationLocked
+		}
 	}
 
 	// Read from the writer: what the role holds now decides which operations are

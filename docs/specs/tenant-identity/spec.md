@@ -208,7 +208,7 @@ The workspace type SHALL be enforced by the services that own the features, not 
 see `asset-authorization` and `approval-screens`), and the messaging service refuses a message that links an
 approval request (`linked_entity_type` `approval`; a direct message is judged by the workspace it belongs to). Each reads `workspaces.type` itself, before it asks the policy, and fails closed: an unknown workspace or a
 type that is not `organization` is a refusal, and a failure to read it is an internal error. Nothing is deleted:
-what a personal workspace already holds is kept, hidden, and is usable again if it becomes an organization. The type is
+what a personal workspace already holds is kept and hidden (a workspace's type never changes, see below). The type is
 not a node of the policy graph and no decision of the policy service depends on it. The document service has no
 approval operation of its own (a text's `draft`/`active`/`archived` status is not an approval), so it has nothing to refuse.
 
@@ -224,42 +224,28 @@ approval operation of its own (a text's `draft`/`active`/`archived` status is no
 - **WHEN** the same operations are called in an organization workspace
 - **THEN** they are decided by the policy as before
 
-### Requirement: The owner converts a personal workspace to an organization, once
-A personal workspace becomes an organization through `POST /api/workspaces/{id}/convert-to-organization` (workspace
-service). The caller SHALL hold `manage` on the workspace's management OA **and** be an owner of it (a member of its Owners
-group, the same test the owner changes and the last-owner rule use, so an owner added later can convert); either missing is a refusal (403), and a caller who may not convert is refused before anyone
-learns the workspace's type. A workspace that is an organization already, whether made one or converted, answers 409
-`{"reason":"already_organization"}`; an unknown workspace answers 404. Conversion is one way and cannot be repeated.
+### Requirement: A workspace's type is fixed when it is created
+A workspace is `personal` or `organization` from the moment it is created (`CreateWorkspace`, above) and stays so.
+There SHALL be no conversion in either direction: no route, gRPC method or screen turns a personal workspace into an
+organization or an organization into a personal one, for anyone, an owner included. Someone who wants to work with
+others in a personal workspace creates a new organization workspace. A request to the routes that existed before
+(`POST /api/workspaces/{id}/convert-to-organization`) or to any `convert-to-*` path answers 404 (or 405) and reaches
+no service method.
 
-It changes only `workspaces.type`, in one conditional statement (`... WHERE id = $1 AND type = 'personal'`), together
-with `converted_by` (the user who converted) and `converted_at` (migration 046; both stay empty for a workspace that was
-made an organization). The owner check, the type check and the update run under the workspace's owner lock (the one owner changes take), so a conversion cannot land after the caller stopped being an owner. Of two requests at once exactly one converts and the other gets 409. Nothing is written to the
-policy graph: an organization needs no node a personal workspace lacks (an asset type's OA is created on first use,
-approvals use the tenant schema, which the approval service creates on first use). Nothing is deleted: what the
-workspace held while personal is kept and is usable now. The workspace service announces a workspace update in realtime
-so every open session refreshes. The workspace service has no administrator audit log; `converted_by` and `converted_at`
-are the record of who converted and when, shown by name in the settings screen.
+`workspaces.converted_by` and `workspaces.converted_at` (migration 046) stay as history of workspaces converted while
+the conversion existed; nothing writes them any more. `GET /api/workspaces/{id}/details` returns `type`, `is_owner`
+(the caller is in the Owners group), `owner_name` (the names of the current owners joined with ", ", never an id),
+`owner_names` (the names of the current owners as an array, never an id), and `converted_by_name` and `converted_at`
+(RFC 3339) from that history, both empty for a workspace that was never converted.
 
-Success answers `200 {"type":"organization","converted_by_name":"<display name>","converted_at":"<RFC 3339>"}`.
-`GET /api/workspaces/{id}/details` also returns `type`, `is_owner` (the caller is in the Owners group), `owner_name` (the names of the current owners joined with ", ", never an id),
-`owner_names` (the names of the current owners as an array, never an id), `converted_by_name` and `converted_at` (RFC 3339, or empty when never converted).
+#### Scenario: No conversion route
+- **WHEN** anyone, an owner of a personal workspace included, posts to `/api/workspaces/{id}/convert-to-organization` or `/convert-to-personal`
+- **THEN** it answers 404 (or 405), the type is unchanged and no service method runs
 
-#### Scenario: The owner converts
-- **WHEN** an owner of a personal workspace (the creator or one added later) converts it
-- **THEN** its type becomes `organization`, the answer names who converted it and when, and open sessions refresh
-- **AND** assets and approvals, refused until now, are decided by the policy as in any organization
+#### Scenario: No conversion in the screens
+- **WHEN** an owner opens the settings of a personal workspace (Cài đặt workspace, or the desktop Workspace tab)
+- **THEN** no control offers to turn it into an organization
 
-#### Scenario: Not the owner
-- **WHEN** a member, or someone holding `manage` who is not an owner, or a person from another workspace, converts it
-- **THEN** it fails with 403 and the type is unchanged
-
-#### Scenario: Already an organization
-- **WHEN** the owner converts a workspace that is an organization, or converts it a second time
-- **THEN** it fails with 409 `already_organization` and nothing changes
-
-#### Scenario: Details after conversion
-- **WHEN** a member reads the workspace details after it was converted
-- **THEN** they see type `organization`, the owner's and the converter's names, and the time of conversion
-
-## Planned change (mobile-ux-overhaul, 2026-10-19)
-Phase 05: a workspace's kind is fixed at creation; the personal → organization conversion (route and screen) is removed and no conversion exists in either direction. See `mobile-shell`. Plan: `plans/261018-1742-mobile-ux-overhaul`.
+#### Scenario: Details keep the history
+- **WHEN** a member reads the details of a workspace that was converted before the conversion was removed
+- **THEN** they see its type, the owners' names, and who converted it and when, by name
