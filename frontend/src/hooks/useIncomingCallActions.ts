@@ -13,7 +13,7 @@ import { toast } from '../components/primitives'
  */
 export function useIncomingCallActions(incoming: IncomingCallInfo, onClear: (callId: string) => void) {
   const navigate = useNavigate()
-  const { callId, kind } = incoming
+  const { callId, kind, workspaceId } = incoming
 
   const decline = async () => {
     onClear(callId)
@@ -27,7 +27,7 @@ export function useIncomingCallActions(incoming: IncomingCallInfo, onClear: (cal
   }
 
   const answer = (how: CallKind) => {
-    void navigate(callRoute(callId, how))
+    void navigate(callRoute(callId, how, workspaceId))
     onClear(callId)
   }
 

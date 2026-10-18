@@ -331,3 +331,24 @@ func TestCallPush_ADMRingAndMissedLinksNameTheDMsWorkspace(t *testing.T) {
 	require.Len(t, sent, 2)
 	assert.Equal(t, "/channels/"+w.chID+"?ws="+other, sent[1].URL)
 }
+
+// A call change names the workspace of the conversation it is about, so a
+// session signed in to another workspace can open the call in the right one.
+func TestCallChange_CarriesTheConversationsWorkspace(t *testing.T) {
+	w := newCallWorld(t)
+	w.asDM(t)
+	other, _ := testutil.CreateWorkspace(t, w.f.pool, w.f.userID)
+	moveChannel(t, w.f, w.chID, other)
+	var callerNode string
+	require.NoError(t, w.f.pool.QueryRow(context.Background(), `SELECT ngac_node FROM users WHERE id = $1`, w.f.userID).Scan(&callerNode))
+	w.f.read.addMember(other, userNode, callerNode, w.peerNode, "tn-"+w.peer)
+	ctx := grpcauth.WithCaller(context.Background(), grpcauth.Caller{UserID: w.f.userID, NGACNodeID: userNode, TenantID: other})
+
+	_, _, err := w.f.svc.StartCall(ctx, domain.StartCallInput{ChannelID: w.chID, UserID: w.f.userID, UserNodeID: userNode, Kind: "audio"})
+	require.NoError(t, err)
+
+	require.NotEmpty(t, w.calls.changes)
+	for _, c := range w.calls.changes {
+		assert.Equal(t, other, c.WorkspaceID, "change %q", c.Type)
+	}
+}

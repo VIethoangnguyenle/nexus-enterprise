@@ -992,14 +992,14 @@ describe('call events', () => {
   const callEvent = (over: Partial<{
     type: string; callId: string; channelId: string; kind: string; status: string
     callerId: string; callerName: string; callerAvatarUrl: string
-    participantCount: number; participantIds: string[]; startedAt: undefined; endedAt: undefined
+    participantCount: number; participantIds: string[]; startedAt: undefined; endedAt: undefined; workspaceId: string
   }> = {}) => ({
     oneofKind: 'callEvent' as const,
     callEvent: {
       type: 'ring', callId: 'call-1', channelId: 'ch-1', kind: 'video', status: 'ringing',
       callerId: 'u-caller', callerName: 'Phạm Hải Yến', callerAvatarUrl: '/yen.png',
       participantCount: 1, participantIds: ['u-caller'],
-      startedAt: undefined, endedAt: undefined, ...over,
+      startedAt: undefined, endedAt: undefined, workspaceId: '', ...over,
     },
   })
 
@@ -1024,6 +1024,16 @@ describe('call events', () => {
       callerName: 'Phạm Hải Yến',
       mode: 'ringing',
     })
+  })
+
+  it('a ring names the workspace of the call\'s conversation, so it can be answered there', () => {
+    deliver(callEvent({ type: 'ring', workspaceId: 'ws-a' }))
+    expect(useIncomingCallStore.getState().incoming).toMatchObject({ callId: 'call-1', workspaceId: 'ws-a' })
+  })
+
+  it('a ring that names no workspace leaves it open to the one on screen', () => {
+    deliver(callEvent({ type: 'ring', workspaceId: '' }))
+    expect(useIncomingCallStore.getState().incoming?.workspaceId).toBeUndefined()
   })
 
   it('a ring event from myself does not trigger ringing', () => {

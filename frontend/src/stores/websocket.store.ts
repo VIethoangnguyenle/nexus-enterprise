@@ -838,7 +838,7 @@ function handleServerMessage(
       const incoming = useIncomingCallStore.getState()
       // A kind that is neither audio nor video is not a call this client knows how to ring or join.
       const kind = asCallKind(ev.kind)
-      const who = { callId: ev.callId, channelId: ev.channelId, callerName: ev.callerName, callerAvatarUrl: ev.callerAvatarUrl }
+      const who = { callId: ev.callId, channelId: ev.channelId, workspaceId: ev.workspaceId || undefined, callerName: ev.callerName, callerAvatarUrl: ev.callerAvatarUrl }
 
       switch (ev.type) {
         case 'ring':

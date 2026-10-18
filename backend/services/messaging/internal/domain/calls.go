@@ -98,6 +98,10 @@ type CallChange struct {
 	Call  *pb.Call
 	Card  *pb.Message
 	Users []string
+	// WorkspaceID is the workspace of the call's conversation. A person signed in
+	// to another workspace needs it to open the call, since a DM is found in its
+	// own workspace only.
+	WorkspaceID string
 }
 
 // CallObserver is told of every committed call change. The hub implements it.
@@ -113,6 +117,13 @@ func (s *Service) announceCall(ctx context.Context, c CallChange) {
 	// it from the event.
 	if c.Call != nil && c.Call.ChannelId == "" {
 		return
+	}
+	if c.WorkspaceID == "" && c.Call != nil {
+		if ch, err := s.loadChannel(ctx, c.Call.ChannelId); err == nil {
+			c.WorkspaceID = ch.WorkspaceID
+		} else {
+			slog.Warn("call change carries no workspace", "call", c.Call.Id, "error", err)
+		}
 	}
 	if s.callObserver != nil {
 		s.callObserver.CallChanged(ctx, c)

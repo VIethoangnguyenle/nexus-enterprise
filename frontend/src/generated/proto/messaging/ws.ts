@@ -878,6 +878,10 @@ export interface CallEvent {
      * @generated from protobuf field: google.protobuf.Timestamp ended_at = 12
      */
     endedAt?: Timestamp;
+    /**
+     * @generated from protobuf field: string workspace_id = 13
+     */
+    workspaceId: string; // the workspace of the call's conversation: a DM exists in one workspace only
 }
 // @generated message type with reflection information, may provide speed optimized methods
 class ClientEnvelope$Type extends MessageType<ClientEnvelope> {
@@ -3111,7 +3115,8 @@ class CallEvent$Type extends MessageType<CallEvent> {
             { no: 9, name: "participant_count", kind: "scalar", T: 5 /*ScalarType.INT32*/ },
             { no: 10, name: "participant_ids", kind: "scalar", repeat: 2 /*RepeatType.UNPACKED*/, T: 9 /*ScalarType.STRING*/ },
             { no: 11, name: "started_at", kind: "message", T: () => Timestamp },
-            { no: 12, name: "ended_at", kind: "message", T: () => Timestamp }
+            { no: 12, name: "ended_at", kind: "message", T: () => Timestamp },
+            { no: 13, name: "workspace_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
         ]);
     }
     create(value?: PartialMessage<CallEvent>): CallEvent {
@@ -3126,6 +3131,7 @@ class CallEvent$Type extends MessageType<CallEvent> {
         message.callerAvatarUrl = "";
         message.participantCount = 0;
         message.participantIds = [];
+        message.workspaceId = "";
         if (value !== undefined)
             reflectionMergePartial<CallEvent>(this, message, value);
         return message;
@@ -3170,6 +3176,9 @@ class CallEvent$Type extends MessageType<CallEvent> {
                     break;
                 case /* google.protobuf.Timestamp ended_at */ 12:
                     message.endedAt = Timestamp.internalBinaryRead(reader, reader.uint32(), options, message.endedAt);
+                    break;
+                case /* string workspace_id */ 13:
+                    message.workspaceId = reader.string();
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -3219,6 +3228,9 @@ class CallEvent$Type extends MessageType<CallEvent> {
         /* google.protobuf.Timestamp ended_at = 12; */
         if (message.endedAt)
             Timestamp.internalBinaryWrite(message.endedAt, writer.tag(12, WireType.LengthDelimited).fork(), options).join();
+        /* string workspace_id = 13; */
+        if (message.workspaceId !== "")
+            writer.tag(13, WireType.LengthDelimited).string(message.workspaceId);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

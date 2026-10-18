@@ -7,6 +7,7 @@ import { jwtFor as tenantToken } from '../test/auth-fixtures'
 import { routerMockFactory, routerState } from '../test/router-mock'
 import { useAuthStore } from '../stores/auth.store'
 import { validateChannelSearch } from '../routes/_workspace/channels.$channelId'
+import { callRoute } from '../lib/call-nav'
 import { validateCallSearch } from '../routes/_workspace/calls.$callId'
 
 const switchTenant = vi.fn()
@@ -70,5 +71,22 @@ describe('following a link to a direct message of another workspace', () => {
     const { result } = await follow('/channels/dm-1?ws=ws-gone', validateChannelSearch)
     expect(result.current.active.workspaceId).toBe('ws-a')
     expect(switchTenant).not.toHaveBeenCalled()
+  })
+
+  // The in-app ring of a DM of workspace A reaches a session signed in to B.
+  // Answering it opens /calls/<id>?ws=A and the session follows to A.
+  it('answering a ring for a DM of another workspace opens the call there and switches the session', async () => {
+    useAuthStore.setState({ accessToken: tenantToken('ws-b'), tenantId: 'ws-b' })
+    switchTenant.mockResolvedValue({ access_token: tenantToken('ws-a') })
+    const route = callRoute('call-1', 'video', 'ws-a')
+    expect(route.to).toBe('/calls/$callId')
+    const search = route.search({ ws: 'ws-b' }) // the address on screen names B
+    expect(search).toEqual({ ws: 'ws-a', answer: 'video' })
+
+    routerState.search = validateCallSearch(search) as Record<string, unknown>
+    const { result } = renderHook(() => ({ sync: useTenantSync(), active: useActiveWorkspace() }), { wrapper })
+
+    expect(result.current.active.workspaceId).toBe('ws-a')
+    await waitFor(() => expect(switchTenant).toHaveBeenCalledWith('ws-a'))
   })
 })
