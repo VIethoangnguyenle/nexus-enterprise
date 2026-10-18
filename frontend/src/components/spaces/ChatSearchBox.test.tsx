@@ -183,6 +183,26 @@ describe('the / key and Esc', () => {
     expect(outside).toHaveFocus()
   })
 
+  it('leaves the box on the third Esc even when nothing had the focus before "/"', async () => {
+    const user = await open()
+    expect(document.body).toHaveFocus()
+    await user.keyboard('/')
+    expect(box()).toHaveFocus()
+    // Nothing typed: the first Esc folds the suggestions, the next leaves the box.
+    await user.keyboard('{Escape}')
+    expect(box()).toHaveFocus()
+    expect(box()).toHaveAttribute('aria-expanded', 'false')
+    await user.keyboard('{Escape}')
+    expect(document.activeElement?.tagName).toBe('BODY')
+  })
+
+  it('types a slash as text inside the box', async () => {
+    const user = await open()
+    await user.click(box())
+    await user.keyboard('a/b')
+    expect(box()).toHaveValue('a/b')
+  })
+
   it('stays in the box after the last Esc when it was opened with the pointer', async () => {
     const user = await open()
     await user.click(box())

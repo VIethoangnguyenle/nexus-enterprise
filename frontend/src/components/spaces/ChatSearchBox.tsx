@@ -24,7 +24,8 @@ export const CHAT_SEARCH_PATH = '/channels/search'
 export function ChatSearchBox({ conversations, people }: { conversations: Conversation[]; people: PeopleDirectory }) {
   const navigate = useNavigate()
   const inputRef = useRef<HTMLInputElement>(null)
-  /** Where the focus was when `/` took it; Esc gives it back. Null when the box was opened with the pointer. */
+  /** Set when `/` took the focus: the last Esc then leaves the box, for `returnTo` (where the focus was) or, with none, for the page. */
+  const viaSlash = useRef(false)
   const returnTo = useRef<HTMLElement | null>(null)
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const address = parseChatSearch(useSearch({ strict: false }) as Record<string, unknown>)
@@ -78,6 +79,7 @@ export function ChatSearchBox({ conversations, people }: { conversations: Conver
       if (document.querySelector('[aria-modal="true"]')) return
       e.preventDefault()
       const from = document.activeElement
+      viaSlash.current = true
       returnTo.current = from instanceof HTMLElement && from !== document.body ? from : null
       inputRef.current?.focus()
     }
@@ -114,7 +116,10 @@ export function ChatSearchBox({ conversations, people }: { conversations: Conver
         panel.inputProps.onBlur(e)
         setFocused(false)
       }}
-      onPointerDown={() => { returnTo.current = null }}
+      onPointerDown={() => {
+        viaSlash.current = false
+        returnTo.current = null
+      }}
       onKeyDown={(e) => {
         panel.inputProps.onKeyDown(e)
         if (e.defaultPrevented) return
@@ -127,12 +132,14 @@ export function ChatSearchBox({ conversations, people }: { conversations: Conver
           if (query) {
             panel.holdClosed()
             setQuery('')
-          } else if (returnTo.current) {
-            // The third Esc leaves the box for where the focus was before `/`; a box opened with the pointer keeps it.
+          } else if (viaSlash.current) {
+            // The last Esc leaves the box for where the focus was before `/` (the page itself when it was nowhere);
+            // a box opened with the pointer keeps the focus.
             const back = returnTo.current
+            viaSlash.current = false
             returnTo.current = null
             inputRef.current?.blur()
-            back.focus()
+            back?.focus()
           }
         }
       }}
