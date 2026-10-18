@@ -25,7 +25,8 @@ import { useMotionPresets } from '../../lib/motion'
 import { workspaceDisplayName } from '../../lib/workspace'
 import { useAuthStore } from '../../stores/auth.store'
 import { useWebSocketStore } from '../../stores/websocket.store'
-import { Avatar, Button, Heading, IconButton, ScrollFade, SearchField, TabBar, toast, type TabItem } from '../primitives'
+import { Avatar, Button, Heading, IconButton, ScrollFade, TabBar, toast, type TabItem } from '../primitives'
+import { SearchBox } from '../patterns/SearchBox'
 import { SearchSuggestions } from '../patterns/SearchSuggestions'
 import { EmptyState } from '../spaces/EmptyState'
 import { ApprovalDetailPanel } from './ApprovalDetailPanel'
@@ -36,6 +37,9 @@ import { CountPill } from './StatusPill'
 import { TemplateDetailPanel } from './TemplateDetailPanel'
 import { TemplateEditor } from './TemplateEditor'
 import { TemplatesTable } from './TemplatesTable'
+
+/** What the open search says while there is nothing to suggest. */
+const SEARCH_HINT = 'Gõ tên đề nghị, người gửi hoặc loại để tìm.'
 
 /** A row's version: a new one means the request changed (a decision, a step, completion). */
 const versionOf = (r: ApprovalRow) =>
@@ -225,6 +229,7 @@ export function ApprovalScreen() {
     value: typed,
     variant: phone ? 'screen' : 'popover',
     anchorRef: searchRef,
+    showWhenEmpty: true,
     groups: [
       recent.group(setTyped),
       {
@@ -491,8 +496,11 @@ export function ApprovalScreen() {
                   <ArrowLeft size={20} strokeWidth={1.75} aria-hidden="true" />
                 </IconButton>
               )}
-              <SearchField
+              <SearchBox
                 ref={searchRef}
+                panel={panel}
+                emptyText={SEARCH_HINT}
+                slotClassName="w-full sm:w-60"
                 label="Tìm đề nghị"
                 moduleSearch
                 tone="sunk"
@@ -518,7 +526,6 @@ export function ApprovalScreen() {
               {!covered && typed.trim() && !loading && (
                 <span className="text-sm text-ink-muted tnum" aria-live="polite">{shownRows.length} trong {rows.length} đề nghị</span>
               )}
-              {!phone && <SearchSuggestions panel={panel} />}
             </div>
           )}
 
@@ -555,7 +562,7 @@ export function ApprovalScreen() {
             {covered && (
               // The list stays mounted under the phone's suggestions, so Quay lại finds it where it was scrolled.
               <div className="absolute inset-0 z-sticky grid bg-base">
-                <SearchSuggestions panel={panel} emptyText="Gõ tên đề nghị, người gửi hoặc loại để tìm." />
+                <SearchSuggestions panel={panel} emptyText={SEARCH_HINT} />
               </div>
             )}
             <div

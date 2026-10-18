@@ -1,9 +1,14 @@
 import { useRef, useState } from 'react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { Button, SearchField } from '../primitives'
+import { Button, useToastStore } from '../primitives'
+import { SearchBox } from './SearchBox'
 import { SearchSuggestions } from './SearchSuggestions'
+import { switchPreferencesTo, updatePreferences } from '../../lib/preferences'
+import { useRecentSearches } from '../../hooks/useRecentSearches'
+import { useAuthStore } from '../../stores/auth.store'
+import { ME } from '../../test/chat-fixtures'
 import { useSuggestionPanel, type SuggestionGroup, type SuggestionVariant } from '../../hooks/useSuggestionPanel'
 import { expectNoIds } from '../../test/no-ids'
 
@@ -14,16 +19,34 @@ interface HarnessProps {
 }
 
 /** A screen's search box with its suggestions, the way every module wires them. */
-function Harness({ groups, variant = 'popover', emptyText, initiallyOpen }: HarnessProps & { initiallyOpen?: boolean }) {
+function Harness({ groups, variant = 'popover', emptyText, initiallyOpen, showWhenEmpty }: HarnessProps & { initiallyOpen?: boolean; showWhenEmpty?: boolean }) {
   const [value, setValue] = useState('')
   const anchorRef = useRef<HTMLInputElement>(null)
-  const panel = useSuggestionPanel({ value, groups, variant, anchorRef, initiallyOpen })
+  const panel = useSuggestionPanel({ value, groups, variant, anchorRef, initiallyOpen, showWhenEmpty })
   return (
     <>
-      <SearchField ref={anchorRef} label="Tìm tài liệu" value={value} onChange={(e) => setValue(e.target.value)} {...panel.inputProps} />
+      <SearchBox
+        ref={anchorRef} panel={panel} label="Tìm tài liệu" emptyText={emptyText}
+        value={value} onChange={(e) => setValue(e.target.value)} {...panel.inputProps}
+      />
       <Button type="button">Ở ngoài</Button>
       <Button type="button" onClick={panel.close}>Quay lại</Button>
-      <SearchSuggestions panel={panel} emptyText={emptyText} />
+      {variant === 'screen' && <SearchSuggestions panel={panel} emptyText={emptyText} />}
+    </>
+  )
+}
+
+/** The same box with its Tìm gần đây kept the way a module keeps it, so removing really removes. */
+function KeptHarness({ words }: { words: string[] }) {
+  const [value, setValue] = useState('')
+  const anchorRef = useRef<HTMLInputElement>(null)
+  const recent = useRecentSearches('drive')
+  useState(() => words.forEach((w) => recent.add(w)))
+  const panel = useSuggestionPanel({ value, groups: [recent.group(setValue)], variant: 'popover', anchorRef })
+  return (
+    <>
+      <SearchBox ref={anchorRef} panel={panel} label="Tìm tài liệu" value={value} onChange={(e) => setValue(e.target.value)} {...panel.inputProps} />
+      <Button type="button">Ở ngoài</Button>
     </>
   )
 }
@@ -225,7 +248,7 @@ describe('pointer', () => {
     await user.click(box())
     // Keyboard and screen reader users remove with Delete; the option's name is the search alone.
     expect(screen.queryByRole('button', { name: /Xoá/ })).toBeNull()
-    expect(screen.getByRole('option', { name: 'hợp đồng' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Tìm lại hợp đồng' })).toBeInTheDocument()
     await user.click(screen.getByTitle('Xoá khỏi Tìm gần đây'))
     expect(remove).toHaveBeenCalledWith('hợp đồng')
     expect(pick).not.toHaveBeenCalled()
@@ -312,7 +335,7 @@ describe('how much is shown', () => {
 })
 
 describe('placement', () => {
-  it('stays inside the window and never narrower than the box', async () => {
+  it('lets the surface reach no further than the window and keeps the rows inside the room left under the box', async () => {
     const user = userEvent.setup()
     vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1024)
     vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(500)
@@ -321,11 +344,11 @@ describe('placement', () => {
     )
     render(<Harness groups={[recent(['hợp đồng'])]} />)
     await user.click(box())
-    const surface = screen.getByRole('listbox').parentElement!
-    expect(surface.style.width).toBe('380px')
-    expect(surface.style.left).toBe(`${1024 - 12 - 380}px`)
-    expect(surface.style.top).toBe('142px')
-    expect(surface.style.maxHeight).toBe(`${500 - 142 - 12}px`)
+    const surface = screen.getByRole('listbox').closest('div[style*="--sx-open-w"]') as HTMLElement
+    expect(surface.style.getPropertyValue('--sx-open-w')).toBe('min(max(100cqw, 440px), calc(100vw - 900px - 16px))')
+    // 500 high, the box ends at 144 with its row, then the foot (36) and 16 to the edge.
+    const list = screen.getByRole('listbox').parentElement as HTMLElement
+    expect(list.style.maxHeight).toBe(`${500 - 100 - 44 - 36 - 16}px`)
   })
 })
 
@@ -359,5 +382,149 @@ describe('states', () => {
     render(<Harness groups={[recent(['hợp đồng']), files(['Đối soát T10.xlsx'])]} />)
     await user.click(box())
     expectNoIds()
+  })
+})
+
+describe('forgetting recent searches', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    useToastStore.getState().clear()
+    useAuthStore.setState({ user: ME, accessToken: 't', bootstrapping: false })
+  })
+  afterEach(() => {
+    switchPreferencesTo(undefined)
+    localStorage.clear()
+  })
+
+  const rows = () => screen.queryAllByRole('option').map((o) => o.getAttribute('aria-label'))
+
+  it('folds a row away with its ✕ while the others stay, and tells a screen reader', async () => {
+    const user = userEvent.setup()
+    render(<KeptHarness words={['một', 'hai', 'ba']} />)
+    await user.click(box())
+    await user.click(within(screen.getByRole('option', { name: 'Tìm lại hai' })).getByTitle('Xoá khỏi Tìm gần đây'))
+    await waitFor(() => expect(rows()).toEqual(['Tìm lại ba', 'Tìm lại một']))
+    expect(screen.getByText('Đã xoá “hai” khỏi Tìm gần đây')).toBeInTheDocument()
+    expect(box()).toHaveFocus()
+    expect(useToastStore.getState().toasts).toHaveLength(0)
+  })
+
+  it('moves the mark to the next row on Delete, and to the one before when the last goes', async () => {
+    const user = userEvent.setup()
+    render(<KeptHarness words={['một', 'hai', 'ba']} />)
+    await user.click(box())
+    // Newest first: ba, hai, một.
+    await user.keyboard('{ArrowDown}{Delete}')
+    await waitFor(() => expect(rows()).toEqual(['Tìm lại hai', 'Tìm lại một']))
+    expect(screen.getByRole('option', { name: 'Tìm lại hai' })).toHaveAttribute('aria-selected', 'true')
+    await user.keyboard('{ArrowDown}{Delete}')
+    await waitFor(() => expect(rows()).toEqual(['Tìm lại hai']))
+    expect(screen.getByRole('option', { name: 'Tìm lại hai' })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('takes the group label with the last row', async () => {
+    const user = userEvent.setup()
+    render(<KeptHarness words={['một']} />)
+    await user.click(box())
+    expect(screen.getByRole('group', { name: 'Tìm gần đây' })).toBeInTheDocument()
+    await user.keyboard('{ArrowDown}{Delete}')
+    await waitFor(() => expect(screen.queryByText('Tìm gần đây')).toBeNull())
+  })
+
+  it('leaves Delete to the text while the box holds words', async () => {
+    const user = userEvent.setup()
+    render(<KeptHarness words={['một', 'hai']} />)
+    await user.click(box())
+    await user.keyboard('{ArrowDown}')
+    await user.keyboard('x{Home}{Delete}')
+    expect(box()).toHaveValue('')
+    expect(JSON.parse(localStorage.getItem(`ngac-recent-searches:drive:${ME.id}`)!)).toEqual(['hai', 'một'])
+  })
+
+  it('offers Xoá tất cả from two searches on, with no confirmation, and a Hoàn tác toast that brings them back', async () => {
+    const user = userEvent.setup()
+    render(<KeptHarness words={['một', 'hai']} />)
+    await user.click(box())
+    await user.click(screen.getByRole('button', { name: 'Xoá tất cả' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    await waitFor(() => expect(rows()).toEqual([]))
+    expect(box()).toHaveFocus()
+    const [toast] = useToastStore.getState().toasts
+    expect(toast).toMatchObject({ message: 'Đã xoá 2 lần tìm gần đây', action: { label: 'Hoàn tác' }, duration: 5000 })
+
+    await user.click(box())
+    act(() => toast!.action!.onClick())
+    await user.click(box())
+    await waitFor(() => expect(rows()).toEqual(['Tìm lại hai', 'Tìm lại một']))
+  })
+
+  it('has no Xoá tất cả for a single search', async () => {
+    const user = userEvent.setup()
+    render(<KeptHarness words={['một']} />)
+    await user.click(box())
+    expect(screen.queryByRole('button', { name: 'Xoá tất cả' })).toBeNull()
+  })
+
+  it('reaches Xoá tất cả with Tab and keeps the surface open; Esc there goes back to the box, a second Tab leaves', async () => {
+    const user = userEvent.setup()
+    render(<KeptHarness words={['một', 'hai']} />)
+    await user.click(box())
+    await user.tab()
+    expect(screen.getByRole('button', { name: 'Xoá tất cả' })).toHaveFocus()
+    expect(screen.getByRole('listbox')).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    expect(box()).toHaveFocus()
+    expect(screen.getByRole('listbox')).toBeInTheDocument()
+    await user.tab()
+    await user.tab()
+    expect(screen.getByRole('button', { name: 'Ở ngoài' })).toHaveFocus()
+    expect(screen.queryByRole('listbox')).toBeNull()
+  })
+
+  it('shows ✕ on a phone row with a 44px target, and Xoá tất cả above the rows', async () => {
+    const user = userEvent.setup()
+    render(<Harness variant="screen" groups={[{ ...recent(['một', 'hai']), onClearAll: vi.fn() }]} />)
+    await user.click(phoneBox())
+    expect(screen.getByRole('button', { name: 'Xoá “một” khỏi Tìm gần đây' })).toHaveClass('w-11', 'h-11')
+    expect(screen.getByRole('button', { name: 'Xoá tất cả' })).toHaveClass('h-11')
+  })
+})
+
+describe('motion', () => {
+  afterEach(() => switchPreferencesTo(undefined))
+
+  const surface = () => screen.getByRole('combobox').closest('div[style*="--sx-open-w"]') as HTMLElement
+
+  it('grows the surface out of the box with a clip, and slides the rows in', async () => {
+    const user = userEvent.setup()
+    render(<Harness groups={[recent(['hợp đồng'])]} />)
+    expect(surface().style.transition).toContain('clip-path')
+    expect(surface().style.getPropertyValue('--sx-rest-clip')).toContain('inset(4px')
+    await user.click(box())
+    expect(surface().style.clipPath).toContain('-24px')
+    expect(screen.getByRole('option').parentElement!.style.transform).toContain('translateY(-4px)')
+  })
+
+  it('under reduced motion changes the surface at once and the rows only fade', async () => {
+    switchPreferencesTo('user-a')
+    updatePreferences({ motion: 'reduce' })
+    const user = userEvent.setup()
+    render(<Harness groups={[recent(['hợp đồng'])]} />)
+    await user.click(box())
+    expect(surface().style.transition).toBe('none')
+    const row = screen.getByRole('option').parentElement!
+    expect(row.style.transform).toBe('')
+    expect(row.style.opacity).not.toBe('')
+  })
+})
+
+describe('with nothing to suggest on a desktop', () => {
+  it('opens the surface with how to search when it was asked to', async () => {
+    const user = userEvent.setup()
+    render(<Harness showWhenEmpty emptyText="Tìm tin nhắn, người và nhóm." groups={[recent([])]} />)
+    await user.click(box())
+    expect(screen.getByText('Tìm tin nhắn, người và nhóm.')).toBeInTheDocument()
+    expect(box()).toHaveAttribute('aria-expanded', 'true')
+    expect(box()).not.toHaveAttribute('aria-controls')
   })
 })

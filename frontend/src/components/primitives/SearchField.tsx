@@ -13,13 +13,18 @@ interface SearchFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, '
    * and `trailing` (a clear button) beside a 16px box and no magnifier.
    */
   pill?: boolean
+  /**
+   * No fill, no corners, no focus outline of its own: the box sits inside a surface that draws all three
+   * (`SearchBox`) and fills it, so the input does not move when the surface opens.
+   */
+  bare?: boolean
   leading?: ReactNode
   trailing?: ReactNode
 }
 
 /** Search box: magnifier + bare input in a 36px control, focus shown as a ring. */
 export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(
-  ({ label, tone = 'base', moduleSearch, pill, leading, trailing, className = '', placeholder, ...props }, ref) => pill ? (
+  ({ label, tone = 'base', moduleSearch, pill, bare, leading, trailing, className = '', placeholder, ...props }, ref) => pill ? (
     <div className={`flex items-center gap-1 h-13 pl-1 pr-2 rounded-full bg-sunk ring-2 ring-inset ring-accent ${className}`}>
       {leading}
       <input
@@ -36,7 +41,9 @@ export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(
     </div>
   ) : (
     <label
-      className={`flex items-center gap-2 h-9 px-3 rounded-md text-ink-muted cursor-text
+      className={bare
+        ? `flex items-center gap-2 h-full w-full px-3 text-ink-muted cursor-text ${className}`
+        : `flex items-center gap-2 h-9 px-3 rounded-md text-ink-muted cursor-text
         focus-within:outline-2 focus-within:outline-focus focus-within:outline-offset-2
         ${tone === 'sunk' ? 'bg-sunk' : 'bg-base'} ${className}`}
     >

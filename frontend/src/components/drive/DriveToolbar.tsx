@@ -1,7 +1,9 @@
 import { useRef, useState, type InputHTMLAttributes, type Ref } from 'react'
 import { ArrowLeft, ChevronDown, FolderPlus, LayoutGrid, List, Upload } from 'lucide-react'
 import type { FileViewMode } from '../../stores/file-view.store'
-import { Button, IconButton, MenuItem, Popover, Pressable, SearchField } from '../primitives'
+import type { SuggestionPanel } from '../../hooks/useSuggestionPanel'
+import { Button, IconButton, MenuItem, Popover, Pressable } from '../primitives'
+import { SearchBox } from '../patterns/SearchBox'
 import { SORT_OPTIONS, TYPE_FILTERS, type SortKey, type TypeFilter } from './drive-model'
 import type { DriveLayout } from './use-drive-layout'
 
@@ -26,9 +28,14 @@ interface DriveToolbarProps {
   searchRef?: Ref<HTMLInputElement>
   /** The suggestions' combobox props and key handling, spread on the search box. */
   searchProps?: InputHTMLAttributes<HTMLInputElement>
+  /** The box's suggestions: on a desktop or a tablet the box opens into them. */
+  suggestPanel?: SuggestionPanel
   /** On a phone, while the suggestions cover the files: only Quay lại and the box are shown. */
   onBack?: () => void
 }
+
+/** What the open search says while there is nothing to suggest. */
+export const SEARCH_HINT = 'Gõ tên tệp hoặc thư mục để tìm.'
 
 const CHIP = `press shrink-0 h-8 px-3 rounded-md cursor-pointer text-small focus-ring max-lg:h-10`
 const chipTone = (on: boolean) => (on ? 'bg-accent-wash text-ink font-semibold' : 'bg-sunk text-ink font-medium hover:bg-hover')
@@ -46,8 +53,12 @@ export function DriveToolbar(props: DriveToolbarProps) {
   const sortLabel = SORT_OPTIONS.find((s) => s.id === sort)!.label
 
   const box = (
-    <SearchField
+    <SearchBox
       ref={props.searchRef}
+      panel={props.suggestPanel}
+      shape="pill"
+      slotClassName={`max-lg:h-11 ${layout === 'desktop' ? 'w-60 shrink-0' : 'flex-1 min-w-0'}`}
+      emptyText={SEARCH_HINT}
       label="Tìm tệp hoặc thư mục"
       placeholder={`Tìm trong ${props.folderLabel}`}
       moduleSearch

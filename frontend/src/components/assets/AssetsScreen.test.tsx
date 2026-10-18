@@ -1069,7 +1069,7 @@ describe('AssetsScreen: suggestions in the empty search box', () => {
     await within(table('Tài sản')).findByText(MAC7)
     await user.click(box())
     const list = await screen.findByRole('listbox', { name: 'Gợi ý tìm kiếm' })
-    expect(within(list).getByRole('option', { name: 'macbook' })).toBeInTheDocument()
+    expect(within(list).getByRole('option', { name: 'Tìm lại macbook' })).toBeInTheDocument()
     const held = await within(list).findByRole('group', { name: 'Bạn đang giữ' })
     expect(within(held).getAllByRole('option').map((o) => o.querySelector('.font-medium')?.textContent)).toEqual(['Màn hình Dell 24 inch, kho'])
     expect(calls.some((c) => c.query.get('assigned_to') === U.hoa.id)).toBe(true)
@@ -1095,7 +1095,7 @@ describe('AssetsScreen: suggestions in the empty search box', () => {
     await user.click(await screen.findByRole('option', { name: /Máy in HP LaserJet tầng 3/ }))
     await waitFor(() => expect(search(router).asset).toBe(A.printer))
     await user.click(box())
-    await user.click(await screen.findByRole('option', { name: 'vinh' }))
+    await user.click(await screen.findByRole('option', { name: 'Tìm lại vinh' }))
     await waitFor(() => expect(search(router).q).toBe('vinh'))
   })
 

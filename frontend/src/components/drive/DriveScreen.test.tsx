@@ -1107,7 +1107,7 @@ describe('DriveScreen: suggestions in the empty search box', () => {
     expect(calls.some((c) => c.path === '/drive/shared-with-me')).toBe(false)
     await user.click(box())
     const list = await screen.findByRole('listbox', { name: 'Gợi ý tìm kiếm' })
-    expect(within(list).getByRole('option', { name: 'sao kê' })).toBeInTheDocument()
+    expect(within(list).getByRole('option', { name: 'Tìm lại sao kê' })).toBeInTheDocument()
     const edited = within(list).getByRole('group', { name: 'Sửa gần đây trong Đối soát' })
     const names = within(edited).getAllByRole('option').map((o) => o.querySelector('.font-medium')?.textContent)
     expect(names[0]).toBe('doi-soat-08-10.xlsx')
@@ -1138,7 +1138,7 @@ describe('DriveScreen: suggestions in the empty search box', () => {
     await user.type(box(), 'bien{Enter}')
     expect(JSON.parse(localStorage.getItem(`ngac-recent-searches:drive:${U.hoa.id}`)!)).toEqual(['bien'])
     await user.clear(box())
-    await user.click(await screen.findByRole('option', { name: 'bien' }))
+    await user.click(await screen.findByRole('option', { name: 'Tìm lại bien' }))
     expect(box()).toHaveValue('bien')
   })
 

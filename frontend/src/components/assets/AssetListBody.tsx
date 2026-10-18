@@ -7,13 +7,18 @@ import type { PeopleDirectory } from '../../lib/people'
 import { ASSET_STATES, stateLabel } from '../../lib/asset-model'
 import { assetSearch, filterSearch, pageSearch, type AssetsSearch } from '../../lib/assets-search'
 import type { MotionPresets } from '../../lib/motion'
-import { Button, FilterChip, IconButton, SearchField } from '../primitives'
+import type { SuggestionPanel } from '../../hooks/useSuggestionPanel'
+import { Button, FilterChip, IconButton } from '../primitives'
+import { SearchBox } from '../patterns/SearchBox'
 import { EmptyState } from '../spaces/EmptyState'
 import { AssetTable, type RealtimeTag } from './AssetTable'
 import type { Summary } from './AssetOverview'
 import { TypeFilter } from './TypeFilter'
 
 export const PAGE = 25
+
+/** What the open search says while there is nothing to suggest. */
+export const SEARCH_HINT = 'Gõ tên tài sản hoặc người giữ để tìm.'
 
 interface Props {
   search: AssetsSearch
@@ -41,7 +46,9 @@ interface Props {
   searchRef?: Ref<HTMLInputElement>
   /** The suggestions' combobox props and key handling, spread on the search box. */
   searchProps?: InputHTMLAttributes<HTMLInputElement>
-  /** What the empty box suggests: a popover on a desktop, the rows over the table on a phone. */
+  /** The box's suggestions: on a desktop the box opens into them. */
+  panel?: SuggestionPanel
+  /** What the empty box suggests on a phone: the rows over the table. */
   suggestions?: ReactNode
   /** On a phone, the suggestions cover the table: only Quay lại and the box are shown above them. */
   covered?: boolean
@@ -53,7 +60,7 @@ interface Props {
 /** The Danh sách tab: filters, the table or why it is empty, and the pager. */
 export function AssetListBody({
   search, go, typed, onTyped, summary, types, requestable, rows, total, page, loading, people, openId, scope,
-  fresh, versionOf, tagOf, route, onAddAsset, searchRef, searchProps, suggestions, covered = false, onBack, onOpened,
+  fresh, versionOf, tagOf, route, onAddAsset, searchRef, searchProps, suggestions, covered = false, onBack, onOpened, panel,
 }: Props) {
   const filtered = !!(search.state || search.kind || search.q)
   const counts = summary?.byState ?? {}
@@ -68,17 +75,19 @@ export function AssetListBody({
             <ArrowLeft size={20} strokeWidth={1.75} aria-hidden="true" />
           </IconButton>
         )}
-        <SearchField
+        <SearchBox
           ref={searchRef}
+          panel={panel}
           label="Tìm tài sản"
           moduleSearch
           value={typed}
           {...searchProps}
           onChange={(e) => onTyped(e.target.value)}
           className={covered ? 'flex-1 min-w-0' : 'w-full sm:w-56'}
+          slotClassName="w-full sm:w-56"
+          emptyText={SEARCH_HINT}
           tone="sunk"
         />
-        {!covered && suggestions}
         {/* While the suggestions cover the table on a phone, filters would change a list that cannot be seen. */}
         {!covered && <>
         <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Lọc theo trạng thái">

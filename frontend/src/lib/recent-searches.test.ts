@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { MAX_RECENT, addRecent, clearAllRecent, readRecent, removeRecent } from './recent-searches'
+import { MAX_RECENT, addRecent, clearAllRecent, clearRecent, readRecent, removeRecent, restoreRecent } from './recent-searches'
 
 beforeEach(() => localStorage.clear())
 
@@ -124,5 +124,32 @@ describe('Chat searches kept before every module had its own', () => {
     expect(readRecent('chat', 'u1')).toEqual(['đối soát'])
     vi.restoreAllMocks()
     expect(localStorage.getItem(LEGACY)).not.toBeNull()
+  })
+})
+
+describe('forgetting every search of one module and taking it back', () => {
+  it('empties one module and hands back what it held, leaving the others alone', () => {
+    addRecent('chat', 'u1', 'tạm ứng')
+    addRecent('chat', 'u1', 'đối soát')
+    addRecent('drive', 'u1', 'hợp đồng')
+    expect(clearRecent('chat', 'u1')).toEqual(['đối soát', 'tạm ứng'])
+    expect(readRecent('chat', 'u1')).toEqual([])
+    expect(readRecent('drive', 'u1')).toEqual(['hợp đồng'])
+  })
+
+  it('puts a list back in its order, with anything searched meanwhile in front', () => {
+    addRecent('chat', 'u1', 'một')
+    addRecent('chat', 'u1', 'hai')
+    const before = clearRecent('chat', 'u1')
+    addRecent('chat', 'u1', 'ba')
+    expect(restoreRecent('chat', 'u1', before)).toEqual(['ba', 'hai', 'một'])
+    expect(readRecent('chat', 'u1')).toEqual(['ba', 'hai', 'một'])
+  })
+
+  it('does not repeat a search that came back and was typed again, and still keeps eight', () => {
+    const before = Array.from({ length: MAX_RECENT }, (_, i) => `cũ ${i + 1}`)
+    addRecent('chat', 'u1', 'CŨ 2')
+    expect(restoreRecent('chat', 'u1', before)).toHaveLength(MAX_RECENT)
+    expect(readRecent('chat', 'u1').filter((x) => x.toLowerCase() === 'cũ 2')).toHaveLength(1)
   })
 })

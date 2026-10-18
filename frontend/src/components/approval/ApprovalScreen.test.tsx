@@ -930,7 +930,7 @@ describe('ApprovalScreen: the search box', () => {
     expect(calls.some((c) => c.path === '/approval/my-requests')).toBe(false)
     await user.click(box())
     const list = await screen.findByRole('listbox', { name: 'Gợi ý tìm kiếm' })
-    expect(within(list).getByRole('option', { name: 'công tác' })).toBeInTheDocument()
+    expect(within(list).getByRole('option', { name: 'Tìm lại công tác' })).toBeInTheDocument()
     const waiting = within(list).getByRole('group', { name: 'Chờ bạn duyệt' })
     expect(within(waiting).getAllByRole('option')[0]).toHaveTextContent('Tạm ứng công tác phí tháng 10')
     const mine = await within(list).findByRole('group', { name: 'Đề nghị của bạn' })
