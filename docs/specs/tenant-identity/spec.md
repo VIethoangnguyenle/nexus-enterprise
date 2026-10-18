@@ -260,3 +260,6 @@ Success answers `200 {"type":"organization","converted_by_name":"<display name>"
 #### Scenario: Details after conversion
 - **WHEN** a member reads the workspace details after it was converted
 - **THEN** they see type `organization`, the owner's and the converter's names, and the time of conversion
+
+## Planned change (mobile-ux-overhaul, 2026-10-19)
+Phase 05: a workspace's kind is fixed at creation; the personal → organization conversion (route and screen) is removed and no conversion exists in either direction. See `mobile-shell`. Plan: `plans/261018-1742-mobile-ux-overhaul`.

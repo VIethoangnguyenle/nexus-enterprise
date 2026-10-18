@@ -1,0 +1,1815 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vỏ điện thoại và cài đặt</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Bricolage+Grotesque:opsz,wght@12..96,600..700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* Phone shell in the Lark direction (brainstorm 2026-10-19, plans/reports/brainstorm-261019-0004-mobile-ux-settings.md):
+   one docked bottom bar for every module (four slots the person picks + Thêm), the ☰ drawer retired, one search per
+   module screen, and settings in three scopes — Tôi (personal), each module, each conversation. Replaces the
+   navigation part of chat-mobile-home.html; screens inside a conversation stay as chat-mobile.html. */
+* { box-sizing: border-box; }
+body { background: var(--color-base); color: var(--color-ink); font-family: var(--font-body); font-size: 0.875rem; line-height: 1.5; padding-inline: 16px; padding-block: 0 64px; margin: 0; }
+svg.i { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+svg.i.s { width: 16px; height: 16px; } svg.i.l { width: 24px; height: 24px; }
+:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+p { margin: 0; }
+h1, h2, h3 { margin: 0; font-family: var(--font-display); text-wrap: balance; }
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* review chrome */
+.page { max-width: 1400px; margin-inline: auto; display: grid; gap: 56px; }
+.page > header { padding-block: 40px 0; display: grid; gap: 16px; }
+.page > header h1 { font-size: 1.75rem; line-height: 1.2; font-weight: 700; letter-spacing: -0.01em; }
+.page > header p { max-width: 80ch; font-size: 1rem; line-height: 1.6; color: var(--color-ink-muted); }
+.toc { display: flex; gap: 6px; flex-wrap: wrap; }
+.toc a { color: var(--color-ink); text-decoration: none; font-weight: 600; padding: 6px 12px; border-radius: 999px; background: var(--color-sunk); }
+.screen { display: grid; gap: 16px; scroll-margin-top: 16px; }
+.screen-head { display: grid; gap: 6px; max-width: 86ch; }
+.screen-head h2 { font-size: 1.375rem; font-weight: 700; }
+.screen-head p { color: var(--color-ink-muted); font-size: 0.9375rem; }
+.notes { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; max-width: 90ch; color: var(--color-ink-muted); }
+.notes b { color: var(--color-ink); }
+.phones { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+.ph { display: grid; gap: 10px; justify-items: center; }
+.ph > small { color: var(--color-ink-muted); font-weight: 600; max-width: 390px; text-align: center; }
+.ph > small.was { color: var(--color-danger); }
+
+/* primitives */
+.ibtn { width: 44px; height: 44px; display: inline-grid; place-items: center; border-radius: 999px; border: 0; background: transparent; color: var(--color-ink-muted); cursor: pointer; position: relative; flex: none; }
+.av { --p: var(--color-person-1); width: 32px; height: 32px; border-radius: 50%; display: inline-grid; place-items: center; flex: none; background: var(--p); color: var(--color-on-person); font: 600 0.75rem/1 var(--font-body); position: relative; }
+.av.s28 { width: 28px; height: 28px; font-size: 0.6875rem; } .av.s44 { width: 44px; height: 44px; font-size: 0.875rem; } .av.s64 { width: 64px; height: 64px; font-size: 1.25rem; }
+.av.stack { box-shadow: 0 0 0 2px var(--color-base); }
+.sp { --p: var(--color-person-4); width: 44px; height: 44px; border-radius: 12px; display: inline-grid; place-items: center; flex: none; background: var(--p); color: var(--color-on-person); font: 700 0.9375rem/1 var(--font-display); }
+.sp.s28 { width: 28px; height: 28px; border-radius: 8px; font-size: 0.75rem; } .sp.s72 { width: 72px; height: 72px; border-radius: 20px; font-size: 1.5rem; }
+.count { display: inline-flex; align-items: center; justify-content: center; height: 18px; min-width: 18px; padding: 0 6px; border-radius: 999px; background: var(--color-accent); color: var(--color-on-accent); font: 600 0.6875rem/1 var(--font-body); font-variant-numeric: tabular-nums; flex: none; }
+.muted { color: var(--color-ink-muted); }
+.pill-ok { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 999px; background: var(--color-accent-wash); font-weight: 600; font-size: 0.75rem; }
+.pill-ok::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--color-success); }
+
+/* phone */
+.phone { width: min(390px, calc(100vw - 48px)); height: 820px; border-radius: 32px; background: var(--color-base); overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; position: relative; isolation: isolate; box-shadow: 0 0 0 8px var(--color-sunk); margin: 8px; }
+.phone.nobar { grid-template-rows: auto minmax(0, 1fr); }
+.sbar { display: flex; align-items: center; justify-content: space-between; height: 34px; padding: 0 22px; font: 600 0.8125rem/1 var(--font-body); }
+.sbar span:last-child { width: 22px; height: 10px; border-radius: 3px; background: currentColor; opacity: 0.8; }
+.pbody { overflow: auto; min-height: 0; position: relative; scrollbar-width: none; padding-bottom: 108px; }
+.nobar .pbody { padding-bottom: 24px; }
+
+/* top bar: workspace tile · search · avatar (no ☰) */
+.spill { display: flex; align-items: center; gap: 4px; height: 52px; margin: 4px 12px 0; padding: 0 4px; border-radius: 999px; background: var(--color-sunk); }
+.spill .ws { width: 44px; height: 44px; border: 0; border-radius: 50%; background: transparent; display: grid; place-items: center; cursor: pointer; position: relative; }
+.spill .ws b { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; background: var(--color-accent); color: var(--color-on-accent); font: 700 0.875rem/1 var(--font-display); }
+.spill .ws .dot { position: absolute; top: 5px; right: 5px; width: 9px; height: 9px; border-radius: 50%; background: var(--color-accent); box-shadow: 0 0 0 2px var(--color-sunk); }
+.spill .q { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; height: 44px; border: 0; background: transparent; text-align: left; padding: 0 4px; color: var(--color-ink-muted); font: 400 1rem/1 var(--font-body); white-space: nowrap; overflow: hidden; cursor: text; }
+.spill .me { width: 44px; height: 44px; border: 0; padding: 0; border-radius: 50%; background: transparent; display: grid; place-items: center; cursor: pointer; }
+
+/* title row: title · one primary action · ⋯ */
+.ttl { display: flex; align-items: center; gap: 6px; padding: 14px 8px 6px 16px; }
+.ttl h2 { flex: 1; min-width: 0; font-size: 1.625rem; line-height: 1.2; font-weight: 700; letter-spacing: -0.01em; }
+.tbtn { display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 14px 0 10px; border: 0; border-radius: 999px; background: var(--color-sunk); color: var(--color-ink); font: 600 0.875rem/1 var(--font-body); cursor: pointer; flex: none; }
+.tbtn.primary { background: var(--color-accent); color: var(--color-on-accent); }
+
+/* scrolling tab/chip rows with an edge fade */
+.tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding: 4px 16px 0; border-bottom: 1px solid var(--color-line); mask-image: linear-gradient(90deg, #000 85%, transparent); }
+.tabs a { flex: none; padding: 10px 10px 12px; font-weight: 600; color: var(--color-ink-muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+.tabs a[aria-current] { color: var(--color-ink); border-color: var(--color-accent); }
+.chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 6px 16px 8px; mask-image: linear-gradient(90deg, #000 88%, transparent); }
+.chips a { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 999px; background: var(--color-sunk); color: var(--color-ink); text-decoration: none; font-weight: 600; white-space: nowrap; }
+.chips a[aria-current] { background: var(--color-accent-wash); box-shadow: inset 0 0 0 1px var(--color-accent); }
+
+/* list rows */
+.row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 16px; min-height: 68px; }
+.row .t { display: flex; gap: 8px; align-items: baseline; }
+.row .t b { flex: 1; min-width: 0; font-size: 1rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .t time { color: var(--color-ink-muted); font-size: 0.8125rem; }
+.row .s { color: var(--color-ink-muted); font-size: 0.875rem; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.row.unread .t b, .row.unread .t time { font-weight: 700; color: var(--color-ink); }
+.row.unread .s { color: var(--color-ink); font-weight: 600; }
+.card { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; margin: 0 16px 8px; padding: 12px; border-radius: 16px; background: var(--color-raised); }
+.fico { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--color-sunk); color: var(--color-ink-muted); }
+.sec { padding: 14px 16px 6px; font-size: 0.75rem; font-weight: 600; color: var(--color-ink-muted); letter-spacing: 0.04em; text-transform: uppercase; }
+
+/* bottom bar (every module): Lark's content (modules, customizable, Thêm) in Google Chat's form (floating pill + separate +) */
+.bbar { position: absolute; left: 12px; right: 86px; bottom: 22px; z-index: 20; display: grid; grid-template-columns: repeat(5, 1fr); height: 64px; padding: 0 4px; border-radius: 999px; background: color-mix(in srgb, var(--color-overlay) 90%, transparent); backdrop-filter: blur(16px); box-shadow: var(--shadow-overlay), inset 0 0 0 1px var(--color-line); transition: transform 240ms var(--ease-out-expo), height 240ms var(--ease-out-expo); }
+.bbar a { display: grid; justify-items: center; align-content: center; gap: 2px; color: var(--color-ink-muted); text-decoration: none; font: 500 0.6875rem/1.1 var(--font-body); position: relative; white-space: nowrap; }
+.bbar a .ic { width: 48px; height: 30px; border-radius: 999px; display: grid; place-items: center; }
+.bbar a[aria-current] { color: var(--color-ink); font-weight: 600; }
+.bbar a[aria-current] .ic { background: var(--color-accent-wash); color: var(--color-accent); }
+.bbar a .count { position: absolute; top: 4px; left: calc(50% + 4px); box-shadow: 0 0 0 2px var(--color-overlay); }
+.bbar a .bdot { position: absolute; top: 8px; left: calc(50% + 10px); width: 9px; height: 9px; border-radius: 50%; background: var(--color-accent); box-shadow: 0 0 0 2px var(--color-overlay); }
+/* scrolled down in a list: labels fold away and the pill shrinks to icons, giving the conversation list room */
+.bbar.compact { height: 52px; } .bbar.compact a { font-size: 0; gap: 0; } .bbar.compact a .count { top: 0; }
+.fab { position: absolute; right: 12px; bottom: 22px; z-index: 21; width: 64px; height: 64px; border: 0; border-radius: 20px; background: var(--color-accent-wash); color: var(--color-accent); display: grid; place-items: center; box-shadow: var(--shadow-overlay); }
+.fab.ext { width: auto; padding: 0 18px 0 14px; display: flex; gap: 8px; font: 600 0.9375rem/1 var(--font-body); right: 12px; bottom: 98px; height: 52px; border-radius: 18px; }
+.nobar-pad .pbody { padding-bottom: 24px; }
+.qjump { position: absolute; z-index: 36; left: 12px; bottom: 96px; width: 230px; border-radius: 18px; background: var(--color-overlay); box-shadow: var(--shadow-overlay); padding: 6px; }
+.qjump a { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 12px; border-radius: 12px; color: var(--color-ink); text-decoration: none; font-weight: 500; }
+.qjump a .count { margin-left: auto; }
+/* variant B: Google Chat's own pill inside Chat, Lark grid button to switch module */
+.gbar { position: absolute; left: 12px; right: 86px; bottom: 22px; z-index: 20; display: grid; grid-template-columns: 52px repeat(4, 1fr); height: 64px; padding: 0 4px; border-radius: 999px; background: color-mix(in srgb, var(--color-overlay) 90%, transparent); box-shadow: var(--shadow-overlay), inset 0 0 0 1px var(--color-line); align-items: center; }
+.gbar > a { display: grid; place-items: center; color: var(--color-ink-muted); position: relative; height: 44px; }
+.gbar > a[aria-current] span { width: 56px; height: 40px; border-radius: 999px; display: grid; place-items: center; background: var(--color-accent-wash); color: var(--color-accent); }
+.gbar > a.switch { border-right: 1px solid var(--color-line); }
+.gbar .count { position: absolute; top: 0; left: calc(50% + 4px); }
+
+/* sheets and scrim */
+.scrim { position: absolute; inset: 0; z-index: 30; background: var(--color-scrim); }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 35; background: var(--color-overlay); border-radius: 24px 24px 0 0; box-shadow: var(--shadow-overlay); padding: 8px 0 28px; max-height: 88%; overflow: auto; }
+.sheet .grab { width: 36px; height: 4px; border-radius: 999px; background: var(--color-line); margin: 0 auto 10px; }
+.sheet h3 { font-size: 1.0625rem; padding: 4px 16px 8px; display: flex; justify-content: space-between; align-items: center; }
+.sheet h3 a { font: 600 0.875rem/1 var(--font-body); color: var(--color-accent); text-decoration: none; }
+.mgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px 4px; padding: 4px 12px 8px; }
+.mgrid a { display: grid; justify-items: center; gap: 6px; padding: 8px 0; color: var(--color-ink); text-decoration: none; font-size: 0.8125rem; font-weight: 500; text-align: center; position: relative; }
+.mgrid .tile { width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; background: var(--color-sunk); color: var(--color-ink); position: relative; }
+.mgrid a.pinned .tile { box-shadow: inset 0 0 0 2px var(--color-accent); }
+.mgrid .tile .count { position: absolute; top: -4px; right: -6px; box-shadow: 0 0 0 2px var(--color-overlay); }
+.mgrid a small { color: var(--color-ink-muted); font-size: 0.6875rem; margin-top: -4px; }
+.wsrow { display: flex; align-items: center; gap: 12px; margin: 4px 12px 8px; padding: 10px 12px; border-radius: 16px; background: var(--color-sunk); }
+.wsrow b.lt { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; background: var(--color-accent); color: var(--color-on-accent); font: 700 1rem/1 var(--font-display); }
+.wsrow > span { flex: 1; min-width: 0; display: grid; }
+.wsrow small { color: var(--color-ink-muted); }
+.slot { display: flex; align-items: center; gap: 12px; padding: 0 16px; min-height: 56px; }
+.slot .fico { width: 36px; height: 36px; border-radius: 10px; }
+.slot > span { flex: 1; font-weight: 500; font-size: 0.9375rem; }
+.slot .grip { color: var(--color-ink-subtle); }
+.sw { width: 44px; height: 26px; border-radius: 999px; background: var(--color-line); position: relative; flex: none; }
+.sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--color-raised); box-shadow: 0 1px 2px rgb(0 0 0 / 0.2); }
+.sw.on { background: var(--color-accent); } .sw.on::after { left: 21px; }
+.hint { padding: 8px 16px 0; color: var(--color-ink-muted); font-size: 0.8125rem; }
+
+/* detail top bar (back · title · actions) */
+.dbar { display: flex; align-items: center; gap: 2px; height: 56px; padding: 0 6px; }
+.dbar h2 { flex: 1; min-width: 0; font-size: 1.0625rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dbar .who { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; border: 0; background: transparent; padding: 4px 6px; border-radius: 12px; text-align: left; cursor: pointer; color: var(--color-ink); }
+.dbar .who span { display: grid; min-width: 0; }
+.dbar .who b { font: 700 1.0625rem/1.25 var(--font-display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 2px; }
+.dbar .who small { color: var(--color-ink-muted); font-size: 0.8125rem; }
+
+/* grouped settings list (iOS / Lark pattern) */
+.grp { margin: 0 16px 12px; border-radius: 16px; background: var(--color-raised); overflow: hidden; }
+.grp-t { padding: 14px 32px 6px; font-size: 0.8125rem; font-weight: 600; color: var(--color-ink-muted); }
+.it { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 12px 8px 14px; }
+.it + .it { border-top: 1px solid var(--color-line); }
+.it .fico { width: 32px; height: 32px; border-radius: 9px; }
+.it > span { flex: 1; min-width: 0; display: grid; }
+.it > span b { font-weight: 500; font-size: 0.9375rem; }
+.it > span small { color: var(--color-ink-muted); font-size: 0.8125rem; }
+.it .val { color: var(--color-ink-muted); font-size: 0.875rem; white-space: nowrap; }
+.it .chev { color: var(--color-ink-subtle); }
+.it > .fico, .it > .av, .it > .val, .it > .sw, .it > .radio { flex: none; display: inline-grid; }
+.it > .members { flex: none; display: flex; }
+.it.danger { color: var(--color-danger); } .it.danger .fico { background: color-mix(in srgb, var(--color-danger) 12%, transparent); color: var(--color-danger); }
+.it.center { justify-content: center; font-weight: 600; }
+.radio { width: 22px; height: 22px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--color-line); flex: none; }
+.radio.on { box-shadow: inset 0 0 0 7px var(--color-accent); }
+.me-card { display: flex; gap: 14px; align-items: center; margin: 4px 16px 14px; padding: 16px; border-radius: 20px; background: var(--color-raised); }
+.me-card > span:not(.av):not(.sp) { flex: 1; display: grid; gap: 4px; min-width: 0; justify-items: start; }
+.me-card b { font: 700 1.125rem/1.2 var(--font-display); }
+
+/* conversation settings head */
+.chead { display: grid; justify-items: center; gap: 6px; padding: 8px 16px 14px; text-align: center; }
+.chead b { font: 700 1.25rem/1.2 var(--font-display); }
+.quick { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 0 16px 14px; }
+.quick a { display: grid; justify-items: center; gap: 6px; padding: 12px 0 10px; border-radius: 16px; background: var(--color-raised); color: var(--color-ink); text-decoration: none; font-size: 0.8125rem; font-weight: 500; }
+.members { display: flex; align-items: center; gap: 0; }
+.members .av { margin-right: -8px; }
+.members .more { margin-left: 14px; }
+
+/* menu popover (⋯) */
+.pop { position: absolute; z-index: 36; right: 10px; top: 140px; width: 240px; border-radius: 16px; background: var(--color-overlay); box-shadow: var(--shadow-overlay); padding: 6px; }
+.pop a { display: flex; gap: 12px; align-items: center; min-height: 48px; padding: 0 12px; border-radius: 10px; color: var(--color-ink); text-decoration: none; font-weight: 500; }
+.pop a:first-child { background: var(--color-hover); }
+/* search (§6) */
+.sfield { display: flex; align-items: center; gap: 4px; height: 52px; margin: 4px 12px 0; padding: 0 4px; border-radius: 999px; background: var(--color-raised); box-shadow: inset 0 0 0 2px var(--color-accent); }
+.sfield .in { flex: 1; min-width: 0; font: 400 1rem/1 var(--font-body); color: var(--color-ink); display: flex; align-items: center; }
+.sfield .in::after { content: ""; width: 2px; height: 20px; background: var(--color-accent); margin-left: 1px; }
+.sfield .in.empty { color: var(--color-ink-muted); }
+.sfield .in.empty::after { order: -1; margin: 0 2px 0 0; }
+.scope { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 10px 12px 6px; mask-image: linear-gradient(90deg, #000 88%, transparent); }
+.scope a { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 999px; background: var(--color-sunk); color: var(--color-ink); text-decoration: none; font-weight: 600; font-size: 0.8125rem; white-space: nowrap; }
+.scope a[aria-current] { background: var(--color-ink); color: var(--color-base); }
+.scope a.flt { background: transparent; box-shadow: inset 0 0 0 1px var(--color-line); font-weight: 500; }
+.scope a.flt.on { background: var(--color-accent-wash); box-shadow: inset 0 0 0 1px var(--color-accent); font-weight: 600; }
+.shead { display: flex; justify-content: space-between; align-items: baseline; padding: 12px 16px 4px; }
+.shead b { font-size: 0.8125rem; font-weight: 600; color: var(--color-ink-muted); }
+.shead a { font-size: 0.8125rem; font-weight: 600; color: var(--color-accent); text-decoration: none; }
+.sr { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 52px; padding: 6px 16px; }
+.sr .fico { width: 36px; height: 36px; border-radius: 10px; }
+.sr .av, .sr .sp { width: 36px; height: 36px; font-size: 0.75rem; }
+.sr > span:nth-child(2) { display: grid; min-width: 0; }
+.sr > span:nth-child(2) b { font-weight: 500; font-size: 0.9375rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sr > span:nth-child(2) small { color: var(--color-ink-muted); font-size: 0.8125rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sr mark { background: none; color: var(--color-ink); font-weight: 700; }
+.sr .x { color: var(--color-ink-subtle); }
+.acts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 4px 8px; }
+.acts a { display: grid; justify-items: center; gap: 6px; padding: 8px 0; color: var(--color-ink); text-decoration: none; font-size: 0.75rem; font-weight: 500; text-align: center; }
+.acts .tile { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; background: var(--color-sunk); }
+.wider { display: flex; align-items: center; gap: 10px; margin: 8px 16px; padding: 12px 14px; border-radius: 14px; background: var(--color-sunk); font-weight: 500; }
+.wider b { color: var(--color-accent); margin-left: auto; font-size: 0.875rem; }
+/* gestures (§7) */
+.swrow { position: relative; overflow: hidden; }
+.swrow .under { position: absolute; inset: 0; display: flex; justify-content: flex-end; }
+.swrow .under.left { justify-content: flex-start; }
+.swrow .under a { width: 76px; display: grid; place-items: center; align-content: center; gap: 4px; color: var(--color-on-accent); font: 600 0.75rem/1 var(--font-body); text-decoration: none; }
+.swrow .row, .swrow .card { position: relative; background: var(--color-base); }
+.swrow .shift-l { transform: translateX(-228px); }
+.swrow .shift-r { transform: translateX(92px); }
+.bub { max-width: 80%; padding: 10px 14px; border-radius: 18px; background: var(--color-raised); font-size: 1rem; line-height: 1.4; }
+.bub.me { background: var(--color-accent-wash); margin-left: auto; }
+.msg { display: flex; gap: 8px; align-items: flex-end; padding: 4px 14px; position: relative; }
+.msg .reply { position: absolute; left: 14px; top: 50%; translate: 0 -50%; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--color-accent-wash); color: var(--color-accent); }
+.peek { position: absolute; inset: 0; z-index: 1; background: var(--color-base); filter: brightness(0.92); transform: translateX(-30%); padding-top: 34px; }
+.front { position: absolute; inset: 0; z-index: 2; background: var(--color-base); transform: translateX(42%); box-shadow: -12px 0 24px rgb(0 0 0 / 0.12); padding-top: 34px; }
+.edge { position: absolute; left: calc(42% - 22px); top: 46%; width: 44px; height: 44px; border-radius: 50%; z-index: 3; background: color-mix(in srgb, var(--color-accent) 35%, transparent); box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-accent) 15%, transparent); }
+.edge::after { content: "← bắt đầu ở mép trái 20px"; position: absolute; left: 52px; top: 12px; white-space: nowrap; font: 600 0.6875rem/1 var(--font-body); color: var(--color-base); background: var(--color-ink); padding: 4px 7px; border-radius: 6px; }
+.gtable { border-collapse: collapse; max-width: 1100px; font-size: 0.875rem; }
+.gtable th, .gtable td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--color-line); vertical-align: top; }
+.gtable th { color: var(--color-ink-muted); font-weight: 600; }
+.kind { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px; font: 600 0.75rem/1 var(--font-body); background: var(--color-sunk); color: var(--color-ink); }
+.kind.org { background: var(--color-accent); color: var(--color-on-accent); }
+.convert { display: grid; gap: 6px; margin: 4px 12px 8px; padding: 14px; border-radius: 16px; background: var(--color-accent-wash); }
+.convert b { font-size: 0.9375rem; } .convert small { color: var(--color-ink-muted); }
+.convert a { justify-self: start; margin-top: 4px; font-weight: 600; color: var(--color-accent); text-decoration: none; }
+.lock { color: var(--color-ink-muted); display: inline-flex; align-items: center; gap: 4px; font-size: 0.8125rem; }
+.shd { display: flex; align-items: center; gap: 6px; padding: 10px 8px 2px 12px; }
+.shd button.fold { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; height: 44px; border: 0; background: transparent; padding: 0 4px; font: 600 1rem/1 var(--font-body); color: var(--color-ink); text-align: left; cursor: pointer; }
+.shd button.fold svg { color: var(--color-ink-muted); }
+.shd .count { margin-left: 4px; }
+.shd .uo { width: 52px; height: 36px; border-radius: 999px; border: 0; background: var(--color-sunk); display: grid; place-items: center; color: var(--color-ink-muted); }
+.srow { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 56px; padding: 4px 16px; }
+.srow .av, .srow .sp { width: 36px; height: 36px; font-size: 0.75rem; }
+.srow .sp { border-radius: 10px; }
+.srow b { font-weight: 500; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.srow.unread b { font-weight: 700; }
+.newsec { display: flex; align-items: center; gap: 10px; padding: 14px 16px; color: var(--color-accent); font-weight: 600; }
+/* chat gestures (§9) */
+.stream { display: grid; gap: 6px; padding: 8px 0; }
+.msg .thr { position: absolute; right: 14px; top: 50%; translate: 0 -50%; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--color-accent); color: var(--color-on-accent); }
+.msg.pull-r .bub, .msg.pull-r .av { transform: translateX(56px); }
+.msg.pull-l .bub { transform: translateX(-60px); }
+.msg.pull-l .av { transform: translateX(-60px); }
+.who-sm { font-size: 0.75rem; color: var(--color-ink-muted); padding: 0 0 2px 50px; }
+.quote { display: flex; gap: 10px; align-items: center; margin: 0 12px; padding: 8px 10px; border-radius: 14px 14px 4px 4px; background: var(--color-sunk); box-shadow: inset 3px 0 0 var(--color-accent); font-size: 0.8125rem; }
+.quote span { flex: 1; min-width: 0; display: grid; } .quote b { font-size: 0.8125rem; } .quote small { color: var(--color-ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.composer { display: flex; align-items: center; gap: 6px; margin: 0 12px 12px; padding: 6px; border-radius: 22px; background: var(--color-raised); box-shadow: inset 0 0 0 1px var(--color-line); }
+.composer .field { flex: 1; color: var(--color-ink-muted); font-size: 1rem; padding: 0 6px; }
+.composer .send { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--color-accent); color: var(--color-on-accent); }
+.composer .grip-top { position: absolute; }
+.dock { position: absolute; left: 0; right: 0; bottom: 0; z-index: 5; background: var(--color-base); padding-top: 6px; }
+.react { position: absolute; z-index: 37; left: 16px; right: 16px; display: flex; justify-content: space-between; padding: 6px 10px; border-radius: 999px; background: var(--color-overlay); box-shadow: var(--shadow-overlay); }
+.react span { width: 44px; height: 44px; display: grid; place-items: center; font-size: 1.6rem; border-radius: 50%; transition: transform 120ms; }
+.react span.hot { transform: translateY(-14px) scale(1.5); background: var(--color-accent-wash); }
+.lifted { position: absolute; z-index: 36; left: 14px; right: 14px; }
+.finger { position: absolute; z-index: 38; width: 44px; height: 44px; border-radius: 50%; background: color-mix(in srgb, var(--color-accent) 35%, transparent); box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-accent) 15%, transparent); }
+.tag { position: absolute; z-index: 39; white-space: nowrap; font: 600 0.6875rem/1 var(--font-body); color: var(--color-base); background: var(--color-ink); padding: 4px 7px; border-radius: 6px; }
+.burst { position: absolute; font-size: 2.6rem; z-index: 3; filter: drop-shadow(0 4px 10px rgb(0 0 0 / 0.18)); }
+.rx { justify-self: start; display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 8px; border-radius: 999px; background: var(--color-raised); box-shadow: inset 0 0 0 1px var(--color-accent); font-size: 0.8125rem; font-weight: 600; margin: 2px 0 0 50px; }
+.jump { position: absolute; z-index: 6; left: 50%; translate: -50% 0; bottom: 84px; display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 999px; background: var(--color-overlay); box-shadow: var(--shadow-overlay); font-weight: 600; font-size: 0.8125rem; }
+.viewer { position: absolute; inset: 0; z-index: 30; background: rgb(0 0 0 / 0.55); display: grid; place-items: center; }
+.viewer .img { width: 78%; aspect-ratio: 4 / 3; border-radius: 14px; background: linear-gradient(135deg, var(--color-person-3), var(--color-person-5)); transform: translateY(70px) scale(0.86); box-shadow: 0 12px 40px rgb(0 0 0 / 0.3); display: grid; place-items: center; color: #fff; font-weight: 600; }
+.viewer .cap { position: absolute; top: 46px; left: 0; right: 0; display: flex; justify-content: space-between; padding: 0 16px; color: #fff; font-weight: 600; opacity: 0.5; }
+/* drive (§10) */
+.qa { display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; padding: 4px 16px 8px; }
+.qa .qc { flex: none; width: 148px; border-radius: 14px; background: var(--color-raised); padding: 6px 6px 10px; display: grid; gap: 6px; }
+.qa .th { aspect-ratio: 16 / 10; border-radius: 9px; background: var(--color-sunk); display: grid; place-items: center; color: var(--color-ink-subtle); }
+.qa .th.img { background: linear-gradient(135deg, var(--color-person-3), var(--color-person-5)); }
+.qa b { font-size: 0.8125rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
+.qa small { font-size: 0.75rem; color: var(--color-ink-muted); padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.frow { display: grid; grid-template-columns: 40px minmax(0, 1fr) 44px; gap: 12px; align-items: center; min-height: 60px; padding: 4px 4px 4px 16px; }
+.frow .fico { width: 40px; height: 40px; border-radius: 10px; }
+.frow > span:nth-child(2) { display: grid; min-width: 0; }
+.frow b { font-weight: 500; font-size: 0.9375rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; gap: 6px; align-items: center; }
+.frow small { color: var(--color-ink-muted); font-size: 0.8125rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.frow.sel { background: var(--color-accent-wash); }
+.k-doc { color: var(--color-info); background: color-mix(in srgb, var(--color-info) 12%, transparent) !important; }
+.k-sheet { color: var(--color-success); background: color-mix(in srgb, var(--color-success) 12%, transparent) !important; }
+.k-pdf { color: var(--color-danger); background: color-mix(in srgb, var(--color-danger) 12%, transparent) !important; }
+.k-img { color: var(--color-warning); background: color-mix(in srgb, var(--color-warning) 14%, transparent) !important; }
+.chk { width: 22px; height: 22px; border-radius: 7px; box-shadow: inset 0 0 0 2px var(--color-line); display: grid; place-items: center; justify-self: center; }
+.chk.on { background: var(--color-accent); box-shadow: none; color: var(--color-on-accent); }
+.crumb { display: flex; align-items: center; gap: 2px; padding: 0 12px 4px 16px; font-size: 0.8125rem; color: var(--color-ink-muted); overflow-x: auto; scrollbar-width: none; white-space: nowrap; }
+.crumb a { color: var(--color-ink-muted); text-decoration: none; padding: 6px 4px; }
+.crumb a:last-child { color: var(--color-ink); font-weight: 600; }
+.sortbar { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px 2px 16px; font-size: 0.8125rem; font-weight: 600; color: var(--color-ink-muted); }
+.sortbar span { display: inline-flex; gap: 4px; align-items: center; }
+.selbar { position: absolute; left: 12px; right: 12px; bottom: 22px; z-index: 20; display: grid; grid-template-columns: repeat(5, 1fr); height: 64px; border-radius: 22px; background: var(--color-ink); color: var(--color-base); box-shadow: var(--shadow-overlay); }
+.selbar a { display: grid; justify-items: center; align-content: center; gap: 3px; font: 500 0.6875rem/1 var(--font-body); color: inherit; text-decoration: none; }
+.upl { position: absolute; left: 12px; right: 12px; bottom: 98px; z-index: 19; display: grid; gap: 6px; padding: 12px 14px; border-radius: 16px; background: var(--color-overlay); box-shadow: var(--shadow-overlay); }
+.upl .bar { height: 4px; border-radius: 999px; background: var(--color-sunk); overflow: hidden; }
+.upl .bar i { display: block; height: 100%; width: 64%; background: var(--color-accent); }
+.upl div:first-child { display: flex; justify-content: space-between; font-weight: 600; font-size: 0.875rem; }
+/* contacts (§12) */
+.freq { display: flex; gap: 14px; overflow-x: auto; scrollbar-width: none; padding: 6px 16px 10px; mask-image: linear-gradient(90deg, #000 88%, transparent); }
+.freq a { flex: none; width: 60px; display: grid; justify-items: center; gap: 6px; color: var(--color-ink); text-decoration: none; font-size: 0.75rem; text-align: center; line-height: 1.2; }
+.freq .av { width: 52px; height: 52px; font-size: 0.875rem; }
+.on2::after { content: ""; position: absolute; right: 0; bottom: 0; width: 13px; height: 13px; border-radius: 50%; background: var(--color-success); box-shadow: 0 0 0 2.5px var(--color-base); }
+.cat { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 4px 16px 8px; }
+.cat a { display: grid; gap: 8px; padding: 14px; border-radius: 16px; background: var(--color-raised); color: var(--color-ink); text-decoration: none; }
+.cat .ci { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; }
+.cat b { font-size: 0.9375rem; } .cat small { color: var(--color-ink-muted); font-size: 0.8125rem; margin-top: -6px; }
+.prow { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 60px; padding: 4px 28px 4px 16px; }
+.prow .av { width: 40px; height: 40px; }
+.prow > span:nth-child(2) { display: grid; min-width: 0; } .prow b { font-weight: 500; font-size: 0.9375rem; } .prow small { color: var(--color-ink-muted); font-size: 0.8125rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prow .st { font-size: 0.75rem; color: var(--color-ink-muted); } .prow .st.on { color: var(--color-success); }
+.drow { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto auto; gap: 12px; align-items: center; min-height: 60px; padding: 4px 28px 4px 16px; }
+.drow .fico { width: 40px; height: 40px; border-radius: 10px; background: var(--color-accent-wash); color: var(--color-accent); }
+.drow > span:nth-child(2) { display: grid; } .drow b { font-weight: 500; } .drow small { color: var(--color-ink-muted); font-size: 0.8125rem; }
+.az { position: absolute; right: 2px; top: 420px; z-index: 4; display: grid; gap: 1px; font: 600 0.625rem/1 var(--font-body); color: var(--color-accent); text-align: center; width: 18px; }
+.cover { height: 120px; background: linear-gradient(135deg, var(--color-person-2-wash, var(--color-sunk)), var(--color-accent-wash)); position: relative; }
+.prof { padding: 0 16px; margin-top: -40px; position: relative; z-index: 2; display: grid; gap: 4px; }
+.prof .av { width: 80px; height: 80px; font-size: 1.5rem; box-shadow: 0 0 0 4px var(--color-base); }
+.prof b { font: 700 1.375rem/1.2 var(--font-display); margin-top: 6px; }
+.acts4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 14px 16px 8px; }
+.acts4 a { display: grid; justify-items: center; gap: 6px; padding: 12px 0 10px; border-radius: 16px; background: var(--color-raised); color: var(--color-ink); text-decoration: none; font-size: 0.8125rem; font-weight: 600; }
+.acts4 a.pri { background: var(--color-accent); color: var(--color-on-accent); }
+.ann { position: absolute; z-index: 40; background: var(--color-ink); color: var(--color-base); font: 600 0.6875rem/1.3 var(--font-body); padding: 3px 7px; border-radius: 6px; pointer-events: none; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+    <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+    <symbol id="i-approve" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></symbol>
+    <symbol id="i-box" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7M19 12H5"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14M12 5v14"/></symbol>
+    <symbol id="i-video" viewBox="0 0 24 24"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+    <symbol id="i-out" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+    <symbol id="i-useradd" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+    <symbol id="i-grip" viewBox="0 0 24 24"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" stroke-width="3"/></symbol>
+    <symbol id="i-thread" viewBox="0 0 24 24"><path d="m15 10 5 5-5 5"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/></symbol>
+    <symbol id="i-at" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/></symbol>
+    <symbol id="i-crown" viewBox="0 0 24 24"><path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z"/><path d="M5 21h14"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></symbol>
+    <symbol id="i-grid2" viewBox="0 0 24 24"><path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+  </defs>
+</svg>
+
+<div class="page">
+<header>
+  <h1>Vỏ điện thoại kiểu Lark và cài đặt ba cấp</h1>
+  <p>Duyệt 2026-10-19 (thanh đáy A). Bản đề xuất từ audit 390px ngày 2026-10-19 (<code>plans/reports/brainstorm-261019-0004-mobile-ux-settings.md</code>). Thanh đáy chung cho mọi phân hệ thay menu ☰; mỗi màn phân hệ chỉ một ô tìm; cài đặt chia ba cấp — <b>Tôi</b> (cá nhân), <b>từng phân hệ</b>, <b>từng cuộc trò chuyện</b> — và mỗi tuỳ chọn chỉ có một chỗ ở. Chỉ áp dụng dưới 1024px; máy tính không đổi.</p>
+  <nav class="toc" aria-label="Các phần">
+    <a href="#s1">§1 Thanh đáy</a><a href="#s1b-sections">§1b Chat theo Mục</a><a href="#s2">§2 Đầu màn phân hệ</a><a href="#s3">§3 Tôi · cài đặt cá nhân</a><a href="#s4">§4 Cài đặt phân hệ</a><a href="#s5">§5 Cài đặt nhóm và DM</a><a href="#s6">§6 Tìm cho mọi tác vụ</a><a href="#s7">§7 Vuốt</a><a href="#s8">§8 Cá nhân và Tổ chức</a><a href="#s9">§9 Vuốt trong Chat</a><a href="#s10">§10 Tài liệu</a><a href="#s11">§11 Cài đặt workspace</a><a href="#s12">§12 Danh bạ</a>
+  </nav>
+</header>
+
+<!-- ================================================================ §1 -->
+<section class="screen" id="s1">
+  <div class="screen-head">
+    <h2>§1 Thanh đáy: nội dung của Lark, hình dáng và cảm giác của Google Chat</h2>
+    <p><b>Lark</b> cho cấu trúc: thanh đáy chứa phân hệ, bốn ô người dùng tự chọn + <b>Thêm</b> dạng lưới (mặc định Chat · Lịch · Tài liệu · Phê duyệt; workspace cá nhân: Danh bạ thay Phê duyệt). <b>Google Chat</b> cho hình thức: viên thuốc nổi + nút + vuông bo tách riêng, ô tìm viên thuốc, bảng tin Trang chủ có dòng thread, chip lọc. <b>Tối ưu cho Chat:</b> cuộn xuống thì thanh thu về icon (danh sách thêm chỗ), nhấn giữ ô Chat nhảy nhanh, trong cuộc trò chuyện thanh ẩn hẳn. Menu ☰ bỏ; ô chữ cái workspace ở đầu viên thuốc tìm mở danh sách workspace.</p>
+  </div>
+  <div class="phones">
+    <div class="ph">
+      <div class="phone">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="spill">
+            <button class="ws" type="button" aria-label="Đổi workspace, đang ở NovaPay; workspace khác có tin mới"><b>N</b><i class="dot"></i></button>
+            <button class="q" type="button"><svg class="i s"><use href="#i-search"/></svg>Tìm trong chat</button>
+            <button class="me" type="button" aria-label="Tôi"><span class="av" style="--p:var(--color-person-6)">MĐ</span></button>
+          </div>
+          <div class="ttl"><h2>Chat</h2><button class="tbtn" type="button"><svg class="i s"><use href="#i-thread"/></svg>Thread</button><button class="ibtn" aria-label="Thêm tuỳ chọn Chat"><svg class="i"><use href="#i-more"/></svg></button></div>
+          <nav class="chips" aria-label="Lọc trò chuyện">
+            <a aria-current="page">Tất cả</a><a>Mục</a><a>Chưa đọc <span class="count">3</span></a><a>Được nhắc <span class="count">1</span></a><a>Trực tiếp</a><a>Nhóm</a>
+          </nav>
+          <div class="row unread"><span class="sp" style="--p:var(--color-person-4)">G</span><span><span class="t"><b>general</b><time>09:02</time></span><span class="s">Lan: Chiều nay họp đối soát lúc 3h nhé</span></span><span class="count">2</span></div>
+          <div class="row"><span class="av s44" style="--p:var(--color-person-2)">VL</span><span><span class="t"><b>Lê Quang Vinh</b><time>08:40</time></span><span class="s">Bạn: Đã gửi bản đối soát tháng 9</span></span><span></span></div>
+          <div class="row unread"><span class="sp" style="--p:var(--color-person-3)">Đ</span><span><span class="t"><b>Đối soát liên khối</b><time>Hôm qua</time></span><span class="s">Thu: 📎 doi-soat-T9.xlsx</span></span><span class="count">1</span></div>
+          <div class="row"><span class="sp" style="--p:var(--color-person-7)">P</span><span><span class="t"><b>Pháp chế phối hợp</b><time>Hôm qua</time></span><span class="s">Bạn: Cảm ơn Pháp chế, Vinh xem giúp bản đối soát nhé.</span></span><span></span></div>
+          <div class="row"><span class="av s44" style="--p:var(--color-person-5)">TL</span><span><span class="t"><b>Nguyễn Thu Lan</b><time>T2</time></span><span class="s">Lan: Ok anh</span></span><span></span></div>
+        </div>
+        <button class="fab" type="button" aria-label="Trò chuyện mới"><svg class="i l"><use href="#i-plus"/></svg></button>
+        <nav class="bbar" aria-label="Phân hệ">
+          <a aria-current="page"><span class="ic"><svg class="i l"><use href="#i-chat"/></svg></span>Chat<span class="count">3</span></a>
+          <a><span class="ic"><svg class="i l"><use href="#i-cal"/></svg></span>Lịch</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-folder"/></svg></span>Tài liệu</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-approve"/></svg></span>Phê duyệt<span class="count">2</span></a>
+          <a><span class="ic"><svg class="i l"><use href="#i-grid"/></svg></span>Thêm<i class="bdot"></i></a>
+        </nav>
+      </div>
+      <small>Chat lúc mở: tab con cũ (Trang chủ · Trực tiếp · Mục · Thêm) thành chip lọc kiểu Google</small>
+    </div>
+
+    <div class="ph">
+      <div class="phone">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="spill"><button class="ws" type="button"><b>N</b></button><button class="q" type="button"><svg class="i s"><use href="#i-search"/></svg>Tìm trong chat</button><button class="me" type="button"><span class="av" style="--p:var(--color-person-6)">MĐ</span></button></div>
+          <div class="row"><span class="av s44" style="--p:var(--color-person-5)">TL</span><span><span class="t"><b>Nguyễn Thu Lan</b><time>T2</time></span><span class="s">Lan: Ok anh</span></span><span></span></div>
+          <div class="row"><span class="sp" style="--p:var(--color-person-1)">K</span><span><span class="t"><b>Kế toán nội bộ</b><time>T2</time></span><span class="s">Hà: Đã khoá sổ tháng 9</span></span><span></span></div>
+          <div class="row"><span class="av s44" style="--p:var(--color-person-3)">HP</span><span><span class="t"><b>Phạm Thu Hà</b><time>CN</time></span><span class="s">Bạn: Cảm ơn chị</span></span><span></span></div>
+          <div class="row"><span class="sp" style="--p:var(--color-person-8)">M</span><span><span class="t"><b>Mua sắm Q4</b><time>17/10</time></span><span class="s">Vinh: Báo giá lần 2 đính kèm</span></span><span></span></div>
+          <div class="row"><span class="sp" style="--p:var(--color-person-2)">B</span><span><span class="t"><b>Ban giám đốc</b><time>16/10</time></span><span class="s">Bạn: Họp giao ban chuyển sang 9h</span></span><span></span></div>
+          <div class="row"><span class="av s44" style="--p:var(--color-person-7)">QA</span><span><span class="t"><b>Quốc Anh</b><time>15/10</time></span><span class="s">Anh: 👍</span></span><span></span></div>
+          <div class="row"><span class="sp" style="--p:var(--color-person-4)">T</span><span><span class="t"><b>Tuyển dụng</b><time>14/10</time></span><span class="s">Lan: 3 hồ sơ mới cho vị trí kế toán</span></span><span></span></div>
+        </div>
+        <div class="scrim" style="background:color-mix(in srgb, var(--color-scrim) 60%, transparent)"></div>
+        <div class="qjump" role="menu" aria-label="Đi nhanh trong Chat">
+          <a><svg class="i"><use href="#i-user"/></svg>Trực tiếp<span class="count">1</span></a>
+          <a><svg class="i"><use href="#i-at"/></svg>Được nhắc<span class="count">1</span></a>
+          <a><svg class="i"><use href="#i-thread"/></svg>Thread theo dõi</a>
+          <a><svg class="i"><use href="#i-star"/></svg>Đã gắn sao</a>
+        </div>
+        <button class="fab" type="button" aria-label="Trò chuyện mới"><svg class="i l"><use href="#i-plus"/></svg></button>
+        <nav class="bbar compact" aria-label="Phân hệ">
+          <a aria-current="page"><span class="ic"><svg class="i l"><use href="#i-chat"/></svg></span>Chat<span class="count">3</span></a>
+          <a><span class="ic"><svg class="i l"><use href="#i-cal"/></svg></span>Lịch</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-folder"/></svg></span>Tài liệu</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-approve"/></svg></span>Phê duyệt<span class="count">2</span></a>
+          <a><span class="ic"><svg class="i l"><use href="#i-grid"/></svg></span>Thêm</a>
+        </nav>
+      </div>
+      <small>Đã cuộn: thanh thu về icon (cao 52), tiêu đề + chip cuộn đi, viên thuốc tìm dính trên; nhấn giữ ô Chat → đi nhanh</small>
+    </div>
+
+
+    <div class="ph">
+      <div class="phone">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="spill"><button class="ws" type="button"><b>N</b></button><button class="q" type="button"><svg class="i s"><use href="#i-search"/></svg>Tìm trong chat</button><button class="me" type="button"><span class="av" style="--p:var(--color-person-6)">MĐ</span></button></div>
+          <div class="ttl"><h2>Chat</h2></div>
+        </div>
+        <div class="scrim"></div>
+        <div class="sheet" role="dialog" aria-label="Thêm">
+          <div class="grab"></div>
+          <div class="wsrow"><b class="lt">N</b><span><b>NovaPay</b><small>Workspace tổ chức · 7 thành viên</small></span><button class="ibtn" aria-label="Cài đặt workspace"><svg class="i"><use href="#i-gear"/></svg></button><svg class="i"><use href="#i-down"/></svg></div>
+          <h3>Tất cả phân hệ <a href="#s1b">Sửa thanh đáy</a></h3>
+          <div class="mgrid">
+            <a class="pinned"><span class="tile"><svg class="i l"><use href="#i-chat"/></svg><span class="count">3</span></span>Chat</a>
+            <a class="pinned"><span class="tile"><svg class="i l"><use href="#i-cal"/></svg></span>Lịch</a>
+            <a class="pinned"><span class="tile"><svg class="i l"><use href="#i-folder"/></svg></span>Tài liệu</a>
+            <a class="pinned"><span class="tile"><svg class="i l"><use href="#i-approve"/></svg><span class="count">2</span></span>Phê duyệt</a>
+            <a><span class="tile"><svg class="i l"><use href="#i-box"/></svg></span>Tài sản</a>
+            <a><span class="tile"><svg class="i l"><use href="#i-users"/></svg></span>Danh bạ</a>
+            <a><span class="tile"><svg class="i l"><use href="#i-bell"/></svg><span class="count">5</span></span>Thông báo</a>
+          </div>
+          <p class="hint">Viền màu là phân hệ đang ở thanh đáy. Cài đặt nằm ở <b>Tôi</b> (chạm avatar) và trong ⋯ của từng phân hệ.</p>
+        </div>
+        <nav class="bbar" aria-label="Phân hệ">
+          <a aria-current="page"><span class="ic"><svg class="i l"><use href="#i-chat"/></svg></span>Chat</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-cal"/></svg></span>Lịch</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-folder"/></svg></span>Tài liệu</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-approve"/></svg></span>Phê duyệt</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-grid"/></svg></span>Thêm</a>
+        </nav>
+      </div>
+      <small>Thêm: workspace, mọi phân hệ dạng lưới (thay menu ☰)</small>
+    </div>
+
+    <div class="ph" id="s1b">
+      <div class="phone nobar">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="dbar"><button class="ibtn" aria-label="Quay lại"><svg class="i"><use href="#i-back"/></svg></button><h2>Sửa thanh đáy</h2><button class="tbtn primary" type="button">Xong</button></div>
+          <p class="hint" style="padding-top:0">Chọn 4 phân hệ hiện ở thanh đáy. Kéo <svg class="i s" style="vertical-align:-3px"><use href="#i-grip"/></svg> để đổi thứ tự. Thêm luôn ở ô cuối.</p>
+          <div class="grp-t">Ở thanh đáy (4/4)</div>
+          <div class="grp">
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-chat"/></svg></span><span><b>Chat</b></span><svg class="i grip"><use href="#i-grip"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-cal"/></svg></span><span><b>Lịch</b></span><svg class="i grip"><use href="#i-grip"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-folder"/></svg></span><span><b>Tài liệu</b></span><svg class="i grip"><use href="#i-grip"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-approve"/></svg></span><span><b>Phê duyệt</b></span><svg class="i grip"><use href="#i-grip"/></svg></div>
+          </div>
+          <div class="grp-t">Trong Thêm</div>
+          <div class="grp">
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-box"/></svg></span><span><b>Tài sản</b></span><span class="val">Đưa lên</span></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-users"/></svg></span><span><b>Danh bạ</b></span><span class="val">Đưa lên</span></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-bell"/></svg></span><span><b>Thông báo</b></span><span class="val">Đưa lên</span></div>
+          </div>
+          <div class="grp"><div class="it center" style="color:var(--color-accent)">Về mặc định</div></div>
+        </div>
+      </div>
+      <small>Sửa thanh đáy: lưu theo người, theo từng workspace (Quản trị không đưa lên được)</small>
+    </div>
+  </div>
+  <ul class="notes">
+    <li><b>Hình (Google Chat):</b> viên thuốc nổi cao 64, cách trái 12, đáy 22 + safe-area, phải chừa nút +; nền <code>--color-overlay</code> 90% + blur 16, <code>--shadow-overlay</code> + viền trong <code>--color-line</code>. Nút + của phân hệ 64×64 radius 20 <code>--color-accent-wash</code>, cùng đáy, bên phải — giữ đúng chỗ ngón cái như thanh Chat hiện nay.</li>
+    <li><b>Nội dung (Lark):</b> 5 ô đều; icon 24 trong pill 48×30 + nhãn 11px (có chữ: thanh này chứa phân hệ, không đoán được bằng icon). Đang ở: pill <code>--color-accent-wash</code>, icon accent, nhãn 600, <code>aria-current="page"</code>. Số chưa đọc: pill góc trên phải icon, <code>99+</code>, ẩn khi 0; Thêm có chấm khi phân hệ trong đó có việc mới.</li>
+    <li><b>Tối ưu cho Chat:</b> cuộn xuống quá 24px thì nhãn gập, thanh cao 52 (240ms expo), tiêu đề và chip cuộn đi, viên thuốc tìm dính trên; cuộn lên một chút là mở lại. Trong một cuộc trò chuyện thanh <b>ẩn hẳn</b> (ô soạn và bàn phím giữ trọn đáy). <b>Nhấn giữ ô Chat</b> (400ms) mở "Đi nhanh": Trực tiếp · Được nhắc · Thread theo dõi · Đã gắn sao, mỗi dòng có số. Chạm ô Chat khi đang ở Chat: về đầu danh sách, chạm lần nữa bỏ lọc về Tất cả.</li>
+    <li><b>Có ở mọi màn danh sách của mọi phân hệ</b>; ẩn trong màn chi tiết (một cuộc trò chuyện, một tài liệu, một đề nghị, trang cài đặt) và khi bàn phím mở. <b>Nhấn giữ vùng trống của thanh</b> hoặc ô Thêm mở "Sửa thanh đáy".</li>
+    <li><b>Viên thuốc trên cùng:</b> trái là ô chữ cái workspace 32 (chấm accent khi workspace khác có tin chưa đọc), giữa là ô tìm của chính phân hệ, phải là avatar mở trang <b>Tôi</b> (§3).</li>
+    <li><b>Chat:</b> hàng chip Tất cả · <b>Mục</b> · Chưa đọc · Được nhắc · Trực tiếp · Nhóm thay bốn tab con. <b>Mục</b> (section kiểu Google Chat) giữ nguyên cơ chế hiện nay — xem §1b. Nhớ chip cuối cùng trên máy; Cài đặt Chat chọn được "Mở Chat ở: Tất cả / Mục". Nút Thread giữ ở tiêu đề.</li>
+  </ul>
+</section>
+
+<!-- ================================================================ §1b -->
+<section class="screen" id="s1b-sections">
+  <div class="screen-head">
+    <h2>§1b Chat theo Mục (section) như Google Chat</h2>
+    <p>Giữ nguyên cơ chế Mục hiện có (DESIGN.md "Chat trên điện thoại" → Mục): Đã gắn sao, mục của bạn, Tin nhắn trực tiếp, Nhóm; gập/mở dùng chung với máy tính. Trên vỏ mới, Mục là chip thứ hai của Chat và có thể là màn mở đầu.</p>
+  </div>
+  <div class="phones">
+    <div class="ph">
+      <div class="phone">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="spill"><button class="ws" type="button"><b>N</b></button><button class="q" type="button"><svg class="i s"><use href="#i-search"/></svg>Tìm trong chat</button><button class="me" type="button"><span class="av" style="--p:var(--color-person-6)">MĐ</span></button></div>
+          <div class="ttl"><h2>Chat</h2><button class="tbtn" type="button"><svg class="i s"><use href="#i-thread"/></svg>Thread</button><button class="ibtn" aria-label="Thêm tuỳ chọn Chat"><svg class="i"><use href="#i-more"/></svg></button></div>
+          <nav class="chips" aria-label="Lọc trò chuyện"><a>Tất cả</a><a aria-current="page">Mục</a><a>Chưa đọc <span class="count">3</span></a><a>Được nhắc <span class="count">1</span></a><a>Trực tiếp</a></nav>
+          <div class="shd"><button class="fold" aria-expanded="true"><svg class="i s"><use href="#i-down"/></svg>Đã gắn sao</button><button class="uo" aria-label="Chỉ chưa đọc trong Đã gắn sao"><svg class="i s"><use href="#i-chat"/></svg></button></div>
+          <div class="srow unread"><span class="sp" style="--p:var(--color-person-4)">G</span><b>general</b><span class="count">2</span></div>
+          <div class="srow"><span class="av" style="--p:var(--color-person-2)">VL</span><b>Lê Quang Vinh</b><span></span></div>
+          <div class="shd"><button class="fold" aria-expanded="true"><svg class="i s"><use href="#i-down"/></svg>Kế toán</button><button class="uo" aria-label="Chỉ chưa đọc trong Kế toán"><svg class="i s"><use href="#i-chat"/></svg></button></div>
+          <div class="srow unread"><span class="sp" style="--p:var(--color-person-3)">Đ</span><b>Đối soát liên khối</b><span class="count">1</span></div>
+          <div class="srow"><span class="sp" style="--p:var(--color-person-1)">K</span><b>Kế toán nội bộ</b><span></span></div>
+          <div class="shd"><button class="fold" aria-expanded="false"><svg class="i s"><use href="#i-chev"/></svg>Dự án Q4<span class="count">4</span></button><button class="uo" aria-label="Chỉ chưa đọc trong Dự án Q4"><svg class="i s"><use href="#i-chat"/></svg></button></div>
+          <div class="shd"><button class="fold" aria-expanded="true"><svg class="i s"><use href="#i-down"/></svg>Tin nhắn trực tiếp</button><button class="uo"><svg class="i s"><use href="#i-chat"/></svg></button></div>
+          <div class="srow"><span class="av" style="--p:var(--color-person-5)">TL</span><b>Nguyễn Thu Lan</b><span></span></div>
+          <div class="shd"><button class="fold" aria-expanded="false"><svg class="i s"><use href="#i-chev"/></svg>Nhóm</button><button class="uo"><svg class="i s"><use href="#i-chat"/></svg></button></div>
+          <div class="newsec"><svg class="i"><use href="#i-plus"/></svg>Mục mới</div>
+        </div>
+        <button class="fab" type="button" aria-label="Trò chuyện mới"><svg class="i l"><use href="#i-plus"/></svg></button>
+        <nav class="bbar" aria-label="Phân hệ">
+          <a aria-current="page"><span class="ic"><svg class="i l"><use href="#i-chat"/></svg></span>Chat<span class="count">3</span></a>
+          <a><span class="ic"><svg class="i l"><use href="#i-cal"/></svg></span>Lịch</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-folder"/></svg></span>Tài liệu</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-approve"/></svg></span>Phê duyệt</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-grid"/></svg></span>Thêm</a>
+        </nav>
+      </div>
+      <small>Chip Mục: Đã gắn sao, mục của bạn, Tin nhắn trực tiếp, Nhóm; gập thì hiện tổng chưa đọc; nút chỉ-chưa-đọc riêng từng mục</small>
+    </div>
+
+    <div class="ph">
+      <div class="phone">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="spill"><button class="ws" type="button"><b>N</b></button><button class="q" type="button"><svg class="i s"><use href="#i-search"/></svg>Tìm trong chat</button><button class="me" type="button"><span class="av" style="--p:var(--color-person-6)">MĐ</span></button></div>
+          <div class="ttl"><h2>Chat</h2></div>
+        </div>
+        <div class="scrim"></div>
+        <div class="sheet" role="dialog" aria-label="Chuyển Đối soát liên khối tới mục">
+          <div class="grab"></div>
+          <h3>Chuyển “Đối soát liên khối” tới</h3>
+          <div class="grp" style="background:transparent;margin:0">
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-star"/></svg></span><span><b>Đã gắn sao</b></span><span class="radio"></span></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-list"/></svg></span><span><b>Kế toán</b></span><span class="radio on"></span></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-list"/></svg></span><span><b>Dự án Q4</b></span><span class="radio"></span></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-users"/></svg></span><span><b>Nhóm</b><small>Mặc định, không thuộc mục nào</small></span><span class="radio"></span></div>
+            <div class="it" style="color:var(--color-accent)"><span class="fico"><svg class="i"><use href="#i-plus"/></svg></span><span><b>Mục mới…</b></span></div>
+          </div>
+        </div>
+        <nav class="bbar" aria-label="Phân hệ">
+          <a aria-current="page"><span class="ic"><svg class="i l"><use href="#i-chat"/></svg></span>Chat</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-cal"/></svg></span>Lịch</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-folder"/></svg></span>Tài liệu</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-approve"/></svg></span>Phê duyệt</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-grid"/></svg></span>Thêm</a>
+        </nav>
+      </div>
+      <small>Chuyển tới mục: từ nhấn giữ hàng, vuốt trái → Thêm, hoặc Cài đặt nhóm → Mục</small>
+    </div>
+  </div>
+  <ul class="notes">
+    <li><b>Giữ nguyên hành vi hiện có:</b> thứ tự Đã gắn sao → mục của bạn → Tin nhắn trực tiếp → Nhóm; tiêu đề mục là nút gập/mở 44 (chevron + tên 16/600), gập thì pill tổng chưa đọc; nút chỉ chưa đọc 52×36 riêng từng mục; hàng 56, avatar 36; trạng thái gập/mở chung với cột điều hướng máy tính.</li>
+    <li><b>Quản lý mục:</b> nhấn giữ tiêu đề mục của bạn → Đổi tên · Lên · Xuống · Xoá mục; "Mục mới" cuối danh sách và trong ⋯ của Chat; Cài đặt Chat → Quản lý mục (kéo để sắp thứ tự).</li>
+    <li><b>Đưa trò chuyện vào mục:</b> nhấn giữ hàng → Chuyển tới mục / Mục mới… / Bỏ khỏi mục; vuốt trái → Thêm → cùng sheet; Cài đặt nhóm/DM → dòng Mục (§5).</li>
+    <li><b>Mở Chat ở Mục:</b> chọn trong Cài đặt Chat; chip đang chọn được nhớ trên máy. Chip Chưa đọc lọc trong mọi mục cùng lúc; ở chế độ Mục, nút chỉ-chưa-đọc của từng mục vẫn có.</li>
+    <li><b>Workspace cá nhân</b> cũng có Mục (Đã gắn sao, mục của bạn, Trực tiếp, Nhóm).</li>
+  </ul>
+</section>
+
+<!-- ================================================================ §2 -->
+<section class="screen" id="s2">
+  <div class="screen-head">
+    <h2>§2 Đầu màn phân hệ: một ô tìm, tab cuộn được, ⋯ chứa cài đặt</h2>
+    <p>Hiện tại Tài liệu và Phê duyệt có hai ô tìm, hàng tab bị cắt không báo, phụ đề "…trong NovaPay (dem…" chiếm một dòng. Quy tắc mới cho mọi phân hệ: viên thuốc là ô tìm duy nhất; hàng tiêu đề = tên + một hành động chính + ⋯; không phụ đề; tab/chip cuộn ngang có mờ mép.</p>
+  </div>
+  <div class="phones">
+    <div class="ph">
+      <div class="phone">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="spill"><button class="ws" type="button"><b>N</b></button><button class="q" type="button"><svg class="i s"><use href="#i-search"/></svg>Tìm tài liệu</button><button class="me" type="button"><span class="av" style="--p:var(--color-person-6)">MĐ</span></button></div>
+          <div class="ttl"><h2>Tài liệu</h2><button class="ibtn" aria-label="Xem dạng danh sách"><svg class="i"><use href="#i-list"/></svg></button><button class="ibtn" aria-label="Thêm tuỳ chọn Tài liệu"><svg class="i"><use href="#i-more"/></svg></button></div>
+          <nav class="chips"><a aria-current="page">Tất cả</a><a>Của tôi</a><a>Được chia sẻ</a><a>Tài liệu</a><a>Bảng tính</a><a>Ảnh & video</a></nav>
+          <div class="sec">Gần đây</div>
+          <div class="card"><span class="fico"><svg class="i"><use href="#i-file"/></svg></span><span><b>Đối soát tháng 9</b><br><small class="muted">Minh Đức · Hôm qua</small></span><button class="ibtn"><svg class="i"><use href="#i-more"/></svg></button></div>
+          <div class="card"><span class="fico"><svg class="i"><use href="#i-file"/></svg></span><span><b>Quy trình mua sắm 2026</b><br><small class="muted">Thu Lan · T2</small></span><button class="ibtn"><svg class="i"><use href="#i-more"/></svg></button></div>
+          <div class="card"><span class="fico"><svg class="i"><use href="#i-image"/></svg></span><span><b>Ảnh khai trương.jpg</b><br><small class="muted">Quang Vinh · 12/10</small></span><button class="ibtn"><svg class="i"><use href="#i-more"/></svg></button></div>
+          <div class="sec">Thư mục</div>
+          <div class="card"><span class="fico"><svg class="i"><use href="#i-folder"/></svg></span><span><b>Tài chính</b><br><small class="muted">24 mục</small></span><svg class="i muted"><use href="#i-chev"/></svg></div>
+        </div>
+        <div class="scrim" style="background:transparent"></div>
+        <div class="pop" role="menu" aria-label="Tuỳ chọn Tài liệu">
+          <a><svg class="i"><use href="#i-gear"/></svg>Cài đặt Tài liệu</a>
+          <a><svg class="i"><use href="#i-trash"/></svg>Thùng rác</a>
+          <a><svg class="i"><use href="#i-star"/></svg>Đã gắn sao</a>
+        </div>
+        <button class="fab" type="button" aria-label="Tạo hoặc tải lên"><svg class="i l"><use href="#i-plus"/></svg></button>
+        <nav class="bbar" aria-label="Phân hệ">
+          <a><span class="ic"><svg class="i l"><use href="#i-chat"/></svg></span>Chat<span class="count">3</span></a>
+          <a><span class="ic"><svg class="i l"><use href="#i-cal"/></svg></span>Lịch</a>
+          <a aria-current="page"><span class="ic"><svg class="i l"><use href="#i-folder"/></svg></span>Tài liệu</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-approve"/></svg></span>Phê duyệt<span class="count">2</span></a>
+          <a><span class="ic"><svg class="i l"><use href="#i-grid"/></svg></span>Thêm</a>
+        </nav>
+      </div>
+      <small>Tài liệu: bỏ ô "Tìm trong Tài liệu" và dòng tên workspace; ⋯ mở menu có "Cài đặt Tài liệu"</small>
+    </div>
+
+    <div class="ph">
+      <div class="phone">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="spill"><button class="ws" type="button"><b>N</b></button><button class="q" type="button"><svg class="i s"><use href="#i-search"/></svg>Tìm đề nghị</button><button class="me" type="button"><span class="av" style="--p:var(--color-person-6)">MĐ</span></button></div>
+          <div class="ttl"><h2>Phê duyệt</h2><button class="ibtn" aria-label="Thêm tuỳ chọn Phê duyệt"><svg class="i"><use href="#i-more"/></svg></button></div>
+          <nav class="tabs"><a aria-current="page">Chờ tôi <span class="count">2</span></a><a>Tôi đã gửi</a><a>Đã xử lý</a><a>Phòng ban</a><a>Tất cả</a></nav>
+          <div class="row unread"><span class="av s44" style="--p:var(--color-person-2)">VL</span><span><span class="t"><b>Mua 3 laptop phòng Kế toán</b><time>10:12</time></span><span class="s">Lê Quang Vinh · 54.000.000 ₫</span></span><svg class="i muted"><use href="#i-chev"/></svg></div>
+          <div class="row unread"><span class="av s44" style="--p:var(--color-person-5)">TL</span><span><span class="t"><b>Nghỉ phép 20–22/10</b><time>Hôm qua</time></span><span class="s">Nguyễn Thu Lan · 3 ngày</span></span><svg class="i muted"><use href="#i-chev"/></svg></div>
+        </div>
+        <button class="fab" type="button" aria-label="Tạo đề nghị"><svg class="i l"><use href="#i-plus"/></svg></button>
+        <nav class="bbar" aria-label="Phân hệ">
+          <a><span class="ic"><svg class="i l"><use href="#i-chat"/></svg></span>Chat<span class="count">3</span></a>
+          <a><span class="ic"><svg class="i l"><use href="#i-cal"/></svg></span>Lịch</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-folder"/></svg></span>Tài liệu</a>
+          <a aria-current="page"><span class="ic"><svg class="i l"><use href="#i-approve"/></svg></span>Phê duyệt<span class="count">2</span></a>
+          <a><span class="ic"><svg class="i l"><use href="#i-grid"/></svg></span>Thêm</a>
+        </nav>
+      </div>
+      <small>Phê duyệt: một ô tìm; tab cuộn có mờ mép, tab đang chọn luôn cuộn vào khung</small>
+    </div>
+  </div>
+  <ul class="notes">
+    <li><b>Ô tìm:</b> viên thuốc chính là ô tìm của phân hệ (nở thành ô nhập theo "Gợi ý trong ô tìm" §6). Trên điện thoại không có ô tìm thứ hai trong trang. Tài sản đổi chữ "Tài sản" thành "Tìm tài sản".</li>
+    <li><b>Hàng tiêu đề:</b> font display 700 26px; tối đa một nút phụ (Thread, chế độ xem), rồi <b>⋯</b>. Hành động tạo của mọi phân hệ là <b>nút + cạnh thanh đáy</b> (Trò chuyện mới, Tạo/Tải lên, Sự kiện mới, Tạo đề nghị, Thêm tài sản) để thanh luôn cùng bề rộng; Danh bạ không có +, ô đó để trống. Không phụ đề: tên workspace đã ở ô chữ cái.</li>
+    <li><b>⋯ của phân hệ:</b> menu nổi, hàng 48: <b>Cài đặt &lt;phân hệ&gt;</b> luôn là dòng đầu, sau đó lối tắt riêng (Thùng rác, Đã gắn sao, Mục mới…).</li>
+    <li><b>Tab/chip:</b> cuộn ngang, <code>mask-image</code> mờ 15% mép phải khi còn tab bị che; tab đang chọn <code>scrollIntoView({inline: 'nearest'})</code>. Không bao giờ cắt chữ giữa từ.</li>
+  </ul>
+</section>
+
+<!-- ================================================================ §3 -->
+<section class="screen" id="s3">
+  <div class="screen-head">
+    <h2>§3 Tôi: một chỗ cho mọi cài đặt cá nhân</h2>
+    <p>Thay bốn lối vào hiện nay (Cài đặt trong ☰; Cài đặt thông báo, Cài đặt tài khoản, Cài đặt trong sheet avatar; Thông báo của Chat trong tab Thêm). Chạm avatar mở trang <b>Tôi</b> toàn màn, danh sách nhóm kiểu iOS/Lark, mỗi dòng mở một trang con. Thông tin workspace (tên, mô tả) chuyển sang Quản trị.</p>
+  </div>
+  <div class="phones">
+    <div class="ph">
+      <div class="phone nobar">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="dbar"><button class="ibtn" aria-label="Đóng"><svg class="i"><use href="#i-back"/></svg></button><h2>Tôi</h2></div>
+          <div class="me-card"><span class="av s64" style="--p:var(--color-person-6)">MĐ</span><span><b>Trần Minh Đức</b><small class="muted">Giám đốc điều hành · NovaPay</small><span class="pill-ok">Đang hoạt động</span></span><svg class="i muted"><use href="#i-chev"/></svg></div>
+          <div class="grp">
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-moon"/></svg></span><span><b>Tạm dừng thông báo</b></span><span class="val">Tắt</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+          </div>
+          <div class="grp-t">Cài đặt chung</div>
+          <div class="grp">
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-user"/></svg></span><span><b>Tài khoản và hồ sơ</b></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-bell"/></svg></span><span><b>Thông báo</b></span><span class="val">Giờ yên lặng 22–7</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-moon"/></svg></span><span><b>Giao diện</b></span><span class="val">Theo hệ thống</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-globe"/></svg></span><span><b>Ngôn ngữ và khu vực</b></span><span class="val">Tiếng Việt</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-phone"/></svg></span><span><b>Thiết bị và phiên đăng nhập</b></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+          </div>
+          <div class="grp-t">Phân hệ</div>
+          <div class="grp">
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-chat"/></svg></span><span><b>Chat</b></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-cal"/></svg></span><span><b>Lịch</b></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-folder"/></svg></span><span><b>Tài liệu</b></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-approve"/></svg></span><span><b>Phê duyệt</b></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-box"/></svg></span><span><b>Tài sản</b></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-grid"/></svg></span><span><b>Thanh đáy</b></span><span class="val">4 phân hệ</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+          </div>
+          <div class="grp">
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-gear"/></svg></span><span><b>Cài đặt workspace</b><small>NovaPay · thành viên, tổ chức, quy định</small></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+          </div>
+          <div class="grp">
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-info"/></svg></span><span><b>Giới thiệu</b></span><span class="val tnum">2026.10.19 · 36edb19</span></div>
+          </div>
+          <div class="grp"><div class="it danger center">Đăng xuất</div></div>
+        </div>
+      </div>
+      <small>Tôi: hồ sơ trên cùng, cài đặt chung, rồi một dòng cho mỗi phân hệ; Đăng xuất chỉ ở đây</small>
+    </div>
+
+    <div class="ph">
+      <div class="phone nobar">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="dbar"><button class="ibtn" aria-label="Quay lại Tôi"><svg class="i"><use href="#i-back"/></svg></button><h2>Thông báo</h2></div>
+          <div class="grp">
+            <div class="it"><span><b>Thông báo đẩy trên máy này</b><small>iPhone · app đã cài</small></span><span class="sw on"></span></div>
+            <div class="it"><span><b>Giờ yên lặng</b><small>Không đổ chuông, vẫn nhận khi được nhắc</small></span><span class="val">22:00–07:00</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span><b>Xem trước nội dung</b><small>Hiện đoạn tin trên màn khoá</small></span><span class="sw on"></span></div>
+          </div>
+          <div class="grp-t">Theo phân hệ</div>
+          <div class="grp">
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-chat"/></svg></span><span><b>Chat</b><small>Trực tiếp, được nhắc và thread theo dõi</small></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-cal"/></svg></span><span><b>Lịch</b><small>Lời mời, nhắc trước sự kiện</small></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-approve"/></svg></span><span><b>Phê duyệt</b><small>Đề nghị chờ bạn, kết quả đề nghị của bạn</small></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-folder"/></svg></span><span><b>Tài liệu</b><small>Được chia sẻ, bình luận nhắc tới bạn</small></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-box"/></svg></span><span><b>Tài sản</b><small>Yêu cầu cấp phát, đến hạn bảo trì</small></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+          </div>
+          <p class="hint">Mức thông báo của từng nhóm đặt trong cài đặt nhóm đó (§5).</p>
+        </div>
+      </div>
+      <small>Thông báo: chung + một dòng mỗi phân hệ; trang con chính là trang "Thông báo" trong Cài đặt &lt;phân hệ&gt;</small>
+    </div>
+
+    <div class="ph">
+      <div class="phone nobar">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="dbar"><button class="ibtn" aria-label="Quay lại Tôi"><svg class="i"><use href="#i-back"/></svg></button><h2>Tài khoản và hồ sơ</h2></div>
+          <div class="chead"><span class="av s64" style="--p:var(--color-person-6)">MĐ</span><small style="color:var(--color-accent);font-weight:600">Đổi ảnh</small></div>
+          <div class="grp">
+            <div class="it"><span><b>Tên hiển thị</b></span><span class="val">Trần Minh Đức</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span><b>Chức danh</b></span><span class="val">Giám đốc điều hành</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span><b>Nơi làm việc</b></span><span class="val">Chưa có</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span><b>Trạng thái</b></span><span class="val">Đang hoạt động</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+          </div>
+          <div class="grp-t">Quản trị viên đặt</div>
+          <div class="grp">
+            <div class="it"><span><b>Email đăng nhập</b><small>Đổi email cần quản trị viên</small></span><span class="val">duc.tran@…</span></div>
+            <div class="it"><span><b>Phòng ban</b></span><span class="val">Chưa có</span></div>
+            <div class="it"><span><b>Vai trò</b></span><span class="val">Chủ sở hữu</span></div>
+          </div>
+        </div>
+      </div>
+      <small>Hồ sơ: dòng → trang sửa một trường (Lưu ở thanh trên), thay form dài có nút Lưu ở đáy</small>
+    </div>
+  </div>
+  <ul class="notes">
+    <li><b>Mở:</b> chạm avatar ở viên thuốc → trang Tôi trượt từ phải (280ms expo), ẩn thanh đáy. Thay sheet tài khoản hiện nay. Máy tính giữ menu tài khoản + trang Cài đặt có tab.</li>
+    <li><b>Danh sách nhóm:</b> nhóm nền <code>--color-raised</code> radius 16, hàng ≥ 52, ô icon 32 radius 9 <code>--color-sunk</code>, giá trị hiện tại mờ bên phải, chevron. Divider thụt theo ô icon. Tiêu đề nhóm 13px/600 mờ.</li>
+    <li><b>Một nguồn cho mỗi tuỳ chọn:</b> dòng "Chat" ở Tôi và "Cài đặt Chat" trong ⋯ của Chat mở <b>cùng một trang</b>; "Thông báo → Chat" mở mục Thông báo của trang đó.</li>
+    <li><b>Bỏ trên điện thoại:</b> "Thu gọn sidebar" (chỉ có nghĩa trên máy tính). <b>Chuyển đi:</b> tên/mô tả workspace sang Quản trị; "Rời workspace" ở Tài khoản và hồ sơ. Đăng xuất chỉ còn một chỗ.</li>
+    <li><b>Sửa một trường:</b> trang con có ô nhập, nút Lưu ở thanh trên (bật khi có thay đổi), Esc / quay lại = huỷ.</li>
+  </ul>
+</section>
+
+<!-- ================================================================ §4 -->
+<section class="screen" id="s4">
+  <div class="screen-head">
+    <h2>§4 Cài đặt của từng phân hệ</h2>
+    <p>Mở từ ⋯ → "Cài đặt &lt;phân hệ&gt;" hoặc từ Tôi → Phân hệ. Chỉ tuỳ chọn của người dùng; quy định chung của workspace thuộc Quản trị.</p>
+  </div>
+  <div class="phones">
+    <div class="ph">
+      <div class="phone nobar">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="dbar"><button class="ibtn" aria-label="Quay lại"><svg class="i"><use href="#i-back"/></svg></button><h2>Cài đặt Chat</h2></div>
+          <div class="grp-t">Thông báo</div>
+          <div class="grp">
+            <div class="it"><span><b>Tin nhắn trực tiếp</b></span><span class="sw on"></span></div>
+            <div class="it"><span><b>Được nhắc tên</b></span><span class="sw on"></span></div>
+            <div class="it"><span><b>Thread đang theo dõi</b></span><span class="sw on"></span></div>
+            <div class="it"><span><b>Mức mặc định cho nhóm mới</b></span><span class="val">Tin chính</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+          </div>
+          <div class="grp-t">Soạn và đọc</div>
+          <div class="grp">
+            <div class="it"><span><b>Enter để gửi</b><small>Tắt: Enter xuống dòng, chạm nút Gửi để gửi</small></span><span class="sw"></span></div>
+            <div class="it"><span><b>Xem trước liên kết</b></span><span class="sw on"></span></div>
+          </div>
+          <div class="grp-t">Danh sách</div>
+          <div class="grp">
+            <div class="it"><span><b>Sắp xếp</b></span><span class="val">Hoạt động mới nhất</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span><b>Mở Chat ở</b><small>Tất cả: theo hoạt động mới nhất · Mục: theo mục của bạn</small></span><span class="val">Mục</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span><b>Quản lý mục</b><small>Đổi tên, sắp thứ tự, xoá mục</small></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+          </div>
+        </div>
+      </div>
+      <small>Chat</small>
+    </div>
+
+    <div class="ph">
+      <div class="phone nobar">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="dbar"><button class="ibtn" aria-label="Quay lại"><svg class="i"><use href="#i-back"/></svg></button><h2>Cài đặt Lịch</h2></div>
+          <div class="grp-t">Hiển thị</div>
+          <div class="grp">
+            <div class="it"><span><b>Chế độ xem mặc định</b></span><span class="val">Lịch trình</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span><b>Tuần bắt đầu vào</b></span><span class="val">Thứ Hai</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span><b>Múi giờ</b></span><span class="val">Hà Nội (GMT+7)</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span><b>Lịch đang hiện</b></span><span class="val">3 lịch</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+          </div>
+          <div class="grp-t">Sự kiện mới</div>
+          <div class="grp">
+            <div class="it"><span><b>Thời lượng mặc định</b></span><span class="val">30 phút</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span><b>Nhắc trước</b></span><span class="val">10 phút</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+          </div>
+          <div class="grp-t">Thông báo</div>
+          <div class="grp">
+            <div class="it"><span><b>Lời mời mới</b></span><span class="sw on"></span></div>
+            <div class="it"><span><b>Thay đổi sự kiện</b></span><span class="sw on"></span></div>
+            <div class="it"><span><b>Nhắc sự kiện</b></span><span class="sw on"></span></div>
+          </div>
+        </div>
+      </div>
+      <small>Lịch (dùng bảng <code>calendar_user_settings</code> sẵn có)</small>
+    </div>
+
+    <div class="ph">
+      <div class="phone nobar">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="dbar"><button class="ibtn" aria-label="Quay lại"><svg class="i"><use href="#i-back"/></svg></button><h2>Cài đặt Tài liệu</h2></div>
+          <div class="grp-t">Hiển thị</div>
+          <div class="grp">
+            <div class="it"><span><b>Xem dạng</b></span><span class="val">Lưới</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span><b>Sắp xếp</b></span><span class="val">Sửa gần nhất</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span><b>Thư mục trước tệp</b></span><span class="sw on"></span></div>
+          </div>
+          <div class="grp-t">Dữ liệu di động</div>
+          <div class="grp">
+            <div class="it"><span><b>Tải ảnh xem trước</b><small>Tắt: chỉ tải qua Wi-Fi</small></span><span class="sw on"></span></div>
+          </div>
+          <div class="grp-t">Thông báo</div>
+          <div class="grp">
+            <div class="it"><span><b>Được chia sẻ tài liệu</b></span><span class="sw on"></span></div>
+            <div class="it"><span><b>Bình luận nhắc tới bạn</b></span><span class="sw on"></span></div>
+          </div>
+          <div class="grp-t">Phê duyệt và Tài sản</div>
+          <p class="hint" style="padding-top:0">Cùng khuôn: Thông báo (theo loại việc) + Hiển thị (tab mở đầu, sắp xếp). Uỷ quyền phê duyệt khi vắng làm ở đợt sau.</p>
+        </div>
+      </div>
+      <small>Tài liệu; Phê duyệt và Tài sản cùng khuôn</small>
+    </div>
+  </div>
+  <ul class="notes">
+    <li><b>Lưu ngay khi chạm</b> (không có nút Lưu cho công tắc và lựa chọn); lưu lỗi thì trả lại giá trị cũ + toast "Chưa lưu được…". Tuỳ chọn lưu theo người trên máy chủ, theo workspace khi tuỳ chọn thuộc workspace (thanh đáy, mức mặc định nhóm mới).</li>
+    <li><b>Chọn giá trị</b> (Sắp xếp, Tuần bắt đầu…): trang con một cột radio, chạm là chọn và quay lại.</li>
+    <li><b>Danh bạ</b> không có cài đặt riêng ở đợt này (không có tuỳ chọn nào có nghĩa); ⋯ của Danh bạ không có dòng Cài đặt.</li>
+  </ul>
+</section>
+
+<!-- ================================================================ §5 -->
+<section class="screen" id="s5">
+  <div class="screen-head">
+    <h2>§5 Cài đặt nhóm và tin nhắn trực tiếp</h2>
+    <p>Hiện tại "Thông tin nhóm" chỉ có Thông báo, ảnh, Đổi tên, Đã ghim; DM còn ít hơn. Như Lark và Google Chat: <b>chạm tên ở thanh trên</b> mở trang cài đặt cuộc trò chuyện; thanh trên còn hai nút (Gọi, Thread) thay vì bốn.</p>
+  </div>
+  <div class="phones">
+    <div class="ph">
+      <div class="phone nobar">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="dbar"><button class="ibtn" aria-label="Về danh sách"><svg class="i"><use href="#i-back"/></svg></button>
+            <button class="who" type="button" aria-label="Cài đặt nhóm general"><span class="sp s28" style="--p:var(--color-person-4)">G</span><span><b>general <svg class="i s muted"><use href="#i-chev"/></svg></b><small>7 thành viên</small></span></button>
+            <button class="ibtn" aria-label="Bắt đầu cuộc gọi"><svg class="i"><use href="#i-video"/></svg></button><button class="ibtn" aria-label="Thread"><svg class="i"><use href="#i-thread"/></svg></button></div>
+          <nav class="tabs"><a aria-current="page">Trò chuyện</a><a>Tệp</a><a>Công việc</a><a>Lịch</a></nav>
+          <div style="height:420px"></div>
+          <div class="row"><span class="av s44" style="--p:var(--color-person-5)">TL</span><span><span class="t"><b>Nguyễn Thu Lan</b><time>09:02</time></span><span class="s" style="-webkit-line-clamp:2">Chiều nay họp đối soát lúc 3h nhé, mọi người chuẩn bị số liệu tháng 9.</span></span><span></span></div>
+        </div>
+      </div>
+      <small>Trong nhóm: chạm tên (có chevron) mở cài đặt; bỏ nút Tìm và Thông tin khỏi thanh trên</small>
+    </div>
+
+    <div class="ph">
+      <div class="phone nobar">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="dbar"><button class="ibtn" aria-label="Quay lại nhóm"><svg class="i"><use href="#i-back"/></svg></button><h2>Cài đặt nhóm</h2></div>
+          <div class="chead"><span class="sp s72" style="--p:var(--color-person-4)">G</span><b>general</b><small class="muted">Kênh chung của NovaPay · Sửa</small></div>
+          <div class="quick">
+            <a><svg class="i"><use href="#i-search"/></svg>Tìm</a>
+            <a><svg class="i"><use href="#i-bell"/></svg>Thông báo</a>
+            <a><svg class="i"><use href="#i-star"/></svg>Gắn sao</a>
+            <a><svg class="i"><use href="#i-useradd"/></svg>Thêm người</a>
+          </div>
+          <div class="grp">
+            <div class="it"><span><b>Thành viên</b></span><span class="members"><span class="av s28 stack" style="--p:var(--color-person-2)">VL</span><span class="av s28 stack" style="--p:var(--color-person-5)">TL</span><span class="av s28 stack" style="--p:var(--color-person-6)">MĐ</span><span class="val more">7</span></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span><b>Tệp, ảnh và liên kết</b></span><span class="val">38</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span><b>Tin đã ghim</b></span><span class="val">2</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+          </div>
+          <div class="grp">
+            <div class="it"><span><b>Thông báo</b></span><span class="val">Tin chính và thread theo dõi</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span><b>Mục</b></span><span class="val">Không có</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+          </div>
+          <div class="grp">
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-crown"/></svg></span><span><b>Quản lý nhóm</b><small>Quyền gửi tin, thêm người, quản trị nhóm</small></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+          </div>
+          <div class="grp"><div class="it danger center">Rời nhóm</div></div>
+        </div>
+      </div>
+      <small>Cài đặt nhóm: hồ sơ nhóm, 4 lối tắt, nội dung, tuỳ chọn của bạn, Quản lý nhóm (chỉ người có quyền), Rời nhóm</small>
+    </div>
+
+    <div class="ph">
+      <div class="phone nobar">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="dbar"><button class="ibtn" aria-label="Quay lại Cài đặt nhóm"><svg class="i"><use href="#i-back"/></svg></button><h2>Quản lý nhóm</h2></div>
+          <div class="grp-t">Ai được gửi tin</div>
+          <div class="grp">
+            <div class="it"><span><b>Mọi thành viên</b></span><span class="radio on"></span></div>
+            <div class="it"><span><b>Chỉ chủ nhóm và quản trị nhóm</b><small>Thành viên vẫn trả lời trong thread</small></span><span class="radio"></span></div>
+          </div>
+          <div class="grp-t">Ai được thêm người</div>
+          <div class="grp">
+            <div class="it"><span><b>Mọi thành viên</b></span><span class="radio"></span></div>
+            <div class="it"><span><b>Chỉ chủ nhóm và quản trị nhóm</b></span><span class="radio on"></span></div>
+          </div>
+          <div class="grp-t">Ai được nhắc @Tất cả</div>
+          <div class="grp">
+            <div class="it"><span><b>Mọi thành viên</b></span><span class="radio"></span></div>
+            <div class="it"><span><b>Chỉ chủ nhóm và quản trị nhóm</b></span><span class="radio on"></span></div>
+          </div>
+          <div class="grp-t">Người quản lý</div>
+          <div class="grp">
+            <div class="it"><span class="av s28" style="--p:var(--color-person-6)">MĐ</span><span><b>Trần Minh Đức</b><small>Chủ nhóm</small></span></div>
+            <div class="it"><span class="av s28" style="--p:var(--color-person-5)">TL</span><span><b>Nguyễn Thu Lan</b><small>Quản trị nhóm</small></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it" style="color:var(--color-accent)"><span class="fico"><svg class="i"><use href="#i-plus"/></svg></span><span><b>Thêm quản trị nhóm</b></span></div>
+          </div>
+          <div class="grp">
+            <div class="it"><span><b>Chuyển quyền chủ nhóm</b></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it danger"><span><b>Giải tán nhóm</b><small>Chỉ chủ nhóm</small></span></div>
+          </div>
+        </div>
+      </div>
+      <small>Quản lý nhóm: quyết định NGAC (spec + test vector trước khi làm UI)</small>
+    </div>
+
+    <div class="ph">
+      <div class="phone nobar">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="dbar"><button class="ibtn" aria-label="Quay lại"><svg class="i"><use href="#i-back"/></svg></button><h2>Cài đặt trò chuyện</h2></div>
+          <div class="chead"><span class="av s64" style="--p:var(--color-person-2)">VL</span><b>Lê Quang Vinh</b><small class="muted">Kế toán trưởng · Phòng Tài chính</small></div>
+          <div class="quick">
+            <a><svg class="i"><use href="#i-user"/></svg>Hồ sơ</a>
+            <a><svg class="i"><use href="#i-search"/></svg>Tìm</a>
+            <a><svg class="i"><use href="#i-bell"/></svg>Thông báo</a>
+            <a><svg class="i"><use href="#i-star"/></svg>Gắn sao</a>
+          </div>
+          <div class="grp">
+            <div class="it"><span><b>Tệp, ảnh và liên kết</b></span><span class="val">12</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span><b>Tin đã ghim</b></span><span class="val">Chưa có</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+          </div>
+          <div class="grp">
+            <div class="it"><span><b>Thông báo</b></span><span class="val">Mọi tin</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span><b>Mục</b></span><span class="val">Kế toán</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+          </div>
+          <div class="grp">
+            <div class="it" style="color:var(--color-accent)"><span class="fico"><svg class="i"><use href="#i-useradd"/></svg></span><span><b>Tạo nhóm với Vinh</b></span></div>
+          </div>
+        </div>
+      </div>
+      <small>DM: hồ sơ người, lối tắt, tệp/ghim, tuỳ chọn của bạn, tạo nhóm từ DM</small>
+    </div>
+  </div>
+  <ul class="notes">
+    <li><b>Thanh trên trong cuộc trò chuyện:</b> quay lại · [avatar 28 + tên + chevron nhỏ + dòng "N thành viên" / chức danh] là một nút mở cài đặt · Gọi · Thread. "Tìm trong nhóm" chuyển vào lối tắt Tìm.</li>
+    <li><b>Lối tắt:</b> 4 ô đều, nền <code>--color-raised</code> radius 16, icon 20 + nhãn 13px. Thông báo mở sheet mức thông báo sẵn có; Gắn sao bật/tắt ngay (nhãn đổi "Bỏ gắn sao"), không có dòng Gắn sao riêng.</li>
+    <li><b>Thành viên:</b> danh sách có tìm, vai trò trong nhóm (Chủ nhóm / Quản trị nhóm / Thành viên), nhấn giữ một người: Nhắn riêng, Đặt làm quản trị nhóm, Xoá khỏi nhóm (theo quyền). Không bao giờ hiện ID.</li>
+    <li><b>Quản lý nhóm</b> chỉ hiện với chủ nhóm và quản trị nhóm; mỗi lựa chọn là một quyết định của PDP (gửi tin, thêm người, nhắc @Tất cả, quản trị nhóm) — server từ chối thì UI trả lại lựa chọn cũ. Cần spec <code>docs/specs/</code> + test vector cho cả nhánh deny trước khi làm.</li>
+    <li><b>Rời nhóm / Giải tán:</b> hộp xác nhận nêu hậu quả; chủ nhóm phải chuyển quyền trước khi rời. Giải tán chỉ chủ nhóm.</li>
+    <li><b>Máy tính:</b> trang này là panel Thông tin bên phải (cùng nội dung, cùng thứ tự), mở bằng nút ⓘ như hiện nay.</li>
+  </ul>
+</section>
+
+<!-- ================================================================ §6 -->
+<section class="screen" id="s6">
+  <div class="screen-head">
+    <h2>§6 Một ô tìm cho mọi tác vụ</h2>
+    <p>Lark: một ô tìm ra người, trò chuyện, tin nhắn, tài liệu, đề nghị, sự kiện, tài sản <b>và hành động</b> (Tạo đề nghị, Cài đặt Chat…). Google: mặc định tìm trong phân hệ đang mở, chip để nới phạm vi, chip lọc riêng từng phân hệ. Viên thuốc ở mọi phân hệ là cùng một ô tìm, chỉ khác phạm vi mặc định.</p>
+  </div>
+  <div class="phones">
+    <div class="ph">
+      <div class="phone nobar">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="sfield"><button class="ibtn" aria-label="Đóng tìm"><svg class="i"><use href="#i-back"/></svg></button><span class="in empty">Tìm trong Phê duyệt</span></div>
+          <nav class="scope" aria-label="Phạm vi tìm"><a aria-current="true">Phê duyệt</a><a>Tất cả</a><a>Chat</a><a>Tài liệu</a><a>Người</a><a>Lịch</a><a>Tài sản</a></nav>
+          <div class="shead"><b>Tìm gần đây</b><a>Xoá tất cả</a></div>
+          <div class="sr"><span class="fico"><svg class="i"><use href="#i-search"/></svg></span><span><b>laptop kế toán</b></span><svg class="i x"><use href="#i-plus" transform="rotate(45 12 12)"/></svg></div>
+          <div class="sr"><span class="fico"><svg class="i"><use href="#i-search"/></svg></span><span><b>nghỉ phép tháng 10</b></span><svg class="i x"><use href="#i-plus" transform="rotate(45 12 12)"/></svg></div>
+          <div class="shead"><b>Gợi ý</b></div>
+          <div class="sr"><span class="fico"><svg class="i"><use href="#i-approve"/></svg></span><span><b>Mua 3 laptop phòng Kế toán</b><small>Chờ bạn · Lê Quang Vinh</small></span><span></span></div>
+          <div class="sr"><span class="fico"><svg class="i"><use href="#i-approve"/></svg></span><span><b>Nghỉ phép 20–22/10</b><small>Chờ bạn · Nguyễn Thu Lan</small></span><span></span></div>
+          <div class="shead"><b>Làm nhanh</b></div>
+          <div class="acts">
+            <a><span class="tile"><svg class="i"><use href="#i-plus"/></svg></span>Tạo đề nghị</a>
+            <a><span class="tile"><svg class="i"><use href="#i-cal"/></svg></span>Sự kiện mới</a>
+            <a><span class="tile"><svg class="i"><use href="#i-chat"/></svg></span>Nhắn tin</a>
+            <a><span class="tile"><svg class="i"><use href="#i-gear"/></svg></span>Cài đặt Phê duyệt</a>
+          </div>
+        </div>
+      </div>
+      <small>Chưa gõ: phạm vi = phân hệ đang mở; Tìm gần đây riêng từng phạm vi; gợi ý; Làm nhanh</small>
+    </div>
+
+    <div class="ph">
+      <div class="phone nobar">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="sfield"><button class="ibtn" aria-label="Đóng tìm"><svg class="i"><use href="#i-back"/></svg></button><span class="in">đối soát</span><button class="ibtn" aria-label="Xoá chữ"><svg class="i"><use href="#i-plus" transform="rotate(45 12 12)"/></svg></button></div>
+          <nav class="scope"><a>Phê duyệt</a><a aria-current="true">Tất cả</a><a>Chat</a><a>Tài liệu</a><a>Người</a><a>Lịch</a></nav>
+          <div class="shead"><b>Hành động</b></div>
+          <div class="sr"><span class="fico"><svg class="i"><use href="#i-plus"/></svg></span><span><b>Tạo đề nghị “<mark>đối soát</mark>”</b></span><span></span></div>
+          <div class="shead"><b>Trò chuyện</b><a>Xem tất cả</a></div>
+          <div class="sr"><span class="sp" style="--p:var(--color-person-3)">Đ</span><span><b><mark>Đối soát</mark> liên khối</b><small>Nhóm · 7 thành viên</small></span><span></span></div>
+          <div class="shead"><b>Tin nhắn</b><a>Xem tất cả · 24</a></div>
+          <div class="sr"><span class="av" style="--p:var(--color-person-5)">TL</span><span><b>Chiều nay họp <mark>đối soát</mark> lúc 3h nhé</b><small>Thu Lan · general · 09:02</small></span><span></span></div>
+          <div class="shead"><b>Tài liệu</b><a>Xem tất cả · 6</a></div>
+          <div class="sr"><span class="fico"><svg class="i"><use href="#i-file"/></svg></span><span><b><mark>Đối soát</mark> tháng 9</b><small>Bảng tính · Minh Đức · Hôm qua</small></span><span></span></div>
+          <div class="shead"><b>Đề nghị</b><a>Xem tất cả · 2</a></div>
+          <div class="sr"><span class="fico"><svg class="i"><use href="#i-approve"/></svg></span><span><b>Thanh toán phí <mark>đối soát</mark> Q3</b><small>Đã duyệt · Quang Vinh</small></span><span></span></div>
+          <div class="shead"><b>Sự kiện</b></div>
+          <div class="sr"><span class="fico"><svg class="i"><use href="#i-cal"/></svg></span><span><b>Họp <mark>đối soát</mark> liên khối</b><small>Hôm nay 15:00–16:00</small></span><span></span></div>
+        </div>
+      </div>
+      <small>Tất cả: nhóm theo loại, mỗi nhóm 1–3 kết quả + "Xem tất cả · N"; hành động khớp chữ lên đầu</small>
+    </div>
+
+    <div class="ph">
+      <div class="phone nobar">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="sfield"><button class="ibtn" aria-label="Đóng tìm"><svg class="i"><use href="#i-back"/></svg></button><span class="in">đối soát</span><button class="ibtn" aria-label="Xoá chữ"><svg class="i"><use href="#i-plus" transform="rotate(45 12 12)"/></svg></button></div>
+          <nav class="scope"><a aria-current="true">Tài liệu</a><a class="flt on">Bảng tính ✕</a><a class="flt">Người sửa</a><a class="flt">Ngày sửa</a><a class="flt">Thư mục</a></nav>
+          <div class="sr"><span class="fico"><svg class="i"><use href="#i-file"/></svg></span><span><b><mark>Đối soát</mark> tháng 9</b><small>Minh Đức · Hôm qua · Tài chính</small></span><svg class="i x"><use href="#i-more"/></svg></div>
+          <div class="sr"><span class="fico"><svg class="i"><use href="#i-file"/></svg></span><span><b><mark>Đối soát</mark> tháng 8</b><small>Thu Lan · 12/09 · Tài chính</small></span><svg class="i x"><use href="#i-more"/></svg></div>
+          <div class="sr"><span class="fico"><svg class="i"><use href="#i-file"/></svg></span><span><b>Mẫu <mark>đối soát</mark> liên khối</b><small>Quang Vinh · 02/09 · Mẫu</small></span><svg class="i x"><use href="#i-more"/></svg></div>
+          <div class="wider"><svg class="i"><use href="#i-search"/></svg>Có 21 kết quả ở phân hệ khác<b>Tìm ở mọi nơi</b></div>
+        </div>
+      </div>
+      <small>Trong một phân hệ: chip lọc riêng (Tài liệu: loại, người sửa, ngày, thư mục); cuối danh sách mời nới sang Tất cả</small>
+    </div>
+  </div>
+  <ul class="notes">
+    <li><b>Mở:</b> chạm viên thuốc ở bất kỳ phân hệ nào → ô tìm toàn màn tại chỗ (viên thuốc đứng yên, viền accent 2px, bàn phím mở ngay). Theo "Gợi ý trong ô tìm" §6 của DESIGN.md, nay áp cho mọi phân hệ.</li>
+    <li><b>Phạm vi:</b> chip đầu là phân hệ đang mở (mặc định), rồi <b>Tất cả</b>, rồi các phân hệ khác. Chip đang chọn nền <code>--color-ink</code>. Đổi phạm vi giữ chữ đã gõ. Sau phạm vi là chip lọc của phân hệ đó (Chat: Người gửi · Trong · Ngày · Có tệp · Có liên kết · Nhắc đến tôi; Tài liệu: Loại · Người sửa · Ngày · Thư mục; Phê duyệt: Trạng thái · Loại · Người gửi · Ngày; Lịch: Lịch · Khoảng ngày; Tài sản: Loại · Trạng thái · Người giữ).</li>
+    <li><b>Tất cả:</b> nhóm theo loại theo thứ tự khớp nhất; mỗi nhóm tối đa 3, "Xem tất cả · N" chuyển sang phạm vi đó. Gõ ra từng nhóm khi về (không chờ nhóm chậm nhất), skeleton cho nhóm đang chờ.</li>
+    <li><b>Hành động:</b> lệnh khớp chữ (Tạo đề nghị, Sự kiện mới, Nhắn tin cho &lt;người&gt;, Cài đặt &lt;phân hệ&gt;, Đổi workspace) đứng đầu; chưa gõ thì hiện "Làm nhanh" của phân hệ.</li>
+    <li><b>Quyền:</b> mỗi nhóm kết quả do service của phân hệ đó trả, đã lọc theo quyền đọc (PEP như hiện nay). Hiện chỉ Tin nhắn và Lịch có API tìm trên server; Tài liệu, Phê duyệt, Tài sản, Người cần API tìm có kiểm quyền — việc backend của đợt này.</li>
+    <li><b>Tìm gần đây</b> riêng theo phạm vi (đã có), xoá từng mục hoặc Xoá tất cả + Hoàn tác. Không bao giờ hiện ID trong kết quả.</li>
+  </ul>
+</section>
+
+<!-- ================================================================ §7 -->
+<section class="screen" id="s7">
+  <div class="screen-head">
+    <h2>§7 Vuốt</h2>
+    <p>App cài trên iPhone (PWA) <b>không có</b> cử chỉ vuốt mép trái để quay lại như app thật — app phải tự làm. Thêm vuốt trên hàng (Lark/Gmail), vuốt tin để trả lời (Lark), vuốt đổi tuần, kéo xuống đóng. Mọi cử chỉ đều có nút tương đương (nhấn giữ hoặc ⋯).</p>
+  </div>
+  <div class="phones">
+    <div class="ph">
+      <div class="phone">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="spill"><button class="ws" type="button"><b>N</b></button><button class="q" type="button"><svg class="i s"><use href="#i-search"/></svg>Tìm trong chat</button><button class="me" type="button"><span class="av" style="--p:var(--color-person-6)">MĐ</span></button></div>
+          <div class="ttl"><h2>Chat</h2></div>
+          <div class="swrow">
+            <div class="under"><a style="background:var(--color-ink-muted)"><svg class="i"><use href="#i-bell"/></svg>Tắt thông báo</a><a style="background:var(--color-warning)"><svg class="i"><use href="#i-star"/></svg>Gắn sao</a><a style="background:var(--color-ink)"><svg class="i"><use href="#i-more"/></svg>Thêm</a></div>
+            <div class="row unread shift-l"><span class="sp" style="--p:var(--color-person-4)">G</span><span><span class="t"><b>general</b><time>09:02</time></span><span class="s">Lan: Chiều nay họp đối soát lúc 3h nhé</span></span><span class="count">2</span></div>
+          </div>
+          <div class="swrow">
+            <div class="under left"><a style="background:var(--color-accent)"><svg class="i"><use href="#i-chat"/></svg>Đã đọc</a></div>
+            <div class="row unread shift-r"><span class="sp" style="--p:var(--color-person-3)">Đ</span><span><span class="t"><b>Đối soát liên khối</b><time>Hôm qua</time></span><span class="s">Thu: 📎 doi-soat-T9.xlsx</span></span><span class="count">1</span></div>
+          </div>
+          <div class="row"><span class="av s44" style="--p:var(--color-person-2)">VL</span><span><span class="t"><b>Lê Quang Vinh</b><time>08:40</time></span><span class="s">Bạn: Đã gửi bản đối soát tháng 9</span></span><span></span></div>
+        </div>
+        <button class="fab" type="button" aria-label="Trò chuyện mới"><svg class="i l"><use href="#i-plus"/></svg></button>
+        <nav class="bbar" aria-label="Phân hệ">
+          <a aria-current="page"><span class="ic"><svg class="i l"><use href="#i-chat"/></svg></span>Chat<span class="count">3</span></a>
+          <a><span class="ic"><svg class="i l"><use href="#i-cal"/></svg></span>Lịch</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-folder"/></svg></span>Tài liệu</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-approve"/></svg></span>Phê duyệt</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-grid"/></svg></span>Thêm</a>
+        </nav>
+      </div>
+      <small>Hàng trò chuyện: vuốt trái lộ Tắt thông báo · Gắn sao · Thêm; vuốt phải = Đã đọc / Chưa đọc (vuốt hết là làm luôn)</small>
+    </div>
+
+    <div class="ph">
+      <div class="phone nobar">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="dbar"><button class="ibtn" aria-label="Về danh sách"><svg class="i"><use href="#i-back"/></svg></button><button class="who" type="button"><span class="sp s28" style="--p:var(--color-person-4)">G</span><span><b>general <svg class="i s muted"><use href="#i-chev"/></svg></b><small>7 thành viên</small></span></button><button class="ibtn"><svg class="i"><use href="#i-video"/></svg></button><button class="ibtn"><svg class="i"><use href="#i-thread"/></svg></button></div>
+          <div style="height:300px"></div>
+          <div class="msg"><span class="av s28" style="--p:var(--color-person-2)">VL</span><div class="bub">Bản đối soát tháng 9 đã lên Tài liệu rồi nhé</div></div>
+          <div class="msg" style="padding-left:70px"><span class="reply" aria-hidden="true"><svg class="i"><use href="#i-back" transform="scale(-1 1) translate(-24 0)"/></svg></span><span class="av s28" style="--p:var(--color-person-5)">TL</span><div class="bub">Chiều nay họp đối soát lúc 3h nhé, mọi người chuẩn bị số liệu</div></div>
+          <div class="msg"><div class="bub me">Ok, mình sẽ mang bản in</div></div>
+        </div>
+      </div>
+      <small>Trong cuộc trò chuyện: vuốt tin sang phải → icon trả lời hiện ra, thả quá ngưỡng = Trích dẫn trả lời (rung nhẹ)</small>
+    </div>
+
+    <div class="ph">
+      <div class="phone nobar">
+        <div class="peek">
+          <div class="spill"><button class="ws" type="button"><b>N</b></button><button class="q" type="button"><svg class="i s"><use href="#i-search"/></svg>Tìm trong chat</button><button class="me" type="button"><span class="av" style="--p:var(--color-person-6)">MĐ</span></button></div>
+          <div class="ttl"><h2>Chat</h2></div>
+          <div class="row"><span class="sp" style="--p:var(--color-person-4)">G</span><span><span class="t"><b>general</b><time>09:02</time></span><span class="s">Lan: Chiều nay họp…</span></span><span></span></div>
+        </div>
+        <div class="front">
+          <div class="dbar"><button class="ibtn"><svg class="i"><use href="#i-back"/></svg></button><h2>Cài đặt nhóm</h2></div>
+          <div class="chead"><span class="sp s72" style="--p:var(--color-person-4)">G</span><b>general</b></div>
+        </div>
+        <div class="edge" aria-hidden="true"></div>
+      </div>
+      <small>Vuốt từ mép trái (vùng 20px) kéo màn hiện tại theo ngón tay sang phải, màn trước lộ dần; thả quá 35% hoặc vuốt nhanh = quay lại</small>
+    </div>
+
+    <div class="ph">
+      <div class="phone">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="spill"><button class="ws" type="button"><b>N</b></button><button class="q" type="button"><svg class="i s"><use href="#i-search"/></svg>Tìm đề nghị</button><button class="me" type="button"><span class="av" style="--p:var(--color-person-6)">MĐ</span></button></div>
+          <div class="ttl"><h2>Phê duyệt</h2></div>
+          <nav class="tabs"><a aria-current="page">Chờ tôi <span class="count">2</span></a><a>Tôi đã gửi</a><a>Đã xử lý</a><a>Phòng ban</a></nav>
+          <div class="swrow">
+            <div class="under left"><a style="background:var(--color-success);width:92px"><svg class="i"><use href="#i-approve"/></svg>Duyệt…</a></div>
+            <div class="row unread shift-r"><span class="av s44" style="--p:var(--color-person-2)">VL</span><span><span class="t"><b>Mua 3 laptop phòng Kế toán</b><time>10:12</time></span><span class="s">Lê Quang Vinh · 54.000.000 ₫</span></span><span></span></div>
+          </div>
+          <div class="swrow">
+            <div class="under"><a style="background:var(--color-danger)"><svg class="i"><use href="#i-plus" transform="rotate(45 12 12)"/></svg>Từ chối…</a><a style="background:var(--color-ink)"><svg class="i"><use href="#i-more"/></svg>Thêm</a></div>
+            <div class="row unread" style="transform:translateX(-152px)"><span class="av s44" style="--p:var(--color-person-5)">TL</span><span><span class="t"><b>Nghỉ phép 20–22/10</b><time>Hôm qua</time></span><span class="s">Nguyễn Thu Lan · 3 ngày</span></span><span></span></div>
+          </div>
+        </div>
+        <button class="fab" type="button" aria-label="Tạo đề nghị"><svg class="i l"><use href="#i-plus"/></svg></button>
+        <nav class="bbar" aria-label="Phân hệ">
+          <a><span class="ic"><svg class="i l"><use href="#i-chat"/></svg></span>Chat</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-cal"/></svg></span>Lịch</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-folder"/></svg></span>Tài liệu</a>
+          <a aria-current="page"><span class="ic"><svg class="i l"><use href="#i-approve"/></svg></span>Phê duyệt</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-grid"/></svg></span>Thêm</a>
+        </nav>
+      </div>
+      <small>Phê duyệt: vuốt chỉ <b>lộ</b> nút Duyệt…/Từ chối… — chạm mới mở sheet xác nhận (có ô ý kiến); không bao giờ duyệt bằng vuốt hết</small>
+    </div>
+  </div>
+  <table class="gtable">
+    <thead><tr><th>Cử chỉ</th><th>Ở đâu</th><th>Làm gì</th><th>Nút tương đương</th></tr></thead>
+    <tbody>
+      <tr><td>Vuốt từ mép trái (20px)</td><td>Mọi màn chi tiết, trang cài đặt, thread</td><td>Quay lại, màn trước lộ dần theo ngón tay; thả &gt; 35% hoặc vận tốc &gt; 0,5 px/ms</td><td>Nút ← thanh trên</td></tr>
+      <tr><td>Vuốt hàng sang trái</td><td>Chat, Tài liệu, Tài sản, Thông báo</td><td>Lộ 2–3 nút (Chat: Tắt thông báo · Gắn sao · Thêm; Tài liệu: Chia sẻ · Gắn sao · Thêm; Thông báo: Xoá)</td><td>Nhấn giữ hàng</td></tr>
+      <tr><td>Vuốt hàng sang phải</td><td>Chat, Thông báo</td><td>Đã đọc / Chưa đọc; vuốt hết (&gt; 60% bề rộng) làm luôn, có Hoàn tác</td><td>Nhấn giữ → Đánh dấu…</td></tr>
+      <tr><td>Vuốt hàng hai chiều</td><td>Phê duyệt (Chờ tôi)</td><td>Chỉ lộ Duyệt… (phải) / Từ chối… (trái); chạm mở sheet xác nhận. Vuốt hết không làm gì</td><td>Mở đề nghị</td></tr>
+      <tr><td>Vuốt tin sang phải</td><td>Trong cuộc trò chuyện, thread</td><td>Trích dẫn trả lời; ngưỡng 64px, rung nhẹ khi qua ngưỡng</td><td>Nhấn giữ → Trích dẫn</td></tr>
+      <tr><td>Vuốt ngang dải tuần / tháng</td><td>Lịch</td><td>Tuần trước / sau (dải tuần), tháng trước / sau (lưới tháng)</td><td>‹ › cạnh tên tháng</td></tr>
+      <tr><td>Kéo xuống</td><td>Đầu danh sách</td><td>Tải lại (đã có ở Chat; thêm cho mọi phân hệ)</td><td>—</td></tr>
+      <tr><td>Kéo xuống trên sheet / ảnh</td><td>Sheet, trình xem ảnh/tệp, trang Tôi</td><td>Đóng (&gt; 25% hoặc vuốt nhanh); ảnh: vuốt ngang chuyển ảnh, chụm để phóng</td><td>✕ / Esc</td></tr>
+      <tr><td>Cuộn xuống / lên</td><td>Danh sách có thanh đáy</td><td>Thanh đáy gập / mở (§1)</td><td>—</td></tr>
+    </tbody>
+  </table>
+  <ul class="notes">
+    <li><b>Khoá trục:</b> sau 10px đầu, chuyển động theo trục nào thì chỉ cử chỉ của trục đó chạy (cuộn dọc không kéo lệch hàng). Vuốt bắt đầu trong vùng mép 20px luôn là quay lại, không phải vuốt hàng.</li>
+    <li><b>Một hàng mở tại một thời điểm:</b> vuốt hàng khác hoặc cuộn thì hàng đang mở đóng lại. Nút lộ ra rộng 76, nhãn 12px dưới icon, màu theo nghĩa (danger chỉ cho hành động phá huỷ / từ chối).</li>
+    <li><b>Chuyển động:</b> theo ngón tay 1:1, thả thì về đích bằng <code>--ease-out-expo</code> 240ms; giảm chuyển động: không theo ngón tay, thả quá ngưỡng là đổi ngay, chưa tới thì đứng yên.</li>
+    <li><b>Không dùng vuốt ngang để đổi tab/chip</b> (tránh tranh với vuốt hàng và vuốt mép); tab/chip đổi bằng chạm.</li>
+    <li><b>Rung</b> (<code>navigator.vibrate</code>) không có trên iOS Safari; qua ngưỡng thì icon phóng 1.15 + đổi màu để báo bằng mắt.</li>
+  </ul>
+</section>
+
+<!-- ================================================================ §8 -->
+<section class="screen" id="s8">
+  <div class="screen-head">
+    <h2>§8 Workspace cá nhân và workspace tổ chức</h2>
+    <p>Cùng một vỏ, khác nội dung. Cá nhân: chỉ bạn, không Phê duyệt, Tài sản, Quản trị, phòng ban; Lịch chỉ lịch cá nhân. Tổ chức: đủ phân hệ, hồ sơ trong tổ chức do quản trị viên đặt, và quản trị viên có thể <b>khoá</b> một số tuỳ chọn cho cả tổ chức. Cài đặt tách hai lớp: <b>Tài khoản</b> (theo người, mọi workspace dùng chung) và <b>Trong workspace này</b> (theo workspace).</p>
+  </div>
+  <div class="phones">
+    <div class="ph">
+      <div class="phone">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="spill"><button class="ws" type="button"><b style="background:var(--color-person-6)">Đ</b></button><button class="q" type="button"><svg class="i s"><use href="#i-search"/></svg>Tìm trong chat</button><button class="me" type="button"><span class="av" style="--p:var(--color-person-6)">MĐ</span></button></div>
+          <div class="ttl"><h2>Chat</h2></div>
+        </div>
+        <div class="scrim"></div>
+        <div class="sheet" role="dialog" aria-label="Thêm">
+          <div class="grab"></div>
+          <div class="wsrow"><b class="lt" style="background:var(--color-person-6)">Đ</b><span><b>Trần Minh Đức</b><small>Workspace cá nhân · chỉ bạn</small></span><svg class="i"><use href="#i-down"/></svg></div>
+          <h3>Tất cả phân hệ <a>Sửa thanh đáy</a></h3>
+          <div class="mgrid">
+            <a class="pinned"><span class="tile"><svg class="i l"><use href="#i-chat"/></svg></span>Chat</a>
+            <a class="pinned"><span class="tile"><svg class="i l"><use href="#i-cal"/></svg></span>Lịch</a>
+            <a class="pinned"><span class="tile"><svg class="i l"><use href="#i-folder"/></svg></span>Tài liệu</a>
+            <a class="pinned"><span class="tile"><svg class="i l"><use href="#i-users"/></svg></span>Danh bạ</a>
+            <a><span class="tile"><svg class="i l"><use href="#i-bell"/></svg></span>Thông báo</a>
+          </div>
+        </div>
+        <nav class="bbar" aria-label="Phân hệ">
+          <a aria-current="page"><span class="ic"><svg class="i l"><use href="#i-chat"/></svg></span>Chat</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-cal"/></svg></span>Lịch</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-folder"/></svg></span>Tài liệu</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-users"/></svg></span>Danh bạ</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-grid"/></svg></span>Thêm</a>
+        </nav>
+      </div>
+      <small><span class="kind">Cá nhân</span> Thanh đáy Chat · Lịch · Tài liệu · Danh bạ; Thêm không có Phê duyệt, Tài sản, Quản trị</small>
+    </div>
+
+    <div class="ph">
+      <div class="phone nobar">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="dbar"><button class="ibtn" aria-label="Đóng"><svg class="i"><use href="#i-back"/></svg></button><h2>Tôi</h2></div>
+          <div class="me-card"><span class="av s64" style="--p:var(--color-person-6)">MĐ</span><span><b>Trần Minh Đức</b><small class="muted">duc.tran@example.test</small><span class="kind">Workspace cá nhân</span></span><svg class="i muted"><use href="#i-chev"/></svg></div>
+          <div class="grp-t">Tài khoản · dùng chung mọi workspace</div>
+          <div class="grp">
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-user"/></svg></span><span><b>Tài khoản và hồ sơ</b></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-bell"/></svg></span><span><b>Thông báo</b></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-moon"/></svg></span><span><b>Giao diện, ngôn ngữ</b></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-phone"/></svg></span><span><b>Thiết bị và phiên</b></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+          </div>
+          <div class="grp-t">Trong workspace này</div>
+          <div class="grp">
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-chat"/></svg></span><span><b>Chat</b></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-cal"/></svg></span><span><b>Lịch</b><small>Chỉ lịch cá nhân</small></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-folder"/></svg></span><span><b>Tài liệu</b></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-grid"/></svg></span><span><b>Thanh đáy</b></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+          </div>
+          <div class="grp">
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-gear"/></svg></span><span><b>Cài đặt workspace</b><small>Tên, dung lượng</small></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+          </div>
+          <div class="grp"><div class="it danger center">Đăng xuất</div></div>
+        </div>
+      </div>
+      <small><span class="kind">Cá nhân</span> Tôi: không hồ sơ tổ chức; tên và dung lượng ở Cài đặt workspace (§11)</small>
+    </div>
+
+    <div class="ph">
+      <div class="phone nobar">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="dbar"><button class="ibtn" aria-label="Đóng"><svg class="i"><use href="#i-back"/></svg></button><h2>Tôi</h2></div>
+          <div class="me-card"><span class="av s64" style="--p:var(--color-person-6)">MĐ</span><span><b>Trần Minh Đức</b><small class="muted">Giám đốc điều hành · Ban giám đốc</small><span class="kind org">NovaPay · Chủ sở hữu</span></span><svg class="i muted"><use href="#i-chev"/></svg></div>
+          <div class="grp-t">Tài khoản · dùng chung mọi workspace</div>
+          <div class="grp">
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-user"/></svg></span><span><b>Tài khoản và hồ sơ</b></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-bell"/></svg></span><span><b>Thông báo</b></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-moon"/></svg></span><span><b>Giao diện, ngôn ngữ</b></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-phone"/></svg></span><span><b>Thiết bị và phiên</b></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+          </div>
+          <div class="grp-t">Trong NovaPay</div>
+          <div class="grp">
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-shield"/></svg></span><span><b>Hồ sơ trong tổ chức</b><small>Chức danh, phòng ban, vai trò</small></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-chat"/></svg></span><span><b>Chat</b></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-cal"/></svg></span><span><b>Lịch</b></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-folder"/></svg></span><span><b>Tài liệu</b></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-approve"/></svg></span><span><b>Phê duyệt</b></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-box"/></svg></span><span><b>Tài sản</b></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-grid"/></svg></span><span><b>Thanh đáy</b></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+          </div>
+          <div class="grp">
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-gear"/></svg></span><span><b>Cài đặt workspace</b><small>Thành viên, tổ chức, quy định, dung lượng</small></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+          </div>
+        </div>
+      </div>
+      <small><span class="kind org">Tổ chức</span> Tôi: thêm Hồ sơ trong tổ chức, Phê duyệt, Tài sản; dòng Cài đặt workspace (§11)</small>
+    </div>
+
+    <div class="ph">
+      <div class="phone nobar">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="dbar"><button class="ibtn" aria-label="Quay lại"><svg class="i"><use href="#i-back"/></svg></button><h2>Cài đặt Chat</h2></div>
+          <div class="grp-t">Soạn và đọc</div>
+          <div class="grp">
+            <div class="it"><span><b>Enter để gửi</b></span><span class="sw"></span></div>
+            <div class="it"><span><b>Xem trước liên kết</b></span><span class="sw on"></span></div>
+          </div>
+          <div class="grp-t">Nhóm mới</div>
+          <div class="grp">
+            <div class="it"><span><b>Mức thông báo mặc định</b></span><span class="val">Tin chính</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it" style="opacity:0.72"><span><b>Ai được tạo nhóm</b><small class="lock"><svg class="i s"><use href="#i-shield"/></svg>Do quản trị viên đặt: thành viên chính thức</small></span><span class="val">Xem</span></div>
+          </div>
+          <p class="hint">Ở workspace cá nhân không có dòng bị khoá: mọi tuỳ chọn là của bạn.</p>
+        </div>
+      </div>
+      <small><span class="kind org">Tổ chức</span> Tuỳ chọn quản trị viên đã khoá: hiện giá trị + lý do, mờ, không chạm được</small>
+    </div>
+  </div>
+  <table class="gtable">
+    <thead><tr><th>Chỗ</th><th><span class="kind">Cá nhân</span></th><th><span class="kind org">Tổ chức</span></th></tr></thead>
+    <tbody>
+      <tr><td>Thanh đáy mặc định</td><td>Chat · Lịch · Tài liệu · Danh bạ · Thêm</td><td>Chat · Lịch · Tài liệu · Phê duyệt · Thêm</td></tr>
+      <tr><td>Thêm</td><td>Chat, Lịch, Tài liệu, Danh bạ, Thông báo</td><td>+ Phê duyệt, Tài sản; Quản trị nằm trong Cài đặt workspace (§11)</td></tr>
+      <tr><td>Tôi → Tài khoản (dùng chung)</td><td colspan="2">Giống nhau: tên hiển thị, ảnh, email đăng nhập, trạng thái, thông báo chung, giờ yên lặng, giao diện, ngôn ngữ, thiết bị</td></tr>
+      <tr><td>Tôi → Trong workspace này</td><td>Chat, Lịch (chỉ lịch cá nhân), Tài liệu, Thanh đáy; Cài đặt workspace (tên, dung lượng)</td><td>Hồ sơ trong tổ chức (chức danh, phòng ban, vai trò — quản trị viên đặt), Chat, Lịch, Tài liệu, Phê duyệt, Tài sản, Thanh đáy; Cài đặt workspace (§11: thông tin, thành viên và tổ chức, quy định, phân hệ, Rời)</td></tr>
+      <tr><td>Tuỳ chọn bị khoá</td><td>Không có</td><td>Quản trị viên khoá được; đợt này chỉ "Ai được tạo nhóm": dòng mờ, giá trị + "Quản trị viên … đã đặt"</td></tr>
+      <tr><td>Cài đặt nhóm</td><td>Như §5, không có phòng ban trong dòng phụ thành viên</td><td>Như §5; Quản lý nhóm theo quyền NGAC của tổ chức</td></tr>
+      <tr><td>Danh bạ</td><td>Thành viên · Nhóm của tôi</td><td>Phòng ban · Vai trò · Nhóm của tôi</td></tr>
+      <tr><td>Tìm (§6) — chip phạm vi</td><td>Chat · Tất cả · Tài liệu · Người · Lịch</td><td>+ Phê duyệt · Tài sản</td></tr>
+      <tr><td>Nút +</td><td>Không có Tạo đề nghị trong "Làm nhanh"</td><td>Đủ</td></tr>
+    </tbody>
+  </table>
+  <ul class="notes">
+    <li><b>Đổi workspace</b> (ô chữ cái hoặc khối workspace trong Thêm) đổi luôn thanh đáy, Thêm, Tôi, phạm vi tìm theo loại workspace mới; thanh đáy nhớ riêng cho từng workspace.</li>
+    <li><b>Phân biệt bằng mắt:</b> ô chữ cái workspace cá nhân mang hue của chính người dùng (như avatar), workspace tổ chức nền accent; dòng phụ "Workspace cá nhân · chỉ bạn" / "Workspace tổ chức · N thành viên".</li>
+    <li><b>Loại workspace cố định khi tạo:</b> không có chuyển cá nhân ↔ tổ chức theo chiều nào. Muốn làm việc nhóm thì tạo một workspace tổ chức mới (Đổi workspace → Tạo workspace, chọn loại lúc tạo). UI "Chuyển thành workspace tổ chức" đang có trong app bị gỡ.</li>
+    <li><b>Khoá của tổ chức</b> là quyết định server: cài đặt bị khoá vẫn gửi lên sẽ bị từ chối; UI chỉ phản ánh. Danh sách tuỳ chọn khoá được chốt khi làm phần Quản trị.</li>
+  </ul>
+</section>
+
+<!-- ================================================================ §9 -->
+<section class="screen" id="s9">
+  <div class="screen-head">
+    <h2>§9 Vuốt trong cuộc trò chuyện</h2>
+    <p>Chat là nơi dùng nhiều nhất, nên các thao tác hay làm nhất có cử chỉ một ngón: trích dẫn, trả lời trong thread, thả cảm xúc, đóng bàn phím, mở rộng ô soạn, đóng ảnh, thoát thread. Gom từ Lark (vuốt trả lời, chạm đúp thả cảm xúc), Google Chat (thread là việc chính) và iOS (kéo luồng để đóng bàn phím).</p>
+  </div>
+  <div class="phones">
+    <div class="ph">
+      <div class="phone nobar">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody" style="padding-bottom:140px">
+          <div class="dbar"><button class="ibtn"><svg class="i"><use href="#i-back"/></svg></button><button class="who" type="button"><span class="sp s28" style="--p:var(--color-person-4)">G</span><span><b>general <svg class="i s muted"><use href="#i-chev"/></svg></b><small>7 thành viên</small></span></button><button class="ibtn"><svg class="i"><use href="#i-video"/></svg></button><button class="ibtn"><svg class="i"><use href="#i-thread"/></svg></button></div>
+          <div class="stream" style="padding-top:150px">
+            <div class="who-sm">Lê Quang Vinh</div>
+            <div class="msg pull-r"><span class="reply" aria-hidden="true"><svg class="i"><use href="#i-back" transform="scale(-1 1) translate(-24 0)"/></svg></span><span class="av s28" style="--p:var(--color-person-2)">VL</span><div class="bub">Bản đối soát tháng 9 đã lên Tài liệu rồi nhé</div></div>
+            <div class="who-sm">Nguyễn Thu Lan</div>
+            <div class="msg pull-l"><span class="av s28" style="--p:var(--color-person-5)">TL</span><div class="bub">Chiều nay họp đối soát lúc 3h nhé, mọi người chuẩn bị số liệu</div><span class="thr" aria-hidden="true"><svg class="i"><use href="#i-thread"/></svg></span></div>
+          </div>
+        </div>
+        <span class="tag" style="left:70px;top:258px">→ phải: trích dẫn</span>
+        <span class="tag" style="right:62px;top:370px">← trái: trả lời trong thread</span>
+        <div class="dock">
+          <div class="quote"><span><b>Trả lời Lê Quang Vinh</b><small>Bản đối soát tháng 9 đã lên Tài liệu rồi nhé</small></span><svg class="i s muted"><use href="#i-plus" transform="rotate(45 12 12)"/></svg></div>
+          <div class="composer" style="border-radius:4px 4px 22px 22px"><span class="ibtn" style="width:36px;height:36px"><svg class="i"><use href="#i-plus"/></svg></span><span class="field">Tin nhắn cho general</span><span class="send"><svg class="i s"><use href="#i-chev"/></svg></span></div>
+        </div>
+      </div>
+      <small>Vuốt tin sang phải = trích dẫn (ô soạn hiện khung trích, bàn phím mở); sang trái = mở thread của tin đó</small>
+    </div>
+
+    <div class="ph">
+      <div class="phone nobar">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="dbar"><button class="ibtn"><svg class="i"><use href="#i-back"/></svg></button><button class="who" type="button"><span class="sp s28" style="--p:var(--color-person-4)">G</span><span><b>general</b><small>7 thành viên</small></span></button></div>
+        </div>
+        <div class="scrim"></div>
+        <div class="react" style="top:300px" role="toolbar" aria-label="Thả cảm xúc"><span>👍</span><span>❤️</span><span class="hot">😂</span><span>😮</span><span>🙏</span><span>✅</span></div>
+        <div class="finger" style="left:150px;top:286px"></div>
+        <span class="tag" style="left:60px;top:250px">trượt ngón, thả để chọn</span>
+        <div class="lifted" style="top:380px"><div class="msg" style="padding:0"><span class="av s28" style="--p:var(--color-person-5)">TL</span><div class="bub" style="box-shadow:var(--shadow-overlay)">Chiều nay họp đối soát lúc 3h nhé, mọi người chuẩn bị số liệu</div></div></div>
+        <div class="sheet" style="max-height:44%">
+          <div class="grab"></div>
+          <div class="grp" style="background:transparent;margin:0">
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-thread"/></svg></span><span><b>Trả lời trong thread</b></span></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-back" transform="scale(-1 1) translate(-24 0)"/></svg></span><span><b>Trích dẫn</b></span></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-pin"/></svg></span><span><b>Ghim</b></span></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-file"/></svg></span><span><b>Sao chép</b></span></div>
+          </div>
+        </div>
+      </div>
+      <small>Nhấn giữ 400ms rồi <b>không nhấc tay</b>, trượt lên hàng cảm xúc: biểu tượng dưới ngón phóng to, thả là chọn. Nhấc tay trước = mở sheet như hiện nay</small>
+    </div>
+
+    <div class="ph">
+      <div class="phone nobar">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="dbar"><button class="ibtn"><svg class="i"><use href="#i-back"/></svg></button><button class="who" type="button"><span class="sp s28" style="--p:var(--color-person-4)">G</span><span><b>general</b><small>7 thành viên</small></span></button><button class="ibtn"><svg class="i"><use href="#i-video"/></svg></button><button class="ibtn"><svg class="i"><use href="#i-thread"/></svg></button></div>
+          <div class="stream" style="padding-top:120px">
+            <div class="who-sm">Nguyễn Thu Lan</div>
+            <div class="msg" style="position:relative"><span class="av s28" style="--p:var(--color-person-5)">TL</span><div class="bub">Mình gửi bản cuối rồi, mọi người xem giúp</div><span class="burst" style="left:200px;top:-18px">👍</span></div>
+            <div class="rx">👍 1</div>
+            <div class="msg"><div class="bub me">Ok, mình sẽ mang bản in</div></div>
+          </div>
+        </div>
+        <span class="tag" style="left:110px;top:180px">chạm đúp = 👍 (đổi trong Cài đặt Chat)</span>
+        <div class="jump"><svg class="i s"><use href="#i-down"/></svg>3 tin mới</div>
+        <div class="dock">
+          <div style="display:grid;justify-items:center;padding-bottom:4px"><span style="width:36px;height:4px;border-radius:999px;background:var(--color-line)"></span></div>
+          <div class="composer"><span class="ibtn" style="width:36px;height:36px"><svg class="i"><use href="#i-plus"/></svg></span><span class="field">Tin nhắn cho general</span><span class="send" style="background:var(--color-sunk);color:var(--color-ink-muted)"><svg class="i s"><use href="#i-chev"/></svg></span></div>
+        </div>
+        <span class="tag" style="left:24px;bottom:96px">kéo vạch lên: soạn toàn màn · kéo danh sách xuống quá 48px: đóng bàn phím</span>
+      </div>
+      <small>Chạm đúp thả 👍; vạch trên ô soạn kéo lên mở soạn toàn màn; kéo danh sách tin xuống quá 48px thì đóng bàn phím; "N tin mới ↓" khi đang đọc tin cũ</small>
+    </div>
+
+    <div class="ph">
+      <div class="phone nobar">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody"></div>
+        <div class="viewer">
+          <div class="cap"><span>Thu Lan · 09:02</span><span>2 / 5</span></div>
+          <div class="img">anh-hop-doi-soat.jpg</div>
+        </div>
+        <span class="tag" style="left:110px;top:560px">kéo xuống &gt; 25%: đóng, ảnh bay về tin</span>
+      </div>
+      <small>Ảnh/tệp: vuốt ngang giữa các ảnh của cuộc trò chuyện, chụm để phóng, chạm đúp phóng 2×, kéo xuống để đóng (nền mờ dần theo ngón tay)</small>
+    </div>
+  </div>
+  <table class="gtable">
+    <thead><tr><th>Cử chỉ trong cuộc trò chuyện</th><th>Làm gì</th><th>Ngưỡng / phản hồi</th><th>Nút tương đương</th></tr></thead>
+    <tbody>
+      <tr><td>Vuốt tin sang phải</td><td>Trích dẫn trả lời: ô soạn hiện khung trích (✕ để bỏ), bàn phím mở</td><td>64px; icon ↩ hiện dần, qua ngưỡng phóng 1.15 + đổi màu accent</td><td>Nhấn giữ → Trích dẫn</td></tr>
+      <tr><td>Vuốt tin sang trái</td><td>Mở thread của tin (tạo thread nếu chưa có)</td><td>64px; icon thread nền accent</td><td>Nhấn giữ → Trả lời trong thread; hàng "N trả lời"</td></tr>
+      <tr><td>Nhấn giữ 400ms, trượt lên hàng cảm xúc</td><td>Thả cảm xúc dưới ngón khi nhấc tay</td><td>Biểu tượng dưới ngón phóng 1.5 và nhô lên; trượt ra ngoài hàng rồi thả = huỷ</td><td>Nhấn giữ → nhấc → chạm cảm xúc</td></tr>
+      <tr><td>Chạm đúp vào tin</td><td>Thả cảm xúc nhanh (mặc định 👍; chạm đúp lần nữa = bỏ)</td><td>Hai chạm trong 300ms; 👍 bật ra 360ms spring</td><td>Hàng cảm xúc</td></tr>
+      <tr><td>Kéo danh sách tin xuống khi bàn phím mở</td><td>Đóng bàn phím (iOS web không cho bàn phím đi theo ngón tay)</td><td>Quá 48px</td><td>Chạm ra ngoài ô soạn</td></tr>
+      <tr><td>Kéo vạch trên ô soạn lên</td><td>Mở soạn toàn màn (tin dài, định dạng); kéo xuống để thu lại</td><td>&gt; 25% chiều cao hoặc vuốt nhanh</td><td>Nút định dạng</td></tr>
+      <tr><td>Vuốt từ mép trái</td><td>Thoát thread về luồng (giữ chỗ cuộn), thoát cuộc trò chuyện về danh sách</td><td>Như §7</td><td>Nút ←</td></tr>
+      <tr><td>Kéo xuống ở trình xem ảnh/tệp</td><td>Đóng, ảnh thu về đúng tin trong luồng</td><td>&gt; 25% hoặc vuốt nhanh; nền mờ dần theo ngón tay</td><td>✕</td></tr>
+      <tr><td>Vuốt ngang ở trình xem ảnh</td><td>Ảnh trước / sau trong cùng cuộc trò chuyện</td><td>Theo ngón 1:1, bắt dính ảnh</td><td>‹ ›</td></tr>
+      <tr><td>Kéo xuống ở đầu luồng</td><td>Tải tin cũ hơn (đã tự tải khi cuộn tới đầu; kéo là để chắc)</td><td>Spinner nhỏ ở đầu luồng</td><td>—</td></tr>
+    </tbody>
+  </table>
+  <ul class="notes">
+    <li><b>Không tranh nhau:</b> bắt đầu trong vùng mép trái 20px luôn là quay lại; ngoài vùng đó, vuốt ngang trên một tin là trích dẫn / thread. Sau 10px đầu khoá trục, nên cuộn dọc không kéo lệch tin. Tin của bạn và của người khác dùng cùng hướng (phải = trích dẫn, trái = thread) để tay nhớ một kiểu.</li>
+    <li><b>Không làm điều không hoàn tác được bằng vuốt:</b> xoá tin, sửa tin chỉ có trong nhấn giữ. Cảm xúc và trích dẫn huỷ được ngay.</li>
+    <li><b>Đồng bộ với §7:</b> vuốt hàng ở danh sách (Đã đọc, Gắn sao, Tắt thông báo, Chuyển tới mục) và vuốt trong luồng là hai bộ riêng; trong luồng không có vuốt hàng.</li>
+    <li><b>Giảm chuyển động:</b> không theo ngón tay; qua ngưỡng thì làm ngay, không bật nảy. <b>Cài đặt Chat</b> có thêm: cảm xúc khi chạm đúp (👍 mặc định, hoặc Tắt).</li>
+    <li><b>Đọc màn hình:</b> mọi cử chỉ có hành động tương đương trong menu nhấn giữ, và các tin có <code>aria-actions</code> / rotor "Trích dẫn", "Trả lời trong thread", "Thả cảm xúc".</li>
+  </ul>
+</section>
+
+<!-- ================================================================ §10 -->
+<section class="screen" id="s10">
+  <div class="screen-head">
+    <h2>§10 Tài liệu trên điện thoại</h2>
+    <p>Hiện tại: khoảng 250px đầu màn (viên thuốc, dòng workspace, tiêu đề, ô tìm thứ hai, nút xem, chip) trước tệp đầu tiên; cây thư mục giấu sau một icon và có hai mục "Được chia sẻ" khác nghĩa; lưới 2 cột với văn bản chỉ là ô xám; không chọn nhiều, không gắn sao, không thấy tiến độ tải lên. Đề xuất theo Google Drive (Trang chủ có Truy cập nhanh, danh sách mặc định trên điện thoại, chọn nhiều) và Lark Docs (lối vào theo Gần đây · Gắn sao · Chia sẻ với tôi).</p>
+  </div>
+  <div class="phones">
+    <div class="ph">
+      <div class="phone">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="spill"><button class="ws" type="button"><b>N</b></button><button class="q" type="button"><svg class="i s"><use href="#i-search"/></svg>Tìm tài liệu</button><button class="me" type="button"><span class="av" style="--p:var(--color-person-6)">MĐ</span></button></div>
+          <div class="ttl"><h2>Tài liệu</h2><button class="ibtn" aria-label="Xem dạng lưới"><svg class="i"><use href="#i-grid2"/></svg></button><button class="ibtn" aria-label="Thêm tuỳ chọn Tài liệu"><svg class="i"><use href="#i-more"/></svg></button></div>
+          <nav class="chips"><a aria-current="page">Gần đây</a><a>Thư mục</a><a>Gắn sao</a><a>Chia sẻ với tôi</a><a>Bản nháp</a></nav>
+          <div class="sec">Truy cập nhanh</div>
+          <div class="qa">
+            <div class="qc"><span class="th"><svg class="i l"><use href="#i-file"/></svg></span><b>Đối soát tháng 9</b><small>Bạn sửa · Hôm qua</small></div>
+            <div class="qc"><span class="th img"></span><b>Ảnh khai trương.jpg</b><small>Thu Lan chia sẻ</small></div>
+            <div class="qc"><span class="th"><svg class="i l"><use href="#i-file"/></svg></span><b>Quy trình mua sắm</b><small>Vinh nhắc bạn</small></div>
+          </div>
+          <div class="sec">Hôm nay</div>
+          <div class="frow"><span class="fico k-sheet"><svg class="i"><use href="#i-file"/></svg></span><span><b>Đối soát tháng 9</b><small>Bảng tính · Bạn sửa 09:40</small></span><button class="ibtn"><svg class="i"><use href="#i-more"/></svg></button></div>
+          <div class="frow"><span class="fico k-doc"><svg class="i"><use href="#i-file"/></svg></span><span><b>Biên bản họp giao ban <svg class="i s" style="color:var(--color-warning)"><use href="#i-star"/></svg></b><small>Văn bản · Thu Lan sửa 08:15</small></span><button class="ibtn"><svg class="i"><use href="#i-more"/></svg></button></div>
+          <div class="sec">Tuần này</div>
+          <div class="frow"><span class="fico k-pdf"><svg class="i"><use href="#i-file"/></svg></span><span><b>Hợp đồng NCC 2026.pdf</b><small>PDF · Quang Vinh · T3</small></span><button class="ibtn"><svg class="i"><use href="#i-more"/></svg></button></div>
+        </div>
+        <button class="fab" type="button" aria-label="Tạo hoặc tải lên"><svg class="i l"><use href="#i-plus"/></svg></button>
+        <nav class="bbar" aria-label="Phân hệ">
+          <a><span class="ic"><svg class="i l"><use href="#i-chat"/></svg></span>Chat<span class="count">3</span></a>
+          <a><span class="ic"><svg class="i l"><use href="#i-cal"/></svg></span>Lịch</a>
+          <a aria-current="page"><span class="ic"><svg class="i l"><use href="#i-folder"/></svg></span>Tài liệu</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-approve"/></svg></span>Phê duyệt</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-grid"/></svg></span>Thêm</a>
+        </nav>
+      </div>
+      <small>Trang chủ Tài liệu: chip lối vào thay cây thư mục; Truy cập nhanh (gợi ý theo việc gần đây); danh sách mặc định trên điện thoại, nhóm theo thời gian</small>
+    </div>
+
+    <div class="ph">
+      <div class="phone">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="dbar"><button class="ibtn" aria-label="Lên thư mục cha"><svg class="i"><use href="#i-back"/></svg></button><h2>Tài chính</h2><button class="ibtn" aria-label="Tìm trong Tài chính"><svg class="i"><use href="#i-search"/></svg></button><button class="ibtn" aria-label="Tuỳ chọn thư mục"><svg class="i"><use href="#i-more"/></svg></button></div>
+          <nav class="crumb" aria-label="Vị trí"><a>NovaPay</a>›<a>Phòng Kế toán</a>›<a aria-current="page">Tài chính</a></nav>
+          <div class="sortbar"><span>Sửa gần nhất <svg class="i s"><use href="#i-down"/></svg></span><button class="ibtn" aria-label="Xem dạng lưới"><svg class="i"><use href="#i-grid2"/></svg></button></div>
+          <div class="frow"><span class="fico"><svg class="i"><use href="#i-folder"/></svg></span><span><b>2026</b><small>14 mục</small></span><button class="ibtn"><svg class="i"><use href="#i-more"/></svg></button></div>
+          <div class="frow"><span class="fico"><svg class="i"><use href="#i-folder"/></svg></span><span><b>Báo cáo quý</b><small>6 mục</small></span><button class="ibtn"><svg class="i"><use href="#i-more"/></svg></button></div>
+          <div class="frow"><span class="fico k-sheet"><svg class="i"><use href="#i-file"/></svg></span><span><b>Đối soát tháng 9</b><small>Bạn sửa · Hôm qua</small></span><button class="ibtn"><svg class="i"><use href="#i-more"/></svg></button></div>
+          <div class="frow"><span class="fico k-sheet"><svg class="i"><use href="#i-file"/></svg></span><span><b>Đối soát tháng 8</b><small>Thu Lan · 12/09</small></span><button class="ibtn"><svg class="i"><use href="#i-more"/></svg></button></div>
+          <div class="frow"><span class="fico k-img"><svg class="i"><use href="#i-image"/></svg></span><span><b>Hoá đơn T9.jpg</b><small>Quang Vinh · 30/09</small></span><button class="ibtn"><svg class="i"><use href="#i-more"/></svg></button></div>
+        </div>
+        <div class="upl"><div><span>Đang tải lên 2 tệp</span><span class="tnum">64%</span></div><div class="bar"><i></i></div><small class="muted">sao-ke-T9.pdf · còn khoảng 10 giây</small></div>
+        <button class="fab" type="button" aria-label="Tải lên vào Tài chính"><svg class="i l"><use href="#i-plus"/></svg></button>
+        <nav class="bbar" aria-label="Phân hệ">
+          <a><span class="ic"><svg class="i l"><use href="#i-chat"/></svg></span>Chat</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-cal"/></svg></span>Lịch</a>
+          <a aria-current="page"><span class="ic"><svg class="i l"><use href="#i-folder"/></svg></span>Tài liệu</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-approve"/></svg></span>Phê duyệt</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-grid"/></svg></span>Thêm</a>
+        </nav>
+      </div>
+      <small>Trong thư mục: thanh có ← lên cha, đường dẫn chạm được, sắp xếp + đổi Lưới/Danh sách một hàng; thẻ tiến độ tải lên nổi trên thanh đáy</small>
+    </div>
+
+    <div class="ph">
+      <div class="phone">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody"><div class="dbar"><button class="ibtn"><svg class="i"><use href="#i-back"/></svg></button><h2>Tài chính</h2></div></div>
+        <div class="scrim"></div>
+        <div class="sheet">
+          <div class="grab"></div>
+          <div class="frow" style="padding-right:16px"><span class="fico k-sheet"><svg class="i"><use href="#i-file"/></svg></span><span><b>Đối soát tháng 9</b><small>Bảng tính · 48 KB · Bạn sửa hôm qua</small></span><span></span></div>
+          <div class="quick" style="margin-top:6px">
+            <a><svg class="i"><use href="#i-useradd"/></svg>Chia sẻ</a>
+            <a><svg class="i"><use href="#i-link"/></svg>Sao chép liên kết</a>
+            <a><svg class="i"><use href="#i-star"/></svg>Gắn sao</a>
+            <a><svg class="i"><use href="#i-down"/></svg>Tải xuống</a>
+          </div>
+          <div class="grp" style="background:transparent;margin:0">
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-chat"/></svg></span><span><b>Gửi vào trò chuyện…</b></span></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-folder"/></svg></span><span><b>Chuyển tới thư mục…</b></span></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-file"/></svg></span><span><b>Tạo bản sao</b></span></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-info"/></svg></span><span><b>Thông tin và hoạt động</b><small>Người có quyền, lịch sử sửa</small></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-list"/></svg></span><span><b>Đổi tên</b></span></div>
+            <div class="it danger"><span class="fico"><svg class="i"><use href="#i-trash"/></svg></span><span><b>Chuyển vào thùng rác</b></span></div>
+          </div>
+        </div>
+      </div>
+      <small>Menu tệp (⋯ hoặc nhấn giữ): 4 lối tắt hay dùng nhất ở trên, rồi danh sách; chỉ hiện việc người đó có quyền làm</small>
+    </div>
+
+    <div class="ph">
+      <div class="phone">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="dbar"><button class="ibtn" aria-label="Thoát chọn"><svg class="i"><use href="#i-plus" transform="rotate(45 12 12)"/></svg></button><h2>Đã chọn 3</h2><button class="tbtn" type="button">Chọn tất cả</button></div>
+          <nav class="crumb"><a>NovaPay</a>›<a>Phòng Kế toán</a>›<a aria-current="page">Tài chính</a></nav>
+          <div class="frow"><span class="chk"></span><span><b>2026</b><small>14 mục</small></span><span></span></div>
+          <div class="frow sel"><span class="chk on"><svg class="i s"><use href="#i-approve" style="display:none"/><path d="m5 12 4 4 10-10" stroke="currentColor" stroke-width="2.4" fill="none"/></svg></span><span><b>Đối soát tháng 9</b><small>Bạn sửa · Hôm qua</small></span><span></span></div>
+          <div class="frow sel"><span class="chk on"><svg class="i s"><path d="m5 12 4 4 10-10" stroke="currentColor" stroke-width="2.4" fill="none"/></svg></span><span><b>Đối soát tháng 8</b><small>Thu Lan · 12/09</small></span><span></span></div>
+          <div class="frow sel"><span class="chk on"><svg class="i s"><path d="m5 12 4 4 10-10" stroke="currentColor" stroke-width="2.4" fill="none"/></svg></span><span><b>Hoá đơn T9.jpg</b><small>Quang Vinh · 30/09</small></span><span></span></div>
+          <div class="frow"><span class="chk"></span><span><b>Báo cáo quý</b><small>6 mục</small></span><span></span></div>
+        </div>
+        <nav class="selbar" aria-label="Thao tác với 3 mục đã chọn">
+          <a><svg class="i"><use href="#i-useradd"/></svg>Chia sẻ</a>
+          <a><svg class="i"><use href="#i-folder"/></svg>Chuyển</a>
+          <a><svg class="i"><use href="#i-down"/></svg>Tải xuống</a>
+          <a><svg class="i"><use href="#i-star"/></svg>Gắn sao</a>
+          <a><svg class="i"><use href="#i-trash"/></svg>Xoá</a>
+        </nav>
+      </div>
+      <small>Chọn nhiều: nhấn giữ một hàng để vào; chạm thêm hàng khác (hoặc kéo dọc cột ô chọn) để chọn tiếp; thanh thao tác thay thanh đáy</small>
+    </div>
+
+    <div class="ph">
+      <div class="phone">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody"><div class="dbar"><button class="ibtn"><svg class="i"><use href="#i-back"/></svg></button><h2>Tài chính</h2></div></div>
+        <div class="scrim"></div>
+        <div class="sheet">
+          <div class="grab"></div>
+          <h3>Thêm vào “Tài chính”</h3>
+          <div class="mgrid">
+            <a><span class="tile"><svg class="i l"><use href="#i-down" transform="rotate(180 12 12)"/></svg></span>Tải tệp lên</a>
+            <a><span class="tile"><svg class="i l"><use href="#i-image"/></svg></span>Chụp ảnh</a>
+            <a><span class="tile"><svg class="i l"><use href="#i-file"/></svg></span>Quét tài liệu</a>
+            <a><span class="tile"><svg class="i l"><use href="#i-folder"/></svg></span>Thư mục mới</a>
+            <a><span class="tile k-doc"><svg class="i l"><use href="#i-file"/></svg></span>Văn bản mới</a>
+          </div>
+          <p class="hint">Tải lên chạy nền: rời màn vẫn tiếp tục, thẻ tiến độ theo sang màn khác; xong thì toast "Đã tải lên 2 tệp vào Tài chính · Xem".</p>
+        </div>
+      </div>
+      <small>Nút +: tạo/tải lên vào đúng thư mục đang mở; Quét tài liệu (chụp, cắt khung, lưu PDF) là đề xuất cho đợt sau</small>
+    </div>
+  </div>
+  <ul class="notes">
+    <li><b>Lối vào thay cây thư mục:</b> chip Gần đây · Thư mục · Gắn sao · Chia sẻ với tôi · Bản nháp. "Thư mục" mở thư mục gốc của workspace (cá nhân: "Tài liệu của tôi"; tổ chức: tên tổ chức, rồi thư mục phòng ban theo quyền). Một mục "Chia sẻ" duy nhất: những gì người khác chia sẻ với bạn. Cây đầy đủ chỉ còn ở máy tính và máy tính bảng.</li>
+    <li><b>Danh sách là mặc định trên điện thoại</b> (hàng 60, ô loại 40 có màu theo loại, tên + "Loại · ai sửa · khi nào", ⋯ 44). Lưới vẫn có ở nút đổi, nhớ theo người; lưới chỉ dùng thumbnail thật (ảnh, video, trang đầu PDF/Office), văn bản không có thumbnail thì hiện như danh sách.</li>
+    <li><b>Truy cập nhanh:</b> tối đa 6 thẻ cuộn ngang, lấy từ tệp bạn mở/sửa gần đây, tệp vừa được chia sẻ hoặc nhắc tới bạn; lý do hiện dưới tên ("Thu Lan chia sẻ", "Vinh nhắc bạn"). Ẩn trong chip khác Gần đây.</li>
+    <li><b>Trong thư mục:</b> ← lên thư mục cha (không về Trang chủ); đường dẫn cuộn ngang, chạm một đoạn để nhảy; tìm trong thư mục bằng icon kính lúp (mở ô tìm §6 với phạm vi = thư mục này); sắp xếp và đổi kiểu xem chung một hàng.</li>
+    <li><b>Vuốt hàng (§7):</b> trái lộ Chia sẻ · Gắn sao · Thêm; không có vuốt xoá.</li>
+    <li><b>Chọn nhiều:</b> nhấn giữ vào chế độ chọn (rung nhẹ nếu có); ô chọn thay icon loại; kéo ngón dọc cột ô chọn để chọn liên tiếp; thanh thao tác tối màu thay thanh đáy; Esc / ✕ / vuốt mép trái thoát chọn. Thao tác chỉ gồm việc mọi mục đã chọn đều cho phép; nếu không, nút mờ kèm lý do khi chạm.</li>
+    <li><b>Tải lên:</b> chạy nền, thẻ tiến độ nổi trên thanh đáy (gập thành vòng tròn % khi cuộn), lỗi từng tệp có "Thử lại"; chia sẻ từ app khác vào Nexus (Web Share Target) đi vào cùng luồng này — làm sau nếu iOS chưa hỗ trợ.</li>
+    <li><b>Quyền:</b> menu và thanh chọn chỉ hiện việc được phép theo quyết định của policy (OA của thư mục); không hiện ID nào; người có quyền ghi tên + avatar trong "Thông tin và hoạt động".</li>
+  </ul>
+</section>
+<!-- ================================================================ §11 -->
+<section class="screen" id="s11">
+  <div class="screen-head">
+    <h2>§11 Cài đặt workspace</h2>
+    <p>Một trang cho mọi thứ thuộc về chính workspace — thông tin, thành viên, tổ chức, quy định, phân hệ, dung lượng — thay cho Cài đặt → Workspace và ô Quản trị trên điện thoại (như "Quản lý tổ chức" của Lark). Mở từ khối workspace trong Thêm (⚙), từ sheet chọn workspace, hoặc Tôi → Cài đặt workspace. Mỗi người chỉ thấy những dòng mình có quyền; máy tính giữ màn Quản trị hiện có.</p>
+  </div>
+  <div class="phones">
+    <div class="ph">
+      <div class="phone nobar">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="dbar"><button class="ibtn" aria-label="Quay lại"><svg class="i"><use href="#i-back"/></svg></button><h2>Cài đặt workspace</h2></div>
+          <div class="me-card"><span class="sp s72" style="--p:var(--color-accent);border-radius:20px">N</span><span><b>NovaPay</b><small class="muted">Workspace tổ chức · 7 thành viên</small><span class="kind org">Bạn là Chủ sở hữu</span></span></div>
+          <div class="grp-t">Thông tin</div>
+          <div class="grp">
+            <div class="it"><span><b>Tên workspace</b></span><span class="val">NovaPay</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span><b>Mô tả</b></span><span class="val">Thanh toán số</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+          </div>
+          <div class="grp-t">Thành viên và tổ chức</div>
+          <div class="grp">
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-users"/></svg></span><span><b>Thành viên</b></span><span class="val tnum">7</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-useradd"/></svg></span><span><b>Mời thành viên</b><small>2 lời mời đang chờ</small></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-list"/></svg></span><span><b>Phòng ban</b></span><span class="val tnum">4</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-shield"/></svg></span><span><b>Vai trò và quyền</b></span><span class="val tnum">3</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-user"/></svg></span><span><b>Phạm vi danh bạ</b><small>Ai thấy ai trong Danh bạ</small></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+          </div>
+          <div class="grp-t">Quy định</div>
+          <div class="grp">
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-chat"/></svg></span><span><b>Ai được tạo nhóm</b></span><span class="val">Mọi thành viên</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+          </div>
+          <div class="grp-t">Phân hệ</div>
+          <div class="grp">
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-approve"/></svg></span><span><b>Mẫu phê duyệt</b></span><span class="val tnum">5</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-box"/></svg></span><span><b>Loại tài sản</b></span><span class="val tnum">3</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-folder"/></svg></span><span><b>Dung lượng Tài liệu</b><small>2,4 GB / 10 GB · 312 tệp</small></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+          </div>
+          <div class="grp"><div class="it danger"><span class="fico"><svg class="i"><use href="#i-out"/></svg></span><span><b>Rời NovaPay</b><small>Chủ sở hữu cuối cùng phải chuyển quyền trước</small></span></div></div>
+        </div>
+      </div>
+      <small><span class="kind org">Tổ chức</span> Quản trị viên: đủ các nhóm; mỗi dòng mở màn Quản trị tương ứng, bố cục điện thoại</small>
+    </div>
+
+    <div class="ph">
+      <div class="phone nobar">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="dbar"><button class="ibtn" aria-label="Quay lại"><svg class="i"><use href="#i-back"/></svg></button><h2>Cài đặt workspace</h2></div>
+          <div class="me-card"><span class="sp s72" style="--p:var(--color-accent);border-radius:20px">N</span><span><b>NovaPay</b><small class="muted">Workspace tổ chức · 7 thành viên</small><span class="kind">Bạn là Thành viên</span></span></div>
+          <div class="grp-t">Thông tin</div>
+          <div class="grp">
+            <div class="it"><span><b>Tên workspace</b></span><span class="val">NovaPay</span></div>
+            <div class="it"><span><b>Mô tả</b></span><span class="val">Thanh toán số</span></div>
+            <div class="it"><span><b>Quản trị viên</b></span><span class="members"><span class="av s28 stack" style="--p:var(--color-person-6)">MĐ</span><span class="av s28 stack" style="--p:var(--color-person-5)">TL</span></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+          </div>
+          <div class="grp-t">Quy định</div>
+          <div class="grp">
+            <div class="it" style="opacity:0.72"><span><b>Ai được tạo nhóm</b><small class="lock"><svg class="i s"><use href="#i-shield"/></svg>Do quản trị viên đặt</small></span><span class="val">Mọi thành viên</span></div>
+          </div>
+          <div class="grp-t">Của bạn trong workspace</div>
+          <div class="grp">
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-user"/></svg></span><span><b>Hồ sơ trong tổ chức</b><small>Kế toán trưởng · Phòng Tài chính</small></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+          </div>
+          <div class="grp"><div class="it danger"><span class="fico"><svg class="i"><use href="#i-out"/></svg></span><span><b>Rời NovaPay</b></span></div></div>
+        </div>
+      </div>
+      <small><span class="kind org">Tổ chức</span> Thành viên: xem thông tin và quy định, biết ai là quản trị viên, sửa hồ sơ của mình, rời workspace</small>
+    </div>
+
+    <div class="ph">
+      <div class="phone nobar">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="dbar"><button class="ibtn" aria-label="Quay lại"><svg class="i"><use href="#i-back"/></svg></button><h2>Cài đặt workspace</h2></div>
+          <div class="me-card"><span class="sp s72" style="--p:var(--color-person-6);border-radius:20px">Đ</span><span><b>Trần Minh Đức</b><small class="muted">Workspace cá nhân · chỉ bạn</small></span></div>
+          <div class="grp-t">Thông tin</div>
+          <div class="grp">
+            <div class="it"><span><b>Tên workspace</b></span><span class="val">Trần Minh Đức</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+          </div>
+          <div class="grp-t">Phân hệ</div>
+          <div class="grp">
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-folder"/></svg></span><span><b>Dung lượng Tài liệu</b><small>340 MB / 5 GB · 58 tệp</small></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+          </div>
+          <p class="hint">Workspace cá nhân chỉ có bạn: không thành viên, phòng ban, vai trò, quy định hay Rời. Muốn làm việc nhóm thì tạo một workspace tổ chức mới.</p>
+        </div>
+      </div>
+      <small><span class="kind">Cá nhân</span> Chỉ tên và dung lượng</small>
+    </div>
+  </div>
+  <ul class="notes">
+    <li><b>Lối vào:</b> khối workspace trong sheet Thêm có nút ⚙ "Cài đặt workspace"; sheet chọn workspace có ⋯ trên workspace đang mở; Tôi → nhóm Workspace thành một dòng "Cài đặt workspace" (tên workspace và Rời chuyển về đây, không còn ở Tôi).</li>
+    <li><b>Quản trị trên điện thoại</b> nằm trong trang này (nhóm Thành viên và tổ chức, Quy định, Phân hệ) — ô Quản trị bỏ khỏi lưới Thêm. Mỗi dòng mở màn Quản trị hiện có với bố cục điện thoại (danh sách, sheet chi tiết thay panel bên phải). Máy tính giữ màn Quản trị.</li>
+    <li><b>Theo quyền:</b> dòng chỉ hiện khi người xem làm được việc đó (kiểm tra quản trị hiện có); thành viên thấy Thông tin chỉ đọc, Quản trị viên (cụm avatar → danh sách), Quy định (giá trị + "Do quản trị viên đặt"), Hồ sơ trong tổ chức, Rời. Server quyết định ở mọi màn.</li>
+    <li><b>Dung lượng Tài liệu:</b> đã dùng / tối đa + số tệp; quản trị viên chạm để đổi hạn mức (quyền <code>manage</code> như hiện nay); thành viên không thấy dòng này ở workspace tổ chức.</li>
+    <li><b>Không có ở đây:</b> chuyển loại workspace (đã bỏ), tuỳ chọn cá nhân (ở Tôi), cài đặt phân hệ của người dùng (ở ⋯ của phân hệ).</li>
+  </ul>
+</section>
+<!-- ================================================================ §12 -->
+<section class="screen" id="s12">
+  <div class="screen-head">
+    <h2>§12 Danh bạ trên điện thoại</h2>
+    <p>Giữ cấu trúc Danh bạ kiểu Lark đã duyệt (danh mục → phòng → thẻ hồ sơ, bấm mới tải, phạm vi hiển thị do quản trị đặt). Audit 390px: màn đầu chỉ ba ô danh mục, nhiều chỗ trống; màn phòng có ô tìm thứ hai; hàng người không có thao tác nhanh; danh sách dài không có cách nhảy; thẻ hồ sơ không dẫn sang Lịch. Đề xuất theo Lark ("Liên hệ thường dùng") và Google Danh bạ (chữ cái A–Z, thao tác nhanh trên thẻ).</p>
+  </div>
+  <div class="phones">
+    <div class="ph">
+      <div class="phone">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="spill"><button class="ws" type="button"><b>N</b></button><button class="q" type="button"><svg class="i s"><use href="#i-search"/></svg>Tìm người</button><button class="me" type="button"><span class="av" style="--p:var(--color-person-6)">MĐ</span></button></div>
+          <div class="ttl"><h2>Danh bạ</h2><button class="ibtn" aria-label="Thêm tuỳ chọn Danh bạ"><svg class="i"><use href="#i-more"/></svg></button></div>
+          <div class="sec">Thường liên lạc</div>
+          <div class="freq">
+            <a><span class="av on2" style="--p:var(--color-person-2)">VL</span>Quang Vinh</a>
+            <a><span class="av" style="--p:var(--color-person-5)">TL</span>Thu Lan</a>
+            <a><span class="av on2" style="--p:var(--color-person-3)">HP</span>Thu Hà</a>
+            <a><span class="av" style="--p:var(--color-person-7)">QA</span>Quốc Anh</a>
+            <a><span class="av" style="--p:var(--color-person-1)">ĐL</span>Thùy Linh</a>
+          </div>
+          <div class="cat">
+            <a><span class="ci" style="background:var(--color-person-3-wash);color:var(--color-person-3)"><svg class="i"><use href="#i-list"/></svg></span><b>Phòng ban</b><small>NovaPay · 3 khối</small></a>
+            <a><span class="ci" style="background:var(--color-person-5-wash);color:var(--color-person-5)"><svg class="i"><use href="#i-users"/></svg></span><b>Phòng của tôi</b><small>Tài chính · 6 người</small></a>
+            <a><span class="ci" style="background:var(--color-person-1-wash);color:var(--color-person-1)"><svg class="i"><use href="#i-shield"/></svg></span><b>Vai trò</b><small>2 vai trò</small></a>
+            <a><span class="ci" style="background:var(--color-person-7-wash);color:var(--color-person-7)"><svg class="i"><use href="#i-chat"/></svg></span><b>Nhóm của tôi</b><small>2 nhóm</small></a>
+          </div>
+          <div class="sec">Đang trực tuyến · 3</div>
+          <div class="prow"><span class="av on2" style="--p:var(--color-person-2)">VL</span><span><b>Lê Quang Vinh</b><small>Kế toán trưởng · Tài chính</small></span><span class="st on">Trực tuyến</span></div>
+          <div class="prow"><span class="av on2" style="--p:var(--color-person-3)">HP</span><span><b>Phạm Thu Hà</b><small>Kế toán viên · Tài chính</small></span><span class="st on">Trực tuyến</span></div>
+        </div>
+        <nav class="bbar" aria-label="Phân hệ">
+          <a><span class="ic"><svg class="i l"><use href="#i-chat"/></svg></span>Chat</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-cal"/></svg></span>Lịch</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-folder"/></svg></span>Tài liệu</a>
+          <a aria-current="page"><span class="ic"><svg class="i l"><use href="#i-users"/></svg></span>Danh bạ</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-grid"/></svg></span>Thêm</a>
+        </nav>
+      </div>
+      <small>Màn đầu: Thường liên lạc (người bạn nhắn gần đây), danh mục dạng lưới 2 cột kèm Phòng của tôi, Đang trực tuyến</small>
+    </div>
+
+    <div class="ph">
+      <div class="phone">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="dbar"><button class="ibtn" aria-label="Lên cấp trên"><svg class="i"><use href="#i-back"/></svg></button><h2>Khối Công nghệ</h2><button class="ibtn" aria-label="Tìm người trong Khối Công nghệ"><svg class="i"><use href="#i-search"/></svg></button></div>
+          <nav class="crumb"><a>NovaPay</a>›<a aria-current="page">Khối Công nghệ</a></nav>
+          <nav class="chips"><a>Đang trực tuyến · 4</a></nav>
+          <div class="sec">Phòng ban · 2</div>
+          <div class="drow"><span class="fico"><svg class="i"><use href="#i-folder"/></svg></span><span><b>Phát triển sản phẩm</b><small>18 người</small></span><span></span><svg class="i muted"><use href="#i-chev"/></svg></div>
+          <div class="drow"><span class="fico"><svg class="i"><use href="#i-folder"/></svg></span><span><b>Hạ tầng</b><small>7 người</small></span><span></span><svg class="i muted"><use href="#i-chev"/></svg></div>
+          <div class="sec">Thành viên · 34</div>
+          <div class="swrow">
+            <div class="under"><a style="background:var(--color-accent)"><svg class="i"><use href="#i-chat"/></svg>Nhắn tin</a><a style="background:var(--color-success)"><svg class="i"><use href="#i-video"/></svg>Gọi</a></div>
+            <div class="prow" style="transform:translateX(-152px)"><span class="av" style="--p:var(--color-person-4)">AN</span><span><b>Nguyễn Văn An</b><small>Trưởng khối</small></span><span class="st">Ngoại tuyến</span></div>
+          </div>
+          <div class="prow"><span class="av on2" style="--p:var(--color-person-8)">BT</span><span><b>Trần Gia Bảo</b><small>Kỹ sư phần mềm</small></span><span class="st on">Trực tuyến</span></div>
+          <div class="prow"><span class="av" style="--p:var(--color-person-1)">CH</span><span><b>Lê Minh Châu</b><small>Kỹ sư hạ tầng</small></span><span class="st">Ngoại tuyến</span></div>
+          <div class="prow"><span class="av" style="--p:var(--color-person-6)">DN</span><span><b>Phạm Ngọc Diệp</b><small>Thiết kế sản phẩm</small></span><span class="st">Ngoại tuyến</span></div>
+        </div>
+        <div class="az" aria-label="Nhảy theo chữ cái">A B C D Đ E G H K L M N P Q S T V X Y</div>
+        <nav class="bbar" aria-label="Phân hệ">
+          <a><span class="ic"><svg class="i l"><use href="#i-chat"/></svg></span>Chat</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-cal"/></svg></span>Lịch</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-folder"/></svg></span>Tài liệu</a>
+          <a aria-current="page"><span class="ic"><svg class="i l"><use href="#i-users"/></svg></span>Danh bạ</a>
+          <a><span class="ic"><svg class="i l"><use href="#i-grid"/></svg></span>Thêm</a>
+        </nav>
+      </div>
+      <small>Trong phòng: ← lên cấp trên, kính lúp (ô tìm §6, phạm vi Người trong phòng này) thay ô tìm trong trang; vuốt trái hàng người lộ Nhắn tin · Gọi; từ 30 người có cột chữ cái A–Z</small>
+    </div>
+
+    <div class="ph">
+      <div class="phone nobar">
+        <div class="pbody" style="padding-top:0">
+          <div class="cover"><button class="ibtn" style="position:absolute;left:10px;top:42px;background:var(--color-overlay)" aria-label="Quay lại"><svg class="i"><use href="#i-back"/></svg></button><button class="ibtn" style="position:absolute;right:10px;top:42px;background:var(--color-overlay)" aria-label="Thêm tuỳ chọn"><svg class="i"><use href="#i-more"/></svg></button></div>
+          <div class="prof"><span class="av on2" style="--p:var(--color-person-2)">VL</span><b>Lê Quang Vinh</b><small class="muted">Kế toán trưởng</small><span class="pill-ok" style="justify-self:start">Trực tuyến</span></div>
+          <div class="acts4">
+            <a class="pri"><svg class="i"><use href="#i-chat"/></svg>Nhắn tin</a>
+            <a><svg class="i"><use href="#i-video"/></svg>Gọi</a>
+            <a><svg class="i"><use href="#i-cal"/></svg>Lịch</a>
+            <a><svg class="i"><use href="#i-link"/></svg>Email</a>
+          </div>
+          <div class="grp">
+            <div class="it"><span><small>Email</small><b>vinh.le@novapay.vn</b></span><svg class="i s muted"><use href="#i-file"/></svg></div>
+            <div class="it"><span><small>Phòng ban</small><b style="color:var(--color-accent)">NovaPay › Khối Vận hành › Tài chính</b></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span><small>Vai trò</small><b>Kế toán</b></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span><small>Nơi làm việc</small><b>Hà Nội</b></span></div>
+          </div>
+          <div class="grp-t">Cùng phòng</div>
+          <div class="grp"><div class="it"><span class="members"><span class="av s28 stack" style="--p:var(--color-person-3)">HP</span><span class="av s28 stack" style="--p:var(--color-person-5)">TL</span><span class="av s28 stack" style="--p:var(--color-person-7)">QA</span></span><span><b>Thu Hà và 4 người khác</b></span><svg class="i chev"><use href="#i-chev"/></svg></div></div>
+          <div class="grp-t">Đã cùng làm việc</div>
+          <div class="grp">
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-chat"/></svg></span><span><b>3 nhóm chung</b><small>general · Đối soát liên khối · Mua sắm Q4</small></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            <div class="it"><span class="fico"><svg class="i"><use href="#i-file"/></svg></span><span><b>Tệp đã chia sẻ với bạn</b><small>4 tệp</small></span><svg class="i chev"><use href="#i-chev"/></svg></div>
+          </div>
+        </div>
+      </div>
+      <small>Thẻ hồ sơ: 4 nút Nhắn tin · Gọi · Lịch (xem lịch của người đó trong Lịch) · Email; Cùng phòng; Đã cùng làm việc (nhóm chung, tệp chia sẻ với bạn)</small>
+    </div>
+
+    <div class="ph">
+      <div class="phone nobar">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="pbody">
+          <div class="sfield"><button class="ibtn" aria-label="Đóng tìm"><svg class="i"><use href="#i-back"/></svg></button><span class="in">vinh</span><button class="ibtn" aria-label="Xoá chữ"><svg class="i"><use href="#i-plus" transform="rotate(45 12 12)"/></svg></button></div>
+          <nav class="scope"><a aria-current="true">Người</a><a>Tất cả</a><a>Chat</a><a class="flt">Phòng ban</a><a class="flt">Vai trò</a><a class="flt">Đang trực tuyến</a></nav>
+          <p class="hint" style="padding-top:2px">Kết quả trong cả NovaPay · 2 người khớp</p>
+          <div class="sr"><span class="av" style="--p:var(--color-person-2)">VL</span><span><b>Lê Quang <mark>Vinh</mark></b><small>Kế toán trưởng · …› Khối Vận hành › Tài chính</small></span><button class="ibtn" aria-label="Nhắn tin cho Lê Quang Vinh"><svg class="i"><use href="#i-chat"/></svg></button></div>
+          <div class="sr"><span class="av" style="--p:var(--color-person-8)">VH</span><span><b>Hoàng <mark>Vinh</mark> Hiển</b><small>Chuyên viên pháp chế · Pháp chế</small></span><button class="ibtn" aria-label="Nhắn tin cho Hoàng Vinh Hiển"><svg class="i"><use href="#i-chat"/></svg></button></div>
+          <div class="shead"><b>Tìm gần đây</b></div>
+          <div class="sr"><span class="fico"><svg class="i"><use href="#i-search"/></svg></span><span><b>kế toán</b></span><span></span></div>
+        </div>
+      </div>
+      <small>Tìm người: ô tìm §6 với phạm vi Người; chip lọc Phòng ban · Vai trò · Đang trực tuyến; nút Nhắn tin ngay trên hàng kết quả</small>
+    </div>
+  </div>
+  <ul class="notes">
+    <li><b>Giữ nguyên</b> mọi quy tắc Danh bạ đã duyệt (DESIGN.md "Danh bạ"): danh mục, bấm mới tải, đường dẫn, hàng phòng/người, phạm vi hiển thị, thẻ người bị ẩn, các trạng thái. Không thêm danh sách "Tất cả thành viên".</li>
+    <li><b>Thường liên lạc:</b> tối đa 8 avatar 52 cuộn ngang, lấy từ tin nhắn trực tiếp gần đây (dữ liệu "Trò chuyện gần đây" sẵn có), chỉ người còn trong phạm vi được xem; chạm mở thẻ hồ sơ, nhấn giữ mở Nhắn tin. Ẩn khi chưa nhắn với ai.</li>
+    <li><b>Danh mục dạng lưới 2 cột</b> (ô 16 radius, icon 40 trên person-wash), thêm <b>Phòng của tôi</b> khi người xem thuộc một phòng; workspace cá nhân: Thành viên · Nhóm của tôi. Dưới lưới: "Đang trực tuyến · N" (tối đa 5, "Xem tất cả").</li>
+    <li><b>Trong phòng / vai trò / nhóm:</b> thanh trên ← · tên · kính lúp (ô tìm §6, phạm vi Người, lọc sẵn phòng đang mở) — bỏ ô tìm trong trang; chip "Đang trực tuyến · N" giữ nguyên. Hàng người 60, avatar 40. Từ 30 người: cột chữ cái A–Z 18px bên phải (theo chữ cái đầu của <b>tên</b>, đúng thứ tự xếp tiếng Việt), chạm hoặc kéo để nhảy, tên chữ cái hiện to giữa màn khi kéo.</li>
+    <li><b>Vuốt hàng người:</b> trái lộ Nhắn tin (accent) · Gọi (success); không có vuốt nào xoá hay sửa.</li>
+    <li><b>Thẻ hồ sơ:</b> 4 nút đều — Nhắn tin (primary) · Gọi · <b>Lịch</b> (mở Lịch với lịch của người đó chồng lên, theo quyền xem lịch hiện có) · Email (hiện địa chỉ, chép được). "Đã cùng làm việc": số nhóm chung (mở danh sách) và tệp người đó chia sẻ với bạn — chỉ những gì người xem đọc được. ⋯: Sao chép email · Thêm vào nhóm… · Mời vào cuộc họp (tạo sự kiện với người đó). Hồ sơ của chính bạn: nút "Sửa hồ sơ" mở Tôi › Tài khoản và hồ sơ.</li>
+    <li><b>Phòng ban chỉ có ở workspace tổ chức:</b> workspace cá nhân không có ô Phòng ban, Phòng của tôi, Vai trò, chip lọc Phòng ban, dòng Phòng ban và Cùng phòng trên thẻ hồ sơ; dòng phụ của người chỉ là chức danh. Danh mục cá nhân: Thành viên · Nhóm của tôi.</li>
+    <li><b>Danh bạ trên thanh đáy:</b> mặc định ở workspace cá nhân; ở tổ chức nằm trong Thêm, người dùng đưa lên được. Không có nút +; quản trị viên mời người qua ⋯ → "Mời thành viên" (mở Cài đặt workspace › Mời thành viên).</li>
+  </ul>
+</section>
+</div>
+</body>
+</html>

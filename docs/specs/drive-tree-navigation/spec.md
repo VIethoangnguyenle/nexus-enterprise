@@ -145,3 +145,5 @@ The drive root of a workspace SHALL hang on the Documents OA recorded on the wor
 - **WHEN** workspace B asks for a drive for a channel that belongs to workspace A, or for a channel that does not exist
 - **THEN** the request is refused with PermissionDenied and no node, association or row is written
 
+## Planned change (mobile-ux-overhaul, 2026-10-19)
+Phase 11: below 1024px the tree drawer gives way to entry chips (Gần đây · Thư mục · Gắn sao · Chia sẻ với tôi · Bản nháp), a folder screen with a tappable path, and list view by default on phones. See DESIGN.md "Tài liệu". Plan: `plans/261018-1742-mobile-ux-overhaul`.

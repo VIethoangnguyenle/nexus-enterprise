@@ -150,3 +150,6 @@ their direct messages), newest reply first, at most 50; a conversation set to `o
 #### Scenario: A thread read is a thread gone
 - **WHEN** the caller opens a thread with unread replies and reads it
 - **THEN** it no longer appears in the list
+
+## Planned change (mobile-ux-overhaul, 2026-10-19)
+Phase 07: when a group restricts posting to managers, members still reply in threads. Phase 10: swiping a message left opens its thread. See `chat-group-management`, `mobile-gestures`. Plan: `plans/261018-1742-mobile-ux-overhaul`.

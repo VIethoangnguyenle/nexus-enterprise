@@ -121,3 +121,6 @@ taken from the destination and never from the request. A name already used in th
 #### Scenario: Gone or wrong destination and source
 - **WHEN** the destination is trashed or missing, or the source is trashed or still pending
 - **THEN** the answer is 404; a destination that is a file is 400
+
+## Planned change (mobile-ux-overhaul, 2026-10-19)
+Phase 11: starring an item and Truy cập nhanh, both filtered to the item's own workspace with read re-checked at every read; multi-select acts only where every selected item allows it. Plan: `plans/261018-1742-mobile-ux-overhaul`.

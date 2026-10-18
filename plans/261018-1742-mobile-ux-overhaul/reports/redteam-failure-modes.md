@@ -1,0 +1,110 @@
+# Red team: failure modes — plan 261018-1742-mobile-ux-overhaul
+
+Reviewer stance: failure-mode analyst / flow tracer. Every finding traced against code at `main` (36edb19).
+
+## Finding 1: A manager who leaves or is removed keeps access to the private group
+- **Severity:** Critical
+- **Location:** phase-07 Architecture ("`Ch_<id>_Managers` … assigned into `Ch_<id>_Members`; association Managers → Content OA `{manage, write, invite}`")
+- **Flaw:** Membership code works only on **direct** U children of the channel's Members UA. With a nested Managers UA, the roster, the membership check and removal all miss people who sit under it. Removal deletes only the U→Members edge. If managers are put under Managers only, they disappear from the roster and can never be removed. If they are put under both, leaving takes away their Members edge but the Managers edge and its association stay.
+- **Failure scenario:** A manager taps Rời nhóm (or a manager removes another manager). `RemoveAssignment(target, ch.NGACUaID)` succeeds and the UI shows them gone. But `U → Ch_X_Managers → Ch_X_Members` still exists, so the PDP keeps allowing read/write/invite/manage on the Content OA. That includes the channel drive, which hangs under the Content OA. The ex-member keeps reading a private group they "left". Under the other assignment choice, the managers are missing from Thành viên and `requireInChannel` returns "not a member".
+- **Evidence:** `backend/services/messaging/internal/domain/members.go:255-266` (ListMembers keeps `TypeU` children only); `members.go:211-217` (requireInChannel uses `IsAssigned` on `ch.NGACUaID`); `members.go:167-169` (RemoveMember removes only the Members edge); `backend/services/drive/internal/domain/channel_drive.go:76` (drive OA under Content OA inherits the grants).
+- **Suggested fix:** Pin the topology in the phase-01 spec. Either (a) managers are U nodes assigned to **both** UAs, and RemoveMember/Leave/Disband remove both edges in one EPP batch, or (b) Managers is a sibling UA and every membership read unions both. Add deny vectors: "manager left → read DENY", "manager removed → drive read DENY", "manager is listed in roster".
+
+## Finding 2: Removing `write` from Members ("Chỉ quản trị gửi tin") breaks reactions, pins, polls, calls and thread replies
+- **Severity:** High
+- **Location:** phase-07 Architecture bullet "Members association drops `write` → `{read, invite?}`"; Implementation step 2 (test vectors list)
+- **Flaw:** In messaging, `write` is not "post a top-level message". It gates almost every interaction. The send path also checks `write` *before* it looks at `ParentMessageID`, so thread replies are refused before any `replies_open` logic could run. The brainstorm non-goal forbids "changing what an operation may do in NGAC beyond the group-management rights named here".
+- **Failure scenario:** An owner restricts posting in a 200-person announcement group. Members can no longer react, unreact, pin, vote in polls, create tasks or start or join calls, and call invites skip them. Replies also fail with 403, because `authorizeChannelOp(..., OpWrite)` runs first. None of this is in the deny matrix, so CI stays green.
+- **Evidence:** `messaging/internal/domain/messages.go:92-99` (write check before the reply-parent check); `reactions_pins_receipts.go:22,40,78,98` (reaction add/remove, pin, unpin require write); `polls_tasks.go:112,280`; `calls.go:188`; `calls_push.go:104` (invite only writers); brainstorm report non-goals line "changing what an operation may do in NGAC…".
+- **Suggested fix:** Keep `write` on Members. Enforce "who may post top-level" in the messaging domain: a check on the channel setting plus `manage` for the restricted case, placed only on top-level SendMessage. Or decide each feature explicitly in the spec. Either way, the deny/allow matrix must list reactions, pins, polls, tasks, calls and replies.
+
+## Finding 3: "@Tất cả" has no server-side concept, and edit is a bypass
+- **Severity:** High
+- **Location:** phase-07 Architecture bullet "@Tất cả = quản trị … messaging requires `manage` … to send `@all`"; Related files "messaging send path (write vs reply, @all)"
+- **Flaw:** The server has no @all token. Mentions are a list of user ids, de-duplicated and pushed one by one. The plan patches only the *send* path, but `EditMessage` also accepts mentions and pushes the new ones. Nothing stops a client from sending every member id instead of a sentinel.
+- **Failure scenario:** A restricted member sends a message, then edits it with `mentions=[all 200 ids]`. `pushNewMentions` notifies everyone. Or a modified client sends all ids on create. The "@all DENY" test vector passes because it only covers the sentinel on send.
+- **Evidence:** `messaging/internal/domain/lifecycle.go:45` (EditMessage takes mentions), `lifecycle.go:87` (pushNewMentions on edit), `lifecycle.go:91-105` (cleanMentions: plain id list); `push.go:114,320` (recipients per id); grep shows no `@all`/`MentionAll` anywhere in the messaging domain.
+- **Suggested fix:** Spec the @all wire form first (a reserved mention kind in proto, with both sides regenerated). Enforce it in send **and** edit. Treat "mentions ≥ N members or the whole roster" as @all for restricted senders. Add an edit-path deny vector.
+
+## Finding 4: Owner, transfer and disband are not PDP decisions, and the old creator keeps rights after a transfer
+- **Severity:** High
+- **Location:** phase-07 Overview ("Every rule is a PDP decision"), Architecture ("Owner = … `channels.owner_id` (business column)"), Risk ("Backfill … creator … fall back to earliest member")
+- **Flaw:**
+  - (a) Transfer and disband are gated on a business column, not on the graph. That contradicts the plan's own contract and CLAUDE.md §5, and it has no PDP deny vector.
+  - (b) Messaging already has a non-graph bypass, `isChannelCreator` (`created_by`). It grants removal rights and `CanRemove`. The plan never retires it, so after a transfer the original creator can still remove anyone.
+  - (c) Workspace owners hold `manage` on every group through the Channels OA. Any new decision gated on "manage on Content OA" therefore passes for a workspace owner who is not in the group. That includes "transfer" if it is implemented as manage + an owner check that is skipped for manage-holders, as RemoveMember already does with `manages`.
+  - (d) The backfill uses `created_by`, which may be a user since removed from the tenant. That leaves a group whose sole owner cannot act, and only the owner can transfer.
+- **Failure scenario:** Lan creates a group and transfers ownership to Minh. Lan later removes Minh's manager, and `isChannelCreator` still authorizes it. Separately, a group whose creator left the company gets `owner_id` = the departed user, and nobody can transfer or disband it.
+- **Evidence:** `messaging/internal/domain/members.go:192-195` (isChannelCreator on `created_by`), `members.go:163`, `members.go:242`; `backend/ngac/ngac_ops.go:52-54` (OwnerChannelOps = manage, create_channel on Channels OA, inherited by every Content OA, `ngac_ops.go:40-43`); `workspace/internal/domain/service.go:248`; `data/init.sql:96` (`created_by`); `data/migrations/062_tenant_users_removed_status.sql` (removed users exist).
+- **Suggested fix:** Model Owner as its own per-channel UA, so transfer and disband are graph decisions with vectors. Delete `isChannelCreator` from the remove and roster paths in the same commit. In the backfill, choose an owner who is an *active* member (created_by if still a member and tenant-active, else the earliest active member). Log groups with no candidate.
+
+## Finding 5: Association replace makes settings toggles race, and the lock row and the graph can diverge
+- **Severity:** High
+- **Location:** phase-07 Architecture ("Settings stored on `channels` … every change rewrites associations"); phase-04 Architecture ("'Ai được tạo nhóm' lock is applied by adjusting the Channels OA association")
+- **Flaw:** `CreateAssociation` *replaces* the operation set. "Ai được gửi tin" and "Ai được thêm người" both edit the same Members→Content association, so each write is a read-modify-write of one row with no lock. The settings column (or the `workspace_setting_locks` row) and the graph write are separate transactions in separate services, with no reconciliation.
+  - Phase 04's lock also ignores custom roles: roles can be granted `create_channel` on the Channels area. "Only admins create groups" therefore still lets any member of such a role create one.
+  - The Members association is not editable through the role editor. A divergence can't be repaired from the UI.
+- **Failure scenario:** Two managers save Ai được gửi tin=quản trị and Ai được thêm người=quản trị within a second. Each reads `{read,write,invite}`, and each writes its own variant. The last write wins, so members keep invite while `channels.who_invites='managers'` and the UI shows "Chỉ quản trị". A crash between the lock-row insert and the association change leaves "locked" displayed with members still creating groups, or the reverse.
+- **Evidence:** `backend/services/policy/internal/ngac/pdp_association_replace_test.go:31` (ON CONFLICT DO UPDATE replaces ops); `pap_store.go:176`; `workspace/internal/domain/roles_admin.go:231` ("Owners and Members are not editable"), `roles_admin.go:240-290`; `backend/ngac/areas.go:59` (AreaChannels grants create_channel to custom roles).
+- **Suggested fix:** Derive the association op-set from the stored settings inside one serialized write: `SELECT … FOR UPDATE` on the channel row, compute ops from *all* settings, then replace. Add an idempotent reconcile step that rebuilds the association from settings. In the spec, say whether locks cover custom-role holders.
+
+## Finding 6: No rollback path, and graph rewrites survive an image rollback
+- **Severity:** High
+- **Location:** phase-04, phase-07 and phase-11 Implementation ("Back up DB; migration; `make db-migrate`") — none of the 12 phases has a rollback section
+- **Flaw:** Production rollback (`ROLLBACK=1`) never migrates, and the schema is forward-only. Phases 04 and 07 also mutate the **graph** at runtime (Members lose `create_channel` or `write`, Managers UAs appear). Old images know nothing about these changes and have no UI to undo them.
+- **Failure scenario:** Phase 07 ships, a bug forces `ROLLBACK=1 deploy.sh <prev>`. Groups that were restricted stay restricted: members can't post, react or pin (Finding 2), and the old UI has no Quản lý nhóm to lift it. Managers under a nested UA are invisible to old `ListMembers` and can't be removed (Finding 1). Workspaces where the phase-04 lock removed `create_channel` stay locked, and the old Members association can't be edited. Restoring the pre-migration `pg_dump` loses every message written since.
+- **Evidence:** `deploy/deploy.sh:92-93` ("rollback: skipping migrations (schema changes are forward-only)"); `deploy/deploy.sh:103-112` (graph reload only when a migration ran, not on rollback); `roles_admin.go:231`.
+- **Suggested fix:** For each graph-mutating phase, add a rollback section with a tested "un-restrict" script. That script restores `ChannelMemberOps()` / `MemberChannelOps()` on every channel or workspace through the policy writer, then runs `policy invalidate-cache --all-workspaces`. Ship the feature behind a server flag that defaults to off, and turn it on only after a deploy has settled.
+
+## Finding 7: Migrations — three `0NN_` placeholders across parallel phases, dev re-run semantics, and invalid DDL
+- **Severity:** High
+- **Location:** phase-04 Related files `data/migrations/0NN_user_preferences.sql` and Architecture `PK(user_id, coalesce(workspace_id,''), key)`; phase-07 `0NN_channel_management.sql`; phase-11 migration; plan.md "Parallel after 02 + 04: … {06→07}, … {03+09→11}"
+- **Flaw:**
+  - (a) 07 and 11 run in parallel and will both take `068`. Renumbering after one has reached production is impossible, because the ledger records filename + sha256 and an edited applied file is a hard stop.
+  - (b) `make db-migrate` re-applies **every** file on every run. A phase-07 backfill that inserts `ngac_nodes`/assignments or owner rows must be idempotent, or dev breaks or duplicates on the second run. The plan does not say so.
+  - (c) Postgres rejects an expression inside `PRIMARY KEY`, so the phase-04 DDL as written fails. It needs a unique index on `(user_id, coalesce(workspace_id,''), key)`.
+  - (d) A SQL backfill that writes graph rows bypasses EPP. On prod, deploy.sh compensates by restarting policy and dropping cached decisions. `make db-migrate` does neither, so the step "verify on the running DB" runs against a stale in-memory graph.
+- **Failure scenario:** 11 merges first as `068_drive_stars.sql` and deploys. 07 rebases, also takes `068_…`, and sorts before or after it depending on the slug. Then someone "fixes" the number by renaming an already-applied file, and the next deploy dies with exit 3.
+- **Evidence:** `deploy/migrate.sh:9-10` (checksum ledger, never edit), `migrate.sh:68-72,88` (CHECKSUM CHANGED → die 3); `Makefile:596-607` (db-migrate re-applies every file); `ls data/migrations` (latest is `067_channels_workspace_not_null.sql`).
+- **Suggested fix:** Reserve the numbers now (068 user_preferences, 069 channel_management, 070 drive_stars). Require every new file to be re-runnable (IF NOT EXISTS, ON CONFLICT DO NOTHING, guarded DO blocks). Fix the PK. Add "restart policy + `make policy-invalidate`" to the dev verification step.
+
+## Finding 8: The approval search route will 404 in dev and in production, and the plan never touches the prod router
+- **Severity:** High
+- **Location:** phase-08 Architecture (`GET /api/workspaces/:id/approvals/search`), Success criteria ("Routes in vite proxy regex block; work in native dev"); every phase that adds routes (04, 07, 08, 11)
+- **Flaw:** The approval service exposes `/api/approval/*` (flat). It has no route under `/api/workspaces/:id/`, and no regex branch exists for it. In dev that path falls through to the workspace service (:8181). In production nginx routes `location /api/workspaces` to the workspace service as well. The plan only ever mentions `vite.config.js`. It never mentions `deploy/nginx/default.conf`, which owns production routing and has its own regex list.
+- **Failure scenario:** Phase 08 passes vitest and the Go tests. On nexus.zaneng.xyz the Đề nghị group in Tất cả is always empty or errors, because the workspace service 404s. The same happens for any new nested route the plan adds without an nginx `location` (for example, a workspace-prefs route that turns out to be served by another service).
+- **Evidence:** `backend/services/approval/internal/rest/handler.go:68-75` (`/api` → `/approval` group); `frontend/vite.config.js:55-88` (regex block: drive, documents, channels, contacts, asset, calendar; no approvals), `vite.config.js:131` (`/api/approval` flat); `deploy/nginx/default.conf:91-116` (nested regexes), `default.conf:141` (`location /api/workspaces` catch-all), `default.conf:184` (`/api/approval`).
+- **Suggested fix:** Put approval search at `/api/approval/search?workspace=` (flat, already routed), or add matching regex entries to **both** vite and nginx. Make "route present in `deploy/nginx/default.conf`" a success criterion in phases 04, 07, 08 and 11.
+
+## Finding 9: The phase-04 preference store rests on false premises (workspace id in the token, read-receipt enforcement, cross-service keys)
+- **Severity:** High
+- **Location:** phase-04 Requirements ("tenant isolation by workspace id from the token"; "registry maps their keys to them"), Architecture ("Read receipts lock is enforced by the messaging read-marker path")
+- **Flaw:**
+  - (a) The JWT carries no workspace id, only `tenant_id`. The workspace scope must come from the path, plus a membership/PDP check that the plan never lists. Without it, a user can read the locks of, or write prefs keyed to, any workspace id.
+  - (b) `read_receipts` is also the source of every unread count. "Enforcing" the read-receipts lock by skipping the read-marker write would break unread badges for everyone affected.
+  - (c) `push_preferences` and `channel_notification_levels` belong to messaging, and `calendar_user_settings` to calendar. A registry in workspace or auth that "maps keys to them" means either cross-service SQL (against the layering rule) or new gRPC that isn't planned. Messaging also needs the lock value at read time, with no client in the plan.
+- **Failure scenario:** An admin locks read receipts off. Messaging stops upserting `read_receipts`, and every conversation shows as unread forever. Or the lock is checked by a messaging→workspace call added hastily without fail-closed handling.
+- **Evidence:** `backend/pkg/httputil/claims.go:13-19` (no workspace claim); `messaging/internal/store/reactions_pins_receipts.go:237` (upsert), `:284,299,314` and `store/stars.go:116` (unread queries join read_receipts); `push_preferences`/`channel_notification_levels` used only under `services/messaging/internal/store`, `calendar_user_settings` only under `services/calendar/internal/store`.
+- **Suggested fix:** Spec read-receipt *visibility*: still record the marker, but hide the reader from others. Put each key in the service that owns its table, with a thin client-side registry. Name the membership check and the deny vector "non-member GET locks → 403/404". List any new gRPC in the plan, with `make proto` + `proto:gen`.
+
+## Finding 10: Redirecting old Chat routes breaks desktop, and edge-back has no history on a push-notification cold start
+- **Severity:** High
+- **Location:** phase-02 Architecture ("`ChatTabBar` routes become chip state … `/channels?view=…`, keeping existing routes as redirects (`channels.mentions`, `channels.starred`)"); phase-09 Architecture (`useEdgeBack` "router history + snapshot of the previous route")
+- **Flaw:**
+  - (a) `/channels/mentions` and `/channels/starred` are the **desktop** main panes, linked and highlighted from the desktop `ChatNavigator`. Making them redirects breaks desktop, and the plan promises "desktop layout does not change".
+  - (b) The existing phone URL contract is `?tab=direct|sections|more`, not `view`. Old links, history entries and screenshots-as-bookmarks get no redirect.
+  - (c) Push notifications open `/channels/<id>?ws=…&thread=…&message=…` as the first entry in a cold PWA. History is empty, so an edge-back driven by "router history" either does nothing or leaves the app, and there is no "previous screen" to peek. The repo already has a `canGoBack`/`useDeviceBack` pattern that the plan re-implements instead of reusing.
+- **Failure scenario:** A desktop user clicks Được nhắc tới in the sidebar and is bounced to `/channels?view=mentions`, which renders the phone chip list in the desktop layout or nothing. On iPhone, a tapped mention notification opens the conversation, and swiping from the left edge reveals a blank peek layer and goes nowhere.
+- **Evidence:** `frontend/src/components/spaces/ChatNavigator.tsx:96-115` (desktop links + `current` on these paths); `frontend/src/routes/_workspace/-mentions-route.tsx` ("the main pane on a desktop, a full screen … on a phone"); `frontend/src/lib/nav-destinations.ts:99-104,137-138` (`tab` search contract); `messaging/internal/domain/push.go:389-393` (deep-link URLs); `frontend/src/hooks/useShortcutScreen.ts:18-23`, `frontend/src/hooks/useDeviceBack.ts:10-16` (existing back/history handling).
+- **Suggested fix:** Keep both routes as real routes on desktop. Redirect only below 1024px, or not at all. Map `?tab=` to the new chip state in `validateSearch`. Define the edge-back behaviour when there is no history (navigate to the module list, the same as the ← button) and add a test for that case. Build on `useDeviceBack`/`markOwnBack` so the app does not animate twice.
+
+## Finding 11: The "background upload" queue is lost on reload and leaves orphaned pending rows
+- **Severity:** Medium
+- **Location:** phase-11 Requirements ("uploads in the background … per-file retry"), Architecture ("Upload queue in a small store (Zustand, client state) so it survives navigation")
+- **Flaw:** An in-memory Zustand store survives route changes only. It is lost when iOS evicts a backgrounded PWA, on a pull-to-refresh, and on the UpdateBar SKIP_WAITING reload. `File` objects can't be persisted to localStorage. An upload is CreateFile (inserts a `pending` row) → PUT to MinIO → ConfirmFile, and nothing ever cleans up pending rows. If "retry" calls CreateFile again, every retry leaves another orphan.
+- **Failure scenario:** A user queues 12 photos, switches to Zalo, and iOS kills the PWA. On return the queue is gone with no notice. There are 12 pending rows and partial objects in MinIO, and the user re-uploads, creating 12 more.
+- **Evidence:** `backend/services/drive/internal/domain/files.go:103` (row created `Status: "pending"`), `files.go:116-128` (ConfirmFile requires pending); `drive/internal/store/files.go:23` (the only pending-status query is the confirm update, with no sweeper); `frontend/src/sw.ts` (SKIP_WAITING reload path).
+- **Suggested fix:** Rename the requirement to "continues while the app is open". Persist the queue metadata (with the files in IndexedDB if needed) and tell the user what was lost on relaunch. Make retry resume the same item id (re-presign the PUT, then ConfirmFile) instead of a new CreateFile. Add a server sweeper for stale pending rows, with a test.
+
+Status: DONE
+Summary: 11 failure modes found. The most serious are in phase 07's NGAC design: a nested Managers UA lets an ex-manager keep access to a private group; dropping `write` disables reactions, pins, polls, calls and replies; @all and edit have no server concept; owner rights are a business column next to the existing `created_by` bypass; and settings writes race on association replace. Phases 04, 07 and 11 have no rollback path and migrate risky data. Phase 08's approval route 404s in production, where nginx routing was never considered.

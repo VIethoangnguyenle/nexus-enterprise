@@ -94,3 +94,6 @@ read. A direct message is only on (`main`) or `off`: `all` on a DM is 400. Web p
 #### Scenario: Not a reader
 - **WHEN** someone who cannot read a conversation asks for or sets its level
 - **THEN** the answer is 403 and nothing is stored
+
+## Planned change (mobile-ux-overhaul, 2026-10-19)
+Phases 04–05: per-module notification switches, quiet hours and pause-until are read by the senders; Thông báo opens from Thêm or the bottom bar on phones. See `user-settings`. Plan: `plans/261018-1742-mobile-ux-overhaul`.

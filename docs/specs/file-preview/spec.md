@@ -179,3 +179,6 @@ Native previews are signed like downloads, so the browser may be told to save ra
 shown as text, never put in a frame.
 Thumbnails need `pdftoppm` (poppler-utils) and `ffmpeg` where the drive runs; the drive image installs them. Without them
 PDFs and videos have no thumbnail and nothing else changes. Tuning: `THUMBNAIL_MAX_CONCURRENT` (4).
+
+## Planned change (mobile-ux-overhaul, 2026-10-19)
+Phase 10: the viewer swipes between a conversation's images, zooms by pinch or double-tap and closes by dragging down. See `mobile-gestures`. Plan: `plans/261018-1742-mobile-ux-overhaul`.

@@ -273,3 +273,6 @@ Known gaps, recorded rather than resolved:
 - Nothing records who changed a role, a permission, a member or a department, so there is no administrators' activity feed.
 - A role cannot be renamed: the policy service has no node update.
 - `UpdateMemberRoles` and `CreatePermission` no longer exist on the workspace gRPC service.
+
+## Planned change (mobile-ux-overhaul, 2026-10-19)
+Phase 04: administrators can lock "Ai được tạo nhóm"; the lock removes `create_channel` from Members and custom roles on Channels (Owners keep theirs), and the roles screen shows the lock and refuses to grant `create_channel` on Channels while it is on. See `user-settings`. Plan: `plans/261018-1742-mobile-ux-overhaul`.
