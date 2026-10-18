@@ -2,6 +2,32 @@
 import { usePwaStore } from './pwa'
 import { getOneSignalAppId } from './push'
 
+const MIN_CHECK_GAP_MS = 60_000
+const CHECK_INTERVAL_MS = 30 * 60_000
+
+/**
+ * Browsers only look for a new worker on a full navigation, and an installed PWA resumed from
+ * the app switcher never navigates. So ask explicitly: when the page comes back to the
+ * foreground (throttled) and on a slow interval while it is visible. A worker that finished
+ * installing while the app was in the background is surfaced on resume as well.
+ */
+function watchForUpdates(reg: ServiceWorkerRegistration): void {
+  let lastCheck = 0
+  const check = () => {
+    if (document.visibilityState !== 'visible') return
+    if (reg.waiting) usePwaStore.setState({ needRefresh: true })
+    const now = Date.now()
+    if (now - lastCheck < MIN_CHECK_GAP_MS) return
+    lastCheck = now
+    // Offline or a transient network error: the next resume or tick tries again.
+    reg.update().catch(() => {})
+  }
+  document.addEventListener('visibilitychange', check)
+  window.addEventListener('pageshow', (e) => { if (e.persisted) check() })
+  window.addEventListener('focus', check)
+  window.setInterval(check, CHECK_INTERVAL_MS)
+}
+
 /**
  * Register the service worker. Production builds only: in `make dev` Vite serves
  * source modules and the proxy table, and a worker would sit in front of both.
@@ -38,6 +64,7 @@ export async function registerPwa(): Promise<void> {
       reg.addEventListener('updatefound', () => {
         if (reg.installing) wireUpdate(reg.installing)
       })
+      watchForUpdates(reg)
       usePwaStore.setState({
         applyUpdate: () => {
           const waiting = reg.waiting
@@ -62,6 +89,7 @@ export async function registerPwa(): Promise<void> {
     const { registerSW } = await import('virtual:pwa-register')
     const update = registerSW({
       onNeedRefresh: () => usePwaStore.setState({ needRefresh: true }),
+      onRegisteredSW: (_url, reg) => { if (reg) watchForUpdates(reg) },
       onRegisterError: (err) => console.warn('[pwa] service worker registration failed', err),
     })
     // Another tab may already have activated the new worker: nothing is waiting any more, and
