@@ -682,7 +682,7 @@ func TestAdminHandler_DetailsCarryTypeOwnerAndConversion(t *testing.T) {
 func TestAdminHandler_DetailsOwnerNamesPreservesCommaInName(t *testing.T) {
 	f := &fakeDeptService{details: &domain.WorkspaceDetails{
 		Name: "Acme", Description: "d", CanManage: false, Type: "personal", IsOwner: false,
-		OwnerName: "Nguyễn, Hoàng Hoa, Trần Văn Bình",
+		OwnerName:  "Nguyễn, Hoàng Hoa, Trần Văn Bình",
 		OwnerNames: []string{"Nguyễn, Hoàng Hoa", "Trần Văn Bình"},
 	}}
 	code, body := call(t, f, "comma in name", find("GetWorkspaceDetails"))

@@ -63,4 +63,3 @@ func TestIPExtractor_RefusesABadRange(t *testing.T) {
 		t.Fatal("a typo in the trusted ranges must stop start-up, not silently trust nothing")
 	}
 }
-

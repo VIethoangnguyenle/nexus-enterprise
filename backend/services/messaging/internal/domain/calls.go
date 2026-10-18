@@ -85,7 +85,7 @@ const (
 	CallChangeAnswered = "answered" // the peer joined: other devices stop ringing
 	CallChangeDeclined = "declined"
 	CallChangeMissed   = "missed"
-	CallChangeState    = "state" // who is in it, or it ended
+	CallChangeState    = "state"   // who is in it, or it ended
 	CallChangeInvite   = "invited" // someone asked the people named to join
 )
 
