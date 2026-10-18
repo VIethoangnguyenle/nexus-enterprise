@@ -24,7 +24,7 @@ func (w *threadWorld) postText(t *testing.T, content, format, parent string) *st
 
 func (w *threadWorld) searchAll(t *testing.T, q string, hasFile bool, before *time.Time, beforeID string, limit int) ([]*store.Message, bool) {
 	t.Helper()
-	msgs, more, err := w.st.SearchAllMessages(context.Background(), []string{w.chID}, q, hasFile, before, beforeID, limit)
+	msgs, more, err := w.st.SearchAllMessages(context.Background(), []string{w.chID}, q, hasFile, before, beforeID, limit, store.SearchFilters{})
 	require.NoError(t, err)
 	return msgs, more
 }
@@ -106,7 +106,7 @@ func TestSearchAllMessages_UserInputNeverBreaksTheQuery(t *testing.T) {
 	hit := w.postText(t, "alpha beta", "markdown", "")
 
 	for _, q := range []string{"a & | ! :*", "(((", "alpha &", "'; DROP TABLE messages; --", `\`, "alpha:*", "!!", "<->", "alpha <-> beta", "'", "alpha'"} {
-		_, _, err := w.st.SearchAllMessages(context.Background(), []string{w.chID}, q, false, nil, "", 25)
+		_, _, err := w.st.SearchAllMessages(context.Background(), []string{w.chID}, q, false, nil, "", 25, store.SearchFilters{})
 		require.NoError(t, err, "query %q", q)
 	}
 	got, _ := w.searchAll(t, "alpha & beta", false, nil, "", 25)
@@ -130,7 +130,7 @@ func TestSearchAllMessages_LeavesOutDeletedAndOtherChannels(t *testing.T) {
 	got, _ := w.searchAll(t, "needle", false, nil, "", 25)
 	assert.Equal(t, []string{kept.ID}, ids(got))
 
-	none, more, err := w.st.SearchAllMessages(context.Background(), nil, "needle", false, nil, "", 25)
+	none, more, err := w.st.SearchAllMessages(context.Background(), nil, "needle", false, nil, "", 25, store.SearchFilters{})
 	require.NoError(t, err)
 	assert.Empty(t, none, "no readable channel, no result")
 	assert.False(t, more)

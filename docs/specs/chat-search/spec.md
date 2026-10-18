@@ -17,6 +17,9 @@ the previous page) continue after that message; messages sent at the same instan
 neither repeats nor skips one. A malformed `before` or non-numeric `limit` is 400; the route needs a session (401
 without). Hits carry what the mentions feed carries: sender name, reactions, attachments and the caller's thread state.
 
+All filters combine with AND. When at least one filter is set, `q` may be empty — a filter-only search is allowed.
+With no `q` and no filter, the answer is an empty list.
+
 #### Scenario: A word in a reply
 - **WHEN** a member searches for a word that only a thread reply contains
 - **THEN** the reply is returned with `parent_message_id` set to the thread's root message
@@ -25,13 +28,23 @@ without). Hits carry what the mentions feed carries: sender name, reactions, att
 - **WHEN** more than one page matches and the client sends `before` and `before_id` of the last message it has
 - **THEN** the next page follows without repeating or skipping a message, and `has_more` is false on the last
 
-### Requirement: Short queries find nothing
+#### Scenario: Paging with filters
+- **WHEN** a filter narrows the results and the client pages through them
+- **THEN** pagination works identically — no results are skipped or repeated
+
+### Requirement: Short queries find nothing (unless a filter is set)
 A `q` that is missing, empty or shorter than 2 characters once trimmed, or that holds no letter or digit, SHALL answer
-an empty list (200), without reading messages.
+an empty list (200), without reading messages — **unless** at least one filter (`has_file`, `from`, `channel_id`,
+`after`, `before_date`, `has_link`, `mentions_me`) is set. When a filter is set and `q` is absent, the full-text
+predicate is skipped and only the filters apply.
 
 #### Scenario: One letter
-- **WHEN** the caller searches for `n`
+- **WHEN** the caller searches for `n` with no filter
 - **THEN** the answer is `{"messages": []}`
+
+#### Scenario: Filter-only search
+- **WHEN** the caller sends `from=<user-id>` with no `q`
+- **THEN** all messages by that sender in readable conversations are returned
 
 ### Requirement: Attachment filter
 With `has_file=true` only messages that carry at least one attachment (or the legacy single drive-file link) SHALL be
@@ -40,6 +53,51 @@ returned; any other value leaves the filter off.
 #### Scenario: Files only
 - **WHEN** two messages match and one has a file
 - **THEN** `has_file=true` returns only that one
+
+### Requirement: Sender filter (`from`)
+With `from=<user-id>` only messages whose `sender_id` matches SHALL be returned.
+
+#### Scenario: From another user
+- **WHEN** `from` names a user who sent some of the matching messages
+- **THEN** only that user's messages are returned; messages by others are excluded
+
+### Requirement: Channel filter (`channel_id`)
+With `channel_id=<id>` results SHALL be restricted to that one conversation. The conversation must be in the caller's
+readable set; a `channel_id` outside the readable set simply yields no results — never an error that reveals the
+channel's existence.
+
+#### Scenario: Unreadable channel
+- **WHEN** `channel_id` names a conversation the caller cannot read
+- **THEN** the answer is an empty list, not an error
+
+### Requirement: Date filters (`after`, `before_date`)
+`after=YYYY-MM-DD` is an inclusive lower bound: only messages created at or after the start of that day in
+Asia/Ho_Chi_Minh (UTC+7). `before_date=YYYY-MM-DD` is an inclusive upper bound: only messages created before the end
+of that day in Asia/Ho_Chi_Minh. A malformed date is 400 via `ErrInvalidInput`. The existing `before` (RFC 3339
+pagination cursor) is unchanged and separate.
+
+#### Scenario: Inclusive boundaries in UTC+7
+- **WHEN** a message is sent at 2025-03-15 00:30 Asia/Ho_Chi_Minh and `after=2025-03-15`
+- **THEN** the message is included (start-of-day is 00:00 HCM = 2025-03-14T17:00Z)
+
+#### Scenario: Invalid date
+- **WHEN** `after=not-a-date`
+- **THEN** the answer is 400
+
+### Requirement: Link filter (`has_link`)
+With `has_link=true` only messages whose text contains an `http://` or `https://` URL SHALL be returned.
+
+#### Scenario: Link filter
+- **WHEN** two messages match and one contains `https://example.com`
+- **THEN** `has_link=true` returns only that one
+
+### Requirement: Mentions filter (`mentions_me`)
+With `mentions_me=true` only messages that mention the caller SHALL be returned. A mention is decided the same way as
+the Mentions feed (`store.MentionsOf`): `m.mentions @> ARRAY[<caller>]::text[]`. No second definition is introduced.
+
+#### Scenario: Mentions filter
+- **WHEN** two messages match and one mentions the caller
+- **THEN** `mentions_me=true` returns only the mentioning one
 
 ### Requirement: Search follows read access
 A message SHALL be returned only when the caller holds `read` on the content OA of its conversation, decided by the
@@ -97,22 +155,6 @@ change nothing in the database.
 #### Scenario: Same matching in a group
 - **WHEN** a member searches a group for `đối so`
 - **THEN** the group's message `Báo cáo đối soát` is found, as in the search across conversations
-
-### Requirement: Narrowing a search
-`GET /api/messages/search` SHALL accept these further parameters, each optional and combinable with `q`; a message is
-returned only when it meets every one given. The client sends them under exactly these names (the only place that maps
-them is `messageSearchParams` in `frontend/src/api/messaging.ts`). Until the server honours a parameter it ignores it.
-- `from` — user id of the sender.
-- `channel_id` — id of one conversation; ignored (nothing found) when the caller does not read it.
-- `after`, `before_date` — first and last day (`YYYY-MM-DD`, both inclusive), days of the caller's zone, which travels as
-  `tz` (an IANA name such as `Asia/Ho_Chi_Minh`, sent only with a day filter). A malformed day or `tz` is 400.
-- `has_file=true` — as above; `has_link=true` — the text holds a link (`http://` or `https://`); `mentions_me=true` — the
-  message names the caller. Any other value leaves the filter off.
-Narrowing never widens read access: the read check applies first.
-
-#### Scenario: Sender and days
-- **WHEN** a member searches with `from` and a one-day range in `Asia/Ho_Chi_Minh`
-- **THEN** only that sender's messages sent between 00:00 and 24:00 of that day in that zone are returned
 
 ### Requirement: Chat's results page
 Enter (or "Xem tất cả kết quả") in the search box of a desktop SHALL open `/channels/search?q=…`, whose address carries the

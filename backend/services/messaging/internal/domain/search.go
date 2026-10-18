@@ -3,6 +3,7 @@ package domain
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -22,6 +23,9 @@ const (
 	searchPageSize = 25
 )
 
+// hcmTZ is Asia/Ho_Chi_Minh (UTC+7), the timezone used for date filters.
+var hcmTZ = time.FixedZone("Asia/Ho_Chi_Minh", 7*60*60)
+
 // SearchQuery is one search across conversations. Before and BeforeID are the
 // send time (RFC 3339) and id of the last message of the previous page.
 type SearchQuery struct {
@@ -30,30 +34,96 @@ type SearchQuery struct {
 	Before   string
 	BeforeID string
 	Limit    int
+
+	// New filters — all optional.
+	From       string // sender user ID
+	ChannelID  string // restrict to one conversation
+	After      string // ISO date YYYY-MM-DD inclusive lower bound (Asia/Ho_Chi_Minh)
+	BeforeDate string // ISO date YYYY-MM-DD inclusive upper bound (Asia/Ho_Chi_Minh)
+	HasLink    bool   // only messages containing http:// or https://
+	MentionsMe bool   // only messages that mention the caller
+}
+
+// hasFilter reports whether any filter beyond text is set.
+func (q SearchQuery) hasFilter() bool {
+	return q.HasFile || q.From != "" || q.ChannelID != "" ||
+		q.After != "" || q.BeforeDate != "" || q.HasLink || q.MentionsMe
+}
+
+// parseSearchDates validates and converts After/BeforeDate to UTC times.
+// After becomes start-of-day in Asia/Ho_Chi_Minh; BeforeDate becomes
+// end-of-day (start of the next day) in Asia/Ho_Chi_Minh.
+func parseSearchDates(after, beforeDate string) (afterTime, beforeDateTime *time.Time, err error) {
+	if after != "" {
+		t, err := time.ParseInLocation("2006-01-02", after, hcmTZ)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%w: after must be an ISO date (YYYY-MM-DD)", ErrInvalidInput)
+		}
+		utc := t.UTC()
+		afterTime = &utc
+	}
+	if beforeDate != "" {
+		t, err := time.ParseInLocation("2006-01-02", beforeDate, hcmTZ)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%w: before_date must be an ISO date (YYYY-MM-DD)", ErrInvalidInput)
+		}
+		end := t.AddDate(0, 0, 1).UTC() // end of day = start of next day
+		beforeDateTime = &end
+	}
+	return afterTime, beforeDateTime, nil
 }
 
 // SearchAll finds, newest first, the messages — main stream and thread replies
 // alike — whose text matches the query, in the conversations the caller reads
 // in the workspace they are signed in to and in their direct messages (the
 // scope of the Mentions feed). A message of any other conversation is never
-// returned: a hit is message text, so it follows read access exactly. Text
-// shorter than two characters finds nothing. A page is 25 hits unless Limit
-// asks for another size (at most 50).
+// returned: a hit is message text, so it follows read access exactly.
+//
+// Text shorter than two characters finds nothing — unless at least one filter
+// is set (a filter-only search is allowed). With no text and no filter, the
+// answer is an empty list.
+//
+// A page is 25 hits unless Limit asks for another size (at most 50).
 func (s *Service) SearchAll(ctx context.Context, userID, userNodeID, workspaceID string, q SearchQuery) (*pb.MessageList, error) {
 	if userID == "" || userNodeID == "" {
 		return nil, ErrInvalidInput
 	}
-	if utf8.RuneCountInString(strings.TrimSpace(q.Text)) < searchMinRunes {
+
+	hasText := utf8.RuneCountInString(strings.TrimSpace(q.Text)) >= searchMinRunes
+	if !hasText && !q.hasFilter() {
 		return &pb.MessageList{}, nil
 	}
+	// When no meaningful text is given but filters are set, clear Text so the
+	// store knows not to apply the full-text predicate.
+	if !hasText {
+		q.Text = ""
+	}
+
 	if r := []rune(q.Text); len(r) > searchMaxRunes {
 		q.Text = string(r[:searchMaxRunes])
 	}
 	if q.Limit <= 0 {
 		q.Limit = searchPageSize
 	}
+
+	// Validate date filters.
+	afterTime, beforeDateTime, err := parseSearchDates(q.After, q.BeforeDate)
+	if err != nil {
+		return nil, err
+	}
+
+	sf := store.SearchFilters{
+		From:       q.From,
+		ChannelID:  q.ChannelID,
+		After:      afterTime,
+		BeforeDate: beforeDateTime,
+		HasLink:    q.HasLink,
+		MentionsMe: q.MentionsMe,
+		CallerID:   userID,
+	}
+
 	return s.messageFeed(ctx, userID, userNodeID, workspaceID, q.Before, q.BeforeID, q.Limit,
 		func(ctx context.Context, _ string, channelIDs []string, before *time.Time, beforeID string, limit int) ([]*store.Message, bool, error) {
-			return s.store.SearchAllMessages(ctx, channelIDs, q.Text, q.HasFile, before, beforeID, limit)
+			return s.store.SearchAllMessages(ctx, channelIDs, q.Text, q.HasFile, before, beforeID, limit, sf)
 		})
 }
