@@ -142,8 +142,8 @@ func (c *Client) ReceiveWebhook(r *http.Request) (Event, error) {
 		return Event{}, fmt.Errorf("livekit webhook: %w", err)
 	}
 	return Event{
-		Kind:     ev.GetEvent(),
-		Room:     ev.GetRoom().GetName(),
+		Kind:        ev.GetEvent(),
+		Room:        ev.GetRoom().GetName(),
 		Identity:    ev.GetParticipant().GetIdentity(),
 		Participant: ev.GetParticipant().GetSid(),
 	}, nil

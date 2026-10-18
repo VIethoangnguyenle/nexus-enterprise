@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { Building2, CircleAlert, KeyRound, Mail, Plus, UserPlus, Users } from 'lucide-react'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useCreateDepartment, useDepartments, useInvitations, useMemberDirectory, useRoles } from '../../hooks/useAdmin'
-import { childrenIndex, deptDepth } from '../../lib/admin-model'
+import { childrenIndex, deptDepth, deptHeadcount } from '../../lib/admin-model'
 import { openSearch, type AdminSearch } from '../../lib/admin-search'
 import { formatCount } from '../../lib/format'
 import { useMotionPresets } from '../../lib/motion'
@@ -71,7 +71,7 @@ export function OverviewScreen() {
     }),
     [initiallyOpen],
   )
-  const counts = useMemo(() => new Map(flat.map((d) => [d.id, d.member_count])), [flat])
+  const counts = useMemo(() => new Map(flat.map((d) => [d.id, deptHeadcount(flat, d.id)])), [flat])
 
   const go = useCallback(
     (to: (prev: AdminSearch) => AdminSearch) => void navigate({ to: '/admin', search: to }),

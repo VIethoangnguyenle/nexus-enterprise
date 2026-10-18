@@ -104,11 +104,11 @@ func TestTokenWithTamperedSignatureIsRefused(t *testing.T) {
 	flipped := tok[:sig] + replacement + tok[sig+1:]
 	for name, bad := range map[string]string{
 		"flipped signature char": flipped,
-		"no signature":      strings.Split(tok, ".")[0] + ".",
-		"no separator":      strings.ReplaceAll(tok, ".", ""),
-		"extra part":        tok + ".AAAA",
-		"empty":             "",
-		"not base64":        "!!!.???",
+		"no signature":           strings.Split(tok, ".")[0] + ".",
+		"no separator":           strings.ReplaceAll(tok, ".", ""),
+		"extra part":             tok + ".AAAA",
+		"empty":                  "",
+		"not base64":             "!!!.???",
 	} {
 		if _, err := verify(keysA, bad, checkMethod); err == nil {
 			t.Errorf("%s: accepted", name)

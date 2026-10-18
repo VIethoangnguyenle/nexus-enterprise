@@ -20,14 +20,14 @@ type Call struct {
 	// calendar event, which has CalendarEventID instead (exactly one is set).
 	ChannelID       string
 	CalendarEventID string
-	Kind          string // audio | video
-	Status        string // ringing | active | ended | missed | declined | cancelled
-	StartedBy     string
-	MessageID     string
-	CreatedAt     time.Time
-	StartedAt     *time.Time
-	EndedAt       *time.Time
-	RingExpiresAt *time.Time
+	Kind            string // audio | video
+	Status          string // ringing | active | ended | missed | declined | cancelled
+	StartedBy       string
+	MessageID       string
+	CreatedAt       time.Time
+	StartedAt       *time.Time
+	EndedAt         *time.Time
+	RingExpiresAt   *time.Time
 }
 
 // CallPerson is someone in a call, named for display.

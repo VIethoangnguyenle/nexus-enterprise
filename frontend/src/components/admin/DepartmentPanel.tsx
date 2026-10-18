@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Pencil, Trash2 } from 'lucide-react'
 import type { Department, Member } from '../../api/admin'
 import { useDeleteDepartment, useMoveDepartment, useUpdateDepartment, useUpdateMemberDepartment } from '../../hooks/useAdmin'
-import { deptWithDescendants, personFromMember } from '../../lib/admin-model'
+import { deptHeadcount, deptWithDescendants, personFromMember } from '../../lib/admin-model'
 import { explain, HIDDEN_DEPARTMENT_HAS_PEOPLE, reasonOf, statusOf } from '../../lib/errors'
 import { formatCount } from '../../lib/format'
 import { Button, PeoplePicker, PersonChip, toast } from '../primitives'
@@ -61,7 +61,7 @@ export function DepartmentPanel({ workspaceId, dept, departments, members, onClo
     <SidePanel
       label="Phòng ban"
       title={dept.name}
-      sub={`${formatCount(dept.member_count)} thành viên`}
+      sub={`${formatCount(deptHeadcount(departments, dept.id))} thành viên`}
       closeLabel="phòng ban"
       onClose={onClose}
       footer={
