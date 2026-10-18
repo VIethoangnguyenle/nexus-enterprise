@@ -593,10 +593,17 @@ db-migrate:
 	@echo "▸ Applying base schema..."
 	@docker exec -i $$($(COMPOSE) ps -q postgres) psql -v ON_ERROR_STOP=1 -U ngac < data/init.sql
 	@echo "▸ Applying numbered migrations..."
+	@# This re-applies every file, so 023 renames the directory nodes again on each run and 064
+	@# gives the names back. 064's "restored" limit is set from production, where each file runs
+	@# once (deploy/migrate.sh); here it is lifted. The file itself must not change: production
+	@# records its checksum.
 	@PG=$$($(COMPOSE) ps -q postgres); \
 	for f in $$(ls data/migrations/*.sql | sort); do \
 		echo "  → $$(basename $$f)"; \
-		docker exec -i $$PG psql -v ON_ERROR_STOP=1 -U ngac < $$f || exit 1; \
+		case $$(basename $$f) in \
+			064_directory_visibility.sql) sed '/^INSERT INTO _m064_limits VALUES/s/, [0-9]*);$$/, 100000);/' $$f ;; \
+			*) cat $$f ;; \
+		esac | docker exec -i $$PG psql -v ON_ERROR_STOP=1 -U ngac || exit 1; \
 	done
 	@echo "✓ Schema up to date"
 
