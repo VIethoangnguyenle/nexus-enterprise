@@ -85,7 +85,10 @@ describe('Tổng quan', () => {
     const tree = await screen.findByRole('tree', { name: 'Phòng ban' })
 
     const khoi = within(tree).getByRole('treeitem', { name: /Khối Vận hành/ })
-    expect(khoi).toHaveTextContent('64')
+    // Each count is the whole subtree (the department's own people plus every department beneath it).
+    expect(khoi).toHaveTextContent('99+')
+    expect(within(tree).getByRole('treeitem', { name: /Vận hành thanh toán/ })).toHaveTextContent('52')
+    expect(within(tree).getByRole('treeitem', { name: /Hành chính/ })).toHaveTextContent('13')
     expect(within(tree).getByRole('treeitem', { name: /Vận hành thanh toán/ })).toHaveAttribute('aria-level', '2')
     expect(within(tree).getByRole('treeitem', { name: /Hành chính/ })).toHaveAttribute('aria-level', '1')
 
@@ -113,6 +116,7 @@ describe('Tổng quan', () => {
     const panel = await screen.findByRole('complementary', { name: 'Phòng ban' })
     expect(within(panel).getByRole('heading', { name: 'Đối soát' })).toBeInTheDocument()
     expect(search(router).dept).toBe(D.doisoat)
+    expect(within(panel).getByText('12 thành viên')).toBeInTheDocument()
     // Who is in it, by name: Lan and Vinh sit in Đối soát.
     const list = await within(panel).findByRole('list', { name: 'Thành viên của phòng' })
     expect(within(list).getByText('Nguyễn Thu Lan')).toBeInTheDocument()
@@ -124,6 +128,12 @@ describe('Tổng quan', () => {
     await user.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('complementary', { name: 'Phòng ban' })).toBeNull())
     expect(search(router).dept).toBeUndefined()
+  })
+
+  it('counts the people of a department panel across its sub-departments', async () => {
+    await renderAdmin(`/admin?dept=${D.vanhanh}`)
+    const panel = await screen.findByRole('complementary', { name: 'Phòng ban' })
+    expect(within(panel).getByText('52 thành viên')).toBeInTheDocument()
   })
 
   it('lands on the department named in the URL after a reload', async () => {

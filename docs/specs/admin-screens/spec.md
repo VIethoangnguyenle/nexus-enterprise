@@ -24,7 +24,7 @@ The frame SHALL ask the people list once. A 403 means the person may not manage 
 - **THEN** the tab shows the no-permission message and offers neither "Mời thành viên" nor "Tạo vai trò"
 
 ### Requirement: Tổng quan shows the organisation as one tree
-Tổng quan SHALL show the member, department and role counts and the departments as the shared tree, two levels open, with each department's head count at the right. Choosing a department opens its panel: where it sits (chosen from the tree by name, never as its own subtree), who is in it by name, adding a person by search, renaming and deleting (after a confirmation). The activity feed of the mockup is not drawn (see Status).
+Tổng quan SHALL show the member, department and role counts and the departments as the shared tree, two levels open, with each department's head count at the right. Each head count is the whole subtree (the people placed in the department plus those in every department beneath it), as in Danh bạ. Choosing a department opens its panel, whose count is the same figure: where it sits (chosen from the tree by name, never as its own subtree), who is in it by name, adding a person by search, renaming and deleting (after a confirmation). The activity feed of the mockup is not drawn (see Status).
 
 #### Scenario: Moving a department
 - **WHEN** the administrator chooses another parent in the panel
