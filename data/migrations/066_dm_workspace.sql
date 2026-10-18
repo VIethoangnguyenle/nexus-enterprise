@@ -9,7 +9,7 @@
 -- their workspace:
 --
 --   the workspaces in which BOTH people of the DM are members (a `tenant_users` row whose
---   status is not 'removed', matched on the node the DM records the person by:
+--   status is 'active': invited, disabled and removed people are not members; matched on the node the DM records the person by:
 --   `tenant_users.ngac_node_id` or `users.ngac_node`):
 --     exactly one      -> that one
 --     several          -> an 'organization' before a 'personal' one, then the oldest
@@ -68,7 +68,7 @@ CREATE INDEX ON _m066_people (channel_id);
 CREATE TEMP TABLE _m066_candidate ON COMMIT DROP AS
 SELECT p.channel_id, w.id AS workspace_id, w.type, w.created_at
 FROM _m066_people p
-JOIN tenant_users tu ON tu.status <> 'removed'
+JOIN tenant_users tu ON tu.status = 'active'
 JOIN users u ON u.id = tu.user_id
 JOIN workspaces w ON w.id = tu.tenant_id
 WHERE p.node IN (tu.ngac_node_id, u.ngac_node)
