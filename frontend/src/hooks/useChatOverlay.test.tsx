@@ -76,3 +76,20 @@ describe('a full-screen layer of the Chat list', () => {
     expect(layer()).toBe('none')
   })
 })
+
+describe('the words and filters of the search screen', () => {
+  it('open the screen on its own, without those of an earlier search', async () => {
+    const user = userEvent.setup()
+    const router = await renderShell(<Host />, '/channels?tab=direct')
+    await user.click(screen.getByRole('button', { name: 'open search' }))
+    expect(search(router)).toEqual({ tab: 'direct', search: 1 })
+  })
+
+  it('leave with the screen: closing by replacing the address drops them', async () => {
+    const user = userEvent.setup()
+    const router = await renderShell(<Host />, '/channels?search=1&q=%C4%91%E1%BB%91i&file=1&from=u-1')
+    expect(layer()).toBe('{"kind":"search"}')
+    await user.click(screen.getByRole('button', { name: 'close' }))
+    expect(search(router)).toEqual({})
+  })
+})

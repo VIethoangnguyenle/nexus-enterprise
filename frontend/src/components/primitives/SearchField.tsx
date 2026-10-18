@@ -1,5 +1,7 @@
 import { forwardRef, type InputHTMLAttributes, type ReactNode } from 'react'
+import { motion } from 'motion/react'
 import { Search } from 'lucide-react'
+import { DURATION, EASE, useMotionPresets } from '../../lib/motion'
 
 interface SearchFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {
   /** Accessible name; also the placeholder unless one is given. */
@@ -22,10 +24,27 @@ interface SearchFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, '
   trailing?: ReactNode
 }
 
+/** The accent ring of the full-screen search's pill: 2px, fading in over 160ms (120ms under reduced motion). */
+function PillRing() {
+  const m = useMotionPresets()
+  return (
+    <motion.span
+      aria-hidden="true"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: m.reduced ? DURATION.reducedFade : DURATION.quick, ease: EASE.out }}
+      className="absolute inset-0 rounded-full ring-2 ring-inset ring-accent pointer-events-none"
+    />
+  )
+}
+
 /** Search box: magnifier + bare input in a 36px control, focus shown as a ring. */
 export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(
   ({ label, tone = 'base', moduleSearch, pill, bare, leading, trailing, className = '', placeholder, ...props }, ref) => pill ? (
-    <div className={`flex items-center gap-1 h-13 pl-1 pr-2 rounded-full bg-sunk ring-2 ring-inset ring-accent ${className}`}>
+    <div className={`relative flex items-center gap-1 h-13 pl-1 pr-2 rounded-full bg-sunk ${className}`}>
+      {/* The ring is its own layer so it can fade in when the pill turns into the search box. */}
+      <PillRing />
       {leading}
       <input
         ref={ref}

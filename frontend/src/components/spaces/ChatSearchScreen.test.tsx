@@ -1,16 +1,19 @@
 import { useState } from 'react'
-import { cleanup, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithClient, resetClient } from '../../test/render'
 import { routerState } from '../../test/router-mock'
-import { isDeviceBack } from '../../lib/device-back'
 import { CH, ME, U, UUID_RE, WS_ID, fixtureApi } from '../../test/chat-fixtures'
 import { ApiError, apiFetch } from '../../api/client'
 import type { Message } from '../../api/messaging'
 import { useChatNavigation } from '../../hooks/useChatNavigation'
 import { usePeople } from '../../hooks/usePeople'
 import { addRecent, readRecent } from '../../lib/recent-searches'
+import { switchPreferencesTo, updatePreferences } from '../../lib/preferences'
+import { useToastStore } from '../primitives'
+import { isDeviceBack } from '../../lib/device-back'
+import { expectNoIds } from '../../test/no-ids'
 import { Pressable } from '../primitives'
 import { ChatSearchScreen } from './ChatSearchScreen'
 
@@ -71,7 +74,14 @@ const open = async () => {
   return dialog
 }
 const box = () => screen.getByRole('searchbox', { name: 'Tìm trong chat' })
-const chip = (name: string) => screen.getByRole('radio', { name })
+const openOnResults = async (search: Record<string, unknown>) => {
+  routerState.search = { search: 1, ...search }
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: query.includes('max-width'), media: query, addEventListener: () => {}, removeEventListener: () => {},
+  }))
+  renderWithClient(<Host />)
+  await screen.findByRole('dialog', { name: 'Tìm trong chat' })
+}
 
 beforeEach(() => {
   searchPages = [[]]
@@ -79,48 +89,29 @@ beforeEach(() => {
   created = null
   activity = []
   localStorage.clear()
+  useToastStore.getState().clear()
   onClose.mockClear()
+  routerState.navigate.mockClear()
+  routerState.search = { search: 1 }
   routerState.history = { back: routerState.history.back }
   routerState.historyState = {}
-  routerState.navigate.mockClear()
+  routerState.historyState = {}
   vi.mocked(apiFetch).mockImplementation(route as never)
 })
 afterEach(() => {
   vi.unstubAllGlobals()
   cleanup()
   resetClient()
+  switchPreferencesTo(undefined)
 })
 
 describe('the Tìm trong chat screen', () => {
-  /** The dialog's opacity in the very render that mounts it: the lists are fetched by a first mount, so the second has them cached. */
-  const opacityAtMount = async () => {
-    const first = renderWithClient(<Host />)
-    await screen.findByRole('dialog', { name: 'Tìm trong chat' })
-    first.unmount()
-    renderWithClient(<Host />)
-    return screen.getByRole('dialog', { name: 'Tìm trong chat' }).style.opacity
-  }
-
-  it('fades in when the app opens it', async () => {
-    routerState.historyState = { __TSR_index: 3 }
-    isDeviceBack(routerState.history, 3)
-    expect(await opacityAtMount()).toBe('0')
-  })
-
-  it('is on screen at once when the device back returns to it, the device having drawn that step already', async () => {
-    routerState.historyState = { __TSR_index: 3 }
-    isDeviceBack(routerState.history, 3)
-    routerState.historyState = { __TSR_index: 2 }
-    isDeviceBack(routerState.history, 2)
-    expect(await opacityAtMount()).not.toBe('0')
-  })
-
-  it('is a full-screen dialog with the box focused and the five chips', async () => {
+  it('is a full-screen dialog with the box focused, ← where ☰ was, and no avatar to fall back on', async () => {
     const dialog = await open()
-    await waitFor(() => expect(box()).toHaveFocus())
-    const chips = within(within(dialog).getByRole('radiogroup', { name: 'Lọc kết quả' })).getAllByRole('radio')
-    expect(chips.map((c) => c.textContent)).toEqual(['Tất cả', 'Người', 'Nhóm', 'Tin nhắn', 'Có tệp'])
-    expect(chip('Tất cả')).toBeChecked()
+    expect(dialog).toHaveAttribute('aria-modal', 'true')
+    expect(within(dialog).getByRole('button', { name: 'Đóng tìm kiếm' })).toBeInTheDocument()
+    // The old chips are gone: the filters belong to the results.
+    expect(within(dialog).queryByRole('radiogroup')).toBeNull()
   })
 
   it('closes with the back button and with Esc', async () => {
@@ -165,11 +156,58 @@ describe('the Tìm trong chat screen', () => {
   it('keeps Tab inside the screen', async () => {
     const user = userEvent.setup()
     const dialog = await open()
-    await waitFor(() => expect(box()).toHaveFocus())
     for (let i = 0; i < 12; i++) {
       await user.tab()
       expect(dialog).toContainElement(document.activeElement as HTMLElement)
     }
+  })
+})
+
+describe('turning the pill into the search box', () => {
+  it('turns ☰ out and ← in, the pill staying where it is', async () => {
+    await open()
+    const back = screen.getByRole('button', { name: 'Đóng tìm kiếm' }).parentElement!
+    const menu = back.previousElementSibling as HTMLElement
+    await waitFor(() => expect(menu.style.transform).toContain('rotate(-90deg)'))
+    await waitFor(() => expect(back.style.opacity).toBe('1'))
+    expect(menu).toHaveAttribute('aria-hidden', 'true')
+  })
+
+  it('under reduced motion changes at once, without turning anything', async () => {
+    switchPreferencesTo('user-a')
+    updatePreferences({ motion: 'reduce' })
+    await open()
+    const back = screen.getByRole('button', { name: 'Đóng tìm kiếm' }).parentElement!
+    const menu = back.previousElementSibling as HTMLElement
+    await waitFor(() => expect(back.style.opacity).toBe('1'))
+    expect(menu.style.transform).not.toContain('rotate(-90deg)')
+    expect(back.style.transform).not.toContain('rotate(90deg)')
+  })
+})
+
+describe('reached again by the device back', () => {
+  /** The layer under it: opacity in the render that mounts it (the lists are fetched by a first mount). */
+  const coverOpacityAtMount = async () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener: () => {}, removeEventListener: () => {} }))
+    const first = renderWithClient(<Host />)
+    await screen.findByRole('dialog', { name: 'Tìm trong chat' })
+    first.unmount()
+    renderWithClient(<Host />)
+    return (screen.getByRole('dialog', { name: 'Tìm trong chat' }).firstElementChild as HTMLElement).style.opacity
+  }
+
+  it('fades in when the app opens it', async () => {
+    routerState.historyState = { __TSR_index: 3 }
+    isDeviceBack(routerState.history, 3)
+    expect(await coverOpacityAtMount()).toBe('0')
+  })
+
+  it('is on screen at once when the device back returns to it', async () => {
+    routerState.historyState = { __TSR_index: 3 }
+    isDeviceBack(routerState.history, 3)
+    routerState.historyState = { __TSR_index: 2 }
+    isDeviceBack(routerState.history, 2)
+    expect(await coverOpacityAtMount()).not.toBe('0')
   })
 })
 
@@ -180,7 +218,6 @@ describe('before anything is typed', () => {
     addRecent('chat', ME.id, 'hợp đồng')
     addRecent('chat', 'someone-else', 'không phải của tôi')
     await open()
-    // The suggestions come with the box's focus, which the screen gives as it opens.
     expect(await screen.findByText('Tìm gần đây')).toBeInTheDocument()
     const rows = screen.getAllByRole('button', { name: /^Tìm lại / })
     expect(rows.map((r) => r.textContent)).toEqual(['hợp đồng', 'tạm ứng tháng 10'])
@@ -190,20 +227,39 @@ describe('before anything is typed', () => {
     expect(box()).toHaveFocus()
   })
 
-  it('removes one recent search without touching the others', async () => {
+  it('removes one recent search without touching the others, with a 44px ✕', async () => {
     const user = userEvent.setup()
     addRecent('chat', ME.id, 'một')
     addRecent('chat', ME.id, 'hai')
     await open()
-    await user.click(screen.getByRole('button', { name: 'Xoá “một” khỏi Tìm gần đây' }))
-    expect(screen.queryByRole('button', { name: 'Tìm lại một' })).toBeNull()
+    const x = screen.getByRole('button', { name: 'Xoá “một” khỏi Tìm gần đây' })
+    expect(x).toHaveClass('w-11', 'h-11')
+    await user.click(x)
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Tìm lại một' })).toBeNull())
     expect(screen.getByRole('button', { name: 'Tìm lại hai' })).toBeInTheDocument()
     expect(readRecent('chat', ME.id)).toEqual(['hai'])
   })
 
-  it('says nothing about recent searches when there are none', async () => {
+  it('clears them all at once and brings them back with Hoàn tác', async () => {
+    const user = userEvent.setup()
+    addRecent('chat', ME.id, 'một')
+    addRecent('chat', ME.id, 'hai')
+    await open()
+    await user.click(screen.getByRole('button', { name: 'Xoá tất cả' }))
+    await waitFor(() => expect(screen.queryByText('Tìm gần đây')).toBeNull())
+    expect(readRecent('chat', ME.id)).toEqual([])
+    const [toast] = useToastStore.getState().toasts
+    expect(toast).toMatchObject({ message: 'Đã xoá 2 lần tìm gần đây', action: { label: 'Hoàn tác' } })
+    act(() => toast!.action!.onClick())
+    expect(await screen.findByRole('button', { name: 'Tìm lại hai' })).toBeInTheDocument()
+    expect(readRecent('chat', ME.id)).toEqual(['hai', 'một'])
+  })
+
+  it('says how to search when there is nothing to suggest', async () => {
     await open()
     expect(screen.queryByText('Tìm gần đây')).toBeNull()
+    expect(screen.getByText('Tìm tin nhắn, người và nhóm.')).toBeInTheDocument()
+    expect(screen.getByText('Sau khi tìm, lọc theo người gửi, cuộc trò chuyện hay ngày.')).toBeInTheDocument()
     expect(searchCalls).toHaveLength(0)
   })
 
@@ -238,41 +294,40 @@ describe('before anything is typed', () => {
   it('keeps the suggestions up when the keyboard is put away', async () => {
     addRecent('chat', ME.id, 'hợp đồng')
     await open()
-    await waitFor(() => expect(box()).toHaveFocus())
     box().blur()
     expect(screen.getByRole('button', { name: 'Tìm lại hợp đồng' })).toBeInTheDocument()
   })
 })
 
-describe('groups and people', () => {
-  it('finds a group typed without accents, from the lists already loaded', async () => {
+describe('words typed', () => {
+  it('suggests people, groups, messages and "Xem tất cả" at once, as buttons', async () => {
     const user = userEvent.setup()
+    searchPages = [[hit(1)]]
     await open()
-    await user.type(box(), 'doi soat')
-    const link = await screen.findByRole('link', { name: /Đối soát giao dịch/ })
-    expect(link).toHaveAttribute('href', `/channels/${CH.doisoat}`)
-    expect(within(link).getByText('Đối soát', { selector: 'mark' })).toBeInTheDocument()
-    expect(within(link).getByText('Nhóm · 14 thành viên')).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /Hợp đồng đối tác/ })).toBeNull()
-    expect(screen.getByText('Nhóm và người')).toBeInTheDocument()
+    await user.type(box(), 'doi')
+    const spaces = await screen.findByRole('group', { name: 'Nhóm và trò chuyện' })
+    expect(within(spaces).getByRole('button', { name: /^Đối soát giao dịch, Nhóm · 14 thành viên/ })).toBeInTheDocument()
+    expect(within(spaces).getByText('Đối', { selector: 'mark' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Xem tất cả kết quả cho “doi”' })).toBeInTheDocument()
+    expectNoIds()
   })
 
   it('finds people by name without accents, but never the person using the app', async () => {
     const user = userEvent.setup()
     await open()
     await user.type(box(), 'tran')
-    expect(await screen.findByRole('button', { name: /Trần Minh Đức/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Trần Bảo Ngọc/ })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /^Trần Minh Đức/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Trần Bảo Ngọc/ })).toBeInTheDocument()
     await user.clear(box())
     await user.type(box(), 'le thi hoa')
-    await waitFor(() => expect(screen.queryByRole('button', { name: /Lê Thị Hoa/ })).toBeNull())
+    await waitFor(() => expect(screen.queryByRole('button', { name: /^Lê Thị Hoa/ })).toBeNull())
   })
 
   it('opens the direct message that exists with a person', async () => {
     const user = userEvent.setup()
     await open()
     await user.type(box(), 'hai yen')
-    await user.click(await screen.findByRole('button', { name: /Phạm Hải Yến/ }))
+    await user.click(await screen.findByRole('button', { name: /^Phạm Hải Yến/ }))
     expect(routerState.navigate).toHaveBeenCalledWith({ to: '/channels/$channelId', params: { channelId: CH.dmYen } })
     expect(created).toBeNull()
   })
@@ -281,155 +336,98 @@ describe('groups and people', () => {
     const user = userEvent.setup()
     await open()
     await user.type(box(), 'duc')
-    await user.click(await screen.findByRole('button', { name: /Trần Minh Đức/ }))
+    await user.click(await screen.findByRole('button', { name: /^Trần Minh Đức/ }))
     await waitFor(() => expect(created).not.toBeNull())
     await waitFor(() =>
       expect(routerState.navigate).toHaveBeenCalledWith({ to: '/channels/$channelId', params: { channelId: created!.id } }))
   })
 
-  it('remembers the search once a result is opened', async () => {
+  it('opens a message in its conversation with the message lit, and remembers the search', async () => {
     const user = userEvent.setup()
-    await open()
-    await user.type(box(), 'doi soat')
-    await user.click(await screen.findByRole('link', { name: /Đối soát giao dịch/ }))
-    expect(readRecent('chat', ME.id)).toEqual(['doi soat'])
-  })
-})
-
-describe('messages', () => {
-  it('asks the server after a pause and shows sender, conversation, the matching words and the time', async () => {
-    const user = userEvent.setup()
-    searchPages = [[hit(1), hit(2, { sender_id: U.lan.id, sender_name: 'lan', channel_id: CH.dmLan, content: 'Chị ơi file đối soát ngân hàng lệch 2 dòng' })]]
+    searchPages = [[hit(1)]]
     await open()
     await user.type(box(), 'đối soát')
-    expect(await screen.findByRole('heading', { name: 'Tin nhắn' })).toBeInTheDocument()
-    const first = await screen.findByRole('link', { name: /Lê Quang Vinh · Đối soát giao dịch/ })
-    expect(within(first).getAllByText(/đối soát/i, { selector: 'mark' })).toHaveLength(1)
-    expect(first).toHaveTextContent('Bảng đối soát tháng 1 em để trong Tài liệu nhé')
-    expect(first).toHaveAttribute('href', `/channels/${CH.doisoat}`)
-    expect(JSON.parse(first.getAttribute('data-search')!)).toEqual({ message: hit(1).id })
-    // A direct message names the person only.
-    const second = screen.getByRole('link', { name: /^Nguyễn Thu Lan/ })
-    expect(second).not.toHaveTextContent('·')
-    expect(searchCalls).toHaveLength(1)
-    expect(searchCalls[0]!.get('q')).toBe('đối soát')
-    expect(document.body.textContent).not.toMatch(UUID_RE)
+    await user.click(await screen.findByRole('button', { name: /^Tin của Lê Quang Vinh trong Đối soát giao dịch: / }))
+    expect(routerState.navigate).toHaveBeenCalledWith({
+      to: '/channels/$channelId', params: { channelId: CH.doisoat }, search: { message: hit(1).id },
+    })
+    expect(readRecent('chat', ME.id)).toEqual(['đối soát'])
   })
 
-  it('opens a reply in its thread, with the reply lit', async () => {
-    const user = userEvent.setup()
-    searchPages = [[hit(1, { parent_message_id: '5b8f6c1e-2b3d-4e5f-8a9b-1c2d3e4f5aff' })]]
-    await open()
-    await user.type(box(), 'đối soát')
-    const link = await screen.findByRole('link', { name: /Lê Quang Vinh/ })
-    expect(JSON.parse(link.getAttribute('data-search')!)).toEqual({ thread: '5b8f6c1e-2b3d-4e5f-8a9b-1c2d3e4f5aff', message: hit(1).id })
-  })
-
-  it('does not ask for a single letter, and says why', async () => {
+  it('does not ask the server for a single letter', async () => {
     const user = userEvent.setup()
     await open()
     await user.type(box(), 'đ')
     await new Promise((r) => setTimeout(r, 350))
     expect(searchCalls).toHaveLength(0)
-    expect(screen.getByText('Gõ ít nhất 2 ký tự để tìm tin nhắn.')).toBeInTheDocument()
-  })
-
-  it('shows a skeleton while it looks', async () => {
-    const user = userEvent.setup()
-    await open()
-    await user.type(box(), 'đối soát')
-    expect(screen.getByRole('status', { name: 'Đang tìm tin nhắn' })).toHaveAttribute('aria-busy', 'true')
-    await screen.findByText(/Không tìm thấy/)
-    expect(screen.queryByRole('status', { name: 'Đang tìm tin nhắn' })).toBeNull()
-  })
-
-  it('says when nothing is found, and suggests accents for a search written without them', async () => {
-    const user = userEvent.setup()
-    await open()
-    await user.type(box(), 'khong co gi')
-    expect(await screen.findByText('Không tìm thấy “khong co gi” — thử từ khác.')).toBeInTheDocument()
-    expect(screen.getByText('Thử gõ có dấu.')).toBeInTheDocument()
-    await user.clear(box())
-    await user.type(box(), 'không có gì')
-    expect(await screen.findByText('Không tìm thấy “không có gì” — thử từ khác.')).toBeInTheDocument()
-    expect(screen.queryByText('Thử gõ có dấu.')).toBeNull()
-  })
-
-  it('says a search failed and tries again', async () => {
-    const user = userEvent.setup()
-    searchPages = ['error']
-    await open()
-    await user.type(box(), 'đối soát')
-    expect(await screen.findByText('Chưa tìm được tin nhắn.')).toBeInTheDocument()
-    searchPages = [[hit(1)]]
-    searchCalls = []
-    await user.click(screen.getByRole('button', { name: 'Thử lại' }))
-    expect(await screen.findByRole('link', { name: /Lê Quang Vinh/ })).toBeInTheDocument()
-  })
-
-  it('loads the next page on "Tải thêm"', async () => {
-    const user = userEvent.setup()
-    searchPages = [[hit(1)], [hit(2)]]
-    await open()
-    await user.type(box(), 'đối soát')
-    await screen.findByRole('link', { name: /tháng 1 /i })
-    await user.click(screen.getByRole('button', { name: 'Tải thêm' }))
-    await waitFor(() => expect(screen.getAllByRole('link', { name: /Lê Quang Vinh/ })).toHaveLength(2))
-    expect(searchCalls[1]!.get('before_id')).toBe(hit(1).id)
-    expect(screen.queryByRole('button', { name: 'Tải thêm' })).toBeNull()
   })
 })
 
-describe('the chips', () => {
-  it('Người shows people only and asks the server nothing', async () => {
+describe('Enter', () => {
+  it('puts the words in the address, replacing the entry and keeping its mark, and puts the keyboard away', async () => {
     const user = userEvent.setup()
+    routerState.historyState = { chatOverlay: true }
     await open()
-    await user.click(chip('Người'))
-    await user.type(box(), 'doi')
+    await user.type(box(), 'đối soát{Enter}')
+    expect(routerState.navigate).toHaveBeenCalledWith({
+      to: '/channels', search: { search: 1, q: 'đối soát' }, replace: true, state: { chatOverlay: true },
+    })
+    expect(box()).not.toHaveFocus()
+    expect(readRecent('chat', ME.id)).toEqual(['đối soát'])
+  })
+
+  it('keeps the filters already in the address', async () => {
+    const user = userEvent.setup()
+    await openOnResults({ q: 'cũ', from: U.vinh.id, file: 1 })
+    await user.click(box())
     await user.clear(box())
-    await user.type(box(), 'duc')
-    expect(await screen.findByRole('button', { name: /Trần Minh Đức/ })).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Tin nhắn' })).toBeNull()
-    await new Promise((r) => setTimeout(r, 350))
-    expect(searchCalls).toHaveLength(0)
+    await user.type(box(), 'mới{Enter}')
+    expect(routerState.navigate).toHaveBeenLastCalledWith({
+      to: '/channels', search: { search: 1, q: 'mới', from: U.vinh.id, file: 1 }, replace: true, state: undefined,
+    })
   })
 
-  it('Nhóm shows groups only', async () => {
+  it('submits from the "Xem tất cả" button too', async () => {
     const user = userEvent.setup()
     await open()
-    await user.click(chip('Nhóm'))
-    await user.type(box(), 'hop')
-    expect(await screen.findByRole('link', { name: /Hợp đồng đối tác/ })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Trần/ })).toBeNull()
+    await user.type(box(), 'tạm ứng')
+    await user.click(await screen.findByRole('button', { name: 'Xem tất cả kết quả cho “tạm ứng”' }))
+    expect(routerState.navigate).toHaveBeenCalledWith(expect.objectContaining({ search: { search: 1, q: 'tạm ứng' } }))
+  })
+})
+
+describe('the results, in the same screen', () => {
+  it('shows them under the pill when the address has words, with the box holding them', async () => {
+    searchPages = [[hit(1), hit(2)]]
+    await openOnResults({ q: 'đối soát' })
+    expect(await screen.findByRole('region', { name: 'Kết quả tìm kiếm' })).toBeInTheDocument()
+    expect(box()).toHaveValue('đối soát')
+    expect(screen.getByRole('toolbar', { name: 'Bộ lọc' })).toBeInTheDocument()
+    expect(await screen.findByText('2 tin nhắn')).toBeInTheDocument()
+    // No suggestions cover them until the box is used again.
+    expect(screen.queryByText('Tìm gần đây')).toBeNull()
+    expect(screen.queryByRole('heading', { level: 1 })).toBeNull()
   })
 
-  it('Tin nhắn shows messages only', async () => {
+  it('reads the filters from the address and a chip writes one back, replacing the entry', async () => {
     const user = userEvent.setup()
-    searchPages = [[hit(1)]]
-    await open()
-    await user.click(chip('Tin nhắn'))
-    await user.type(box(), 'đối soát')
-    expect(await screen.findByRole('link', { name: /Lê Quang Vinh/ })).toBeInTheDocument()
-    expect(screen.queryByText('Nhóm và người')).toBeNull()
-    expect(screen.queryByRole('link', { name: /^Đối soát giao dịch$/ })).toBeNull()
+    await openOnResults({ q: 'đối soát', from: U.vinh.id })
+    await screen.findByRole('toolbar', { name: 'Bộ lọc' })
+    expect(await screen.findByRole('button', { name: 'Người gửi: Lê Quang Vinh' })).toBeInTheDocument()
+    await waitFor(() => expect(searchCalls.some((c) => c.get('from') === U.vinh.id)).toBe(true))
+    await user.click(screen.getByRole('button', { name: 'Có tệp' }))
+    expect(routerState.navigate).toHaveBeenLastCalledWith({
+      to: '/channels', search: { search: 1, q: 'đối soát', from: U.vinh.id, file: 1 }, replace: true, state: undefined,
+    })
   })
 
-  it('Có tệp asks for messages with a file and hides groups and people', async () => {
-    const user = userEvent.setup()
-    searchPages = [[hit(1)]]
-    await open()
-    await user.click(chip('Có tệp'))
-    await user.type(box(), 'đối soát')
-    expect(await screen.findByRole('link', { name: /Lê Quang Vinh/ })).toBeInTheDocument()
-    expect(searchCalls[0]!.get('has_file')).toBe('true')
-    expect(screen.queryByText('Nhóm và người')).toBeNull()
-  })
-
-  it('keeps the recent searches under every chip', async () => {
+  it('covers the results with the suggestions again when the box is used', async () => {
     const user = userEvent.setup()
     addRecent('chat', ME.id, 'hợp đồng')
-    await open()
-    await user.click(chip('Người'))
-    expect(screen.getByRole('button', { name: 'Tìm lại hợp đồng' })).toBeInTheDocument()
+    await openOnResults({ q: 'đối soát' })
+    await screen.findByRole('region', { name: 'Kết quả tìm kiếm' })
+    await user.click(box())
+    expect(await screen.findByRole('button', { name: 'Xem tất cả kết quả cho “đối soát”' })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Kết quả tìm kiếm' })).toBeNull()
   })
 })
