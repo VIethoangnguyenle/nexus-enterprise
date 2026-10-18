@@ -1,18 +1,31 @@
 import { useRef, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
-import { motion } from 'motion/react'
+import { motion, type Variants } from 'motion/react'
 import { ArrowLeft } from 'lucide-react'
 import { useModalFocus } from '../../hooks/useModalFocus'
 import { DURATION, EASE, useMotionPresets } from '../../lib/motion'
 import { IconButton } from '../primitives'
 
-/** The push of a level into view: from the right over 280ms (expo), a fade under reduced motion. */
+/**
+ * The push of a level into view: from the right over 280ms (expo), a fade under reduced motion.
+ *
+ * The leave is a variant that takes `custom`, the `AnimatePresence`'s: a layer being removed can no longer
+ * be given new props, so the screen tells it through `custom` whether the person left by the device's own
+ * back (`true`: the device has drawn that step already, a second fade over it is the flash) or by a step of
+ * the app's.
+ */
 export function phonePush(m: ReturnType<typeof useMotionPresets>) {
-  return m.reduced ? m.route : {
+  const push = m.reduced ? m.route : {
     initial: { opacity: 0, x: 24 },
     animate: { opacity: 1, x: 0, transition: { duration: DURATION.layout, ease: EASE.outExpo } },
     exit: { opacity: 0, transition: { duration: DURATION.quick, ease: EASE.in } },
   }
+  const variants: Variants = {
+    from: push.initial,
+    to: push.animate,
+    leave: (byDevice: boolean) => (byDevice ? { opacity: 0, transition: { duration: 0 } } : push.exit),
+  }
+  return { variants, initial: 'from', animate: 'to', exit: 'leave' } as const
 }
 
 /**
