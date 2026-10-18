@@ -65,4 +65,7 @@ node -e '
   fs.writeFileSync(f, JSON.stringify(s, null, 2) + "\n");
 ' "$PWD/$DEST/ak-engineer/ak-engineer-statusline.cjs"
 
+# Extracting the kit wipes its per-skill node_modules, so dependencies are re-checked every time.
+scripts/agentkit-deps.sh
+
 echo "✓ AgentKit installed. Restart Claude Code; skills appear as ak-engineer:<skill>."
