@@ -1,7 +1,7 @@
 import { useId, useMemo, useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
-import { MoreVertical, MessageSquare, UserMinus, UserPlus, CircleAlert, Users } from 'lucide-react'
+import { MoreVertical, MessageSquare, UserMinus, UserPlus, CircleAlert, Users, LogOut } from 'lucide-react'
 import { useAddChannelMember, useChannelMembers, useCreateDM, useRemoveChannelMember } from '../../hooks/useMessaging'
 import { useWebSocketStore } from '../../stores/websocket.store'
 import { useMotionPresets } from '../../lib/motion'
@@ -9,7 +9,7 @@ import { explain, explainRemoval, isForbidden } from '../../lib/errors'
 import { displayName, matchesPerson, type PeopleDirectory, type Person } from '../../lib/people'
 import type { ChannelMember } from '../../api/messaging'
 import {
-  Avatar, Button, IconButton, MenuItem, MenuSeparator, PeoplePicker, Popover, SearchField, toast,
+  Avatar, Button, IconButton, MenuItem, MenuSeparator, PeoplePicker, Popover, Pressable, SearchField, toast,
 } from '../primitives'
 import { PersonLink } from '../primitives/PersonLink'
 import { SidePanel } from './SidePanel'
@@ -24,6 +24,9 @@ interface MembersPanelProps {
   me: string | undefined
   /** Open with the people picker showing ("Thêm người" in the header). */
   startAdding?: boolean
+  /** Show "Rời nhóm" at the bottom: true for a private group, never for DM or #general. */
+  canLeave?: boolean
+  onLeave?: () => void
   onClose: () => void
 }
 
@@ -39,7 +42,7 @@ interface Row {
  * Removing does not ask first; the toast offers "Hoàn tác" for 5s instead.
  * Manager roles are not shown: the API does not return a member's role.
  */
-export function MembersPanel({ channelId, kind, spaceName, people, me, startAdding, onClose }: MembersPanelProps) {
+export function MembersPanel({ channelId, kind, spaceName, people, me, startAdding, canLeave, onLeave, onClose }: MembersPanelProps) {
   const m = useMotionPresets()
   const { data, isLoading, isError, refetch } = useChannelMembers(channelId)
   const add = useAddChannelMember(channelId)
@@ -209,6 +212,16 @@ export function MembersPanel({ channelId, kind, spaceName, people, me, startAddi
             </AnimatePresence>
           </ul>
         </>
+      )}
+
+      {canLeave && (
+        <Pressable
+          onClick={onLeave}
+          className="flex items-center gap-2.5 min-h-11 px-3 text-danger font-semibold border-0 border-t border-line mt-2 hover:bg-hover rounded-none w-full"
+        >
+          <LogOut size={16} strokeWidth={1.75} aria-hidden="true" />
+          Rời nhóm
+        </Pressable>
       )}
     </SidePanel>
   )

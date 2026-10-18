@@ -40,6 +40,7 @@ import { SpaceSearchPanel } from './SpaceSearchPanel'
 import { SpaceInfoPanel } from './SpaceInfoPanel'
 import { SelfMentionStyle } from './SelfMentionStyle'
 import { EmptyState } from './EmptyState'
+import { LeaveGroupDialog } from './LeaveGroupDialog'
 import { CallHeaderActions } from '../calls/CallHeaderActions'
 import { keys } from '../../hooks/keys'
 
@@ -75,6 +76,7 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
   const [panel, setPanel] = useState<Panel | null>(() => (initialThreadId ? { kind: 'thread', id: initialThreadId } : null))
   const viewRef = useRef<HTMLDivElement>(null)
   const [emojiTarget, setEmojiTarget] = useState<string | null>(null)
+  const [leaveOpen, setLeaveOpen] = useState(false)
 
   // Title, kind and counts come from the lists already loaded for the
   // navigator; a channel opened by link before they arrive is fetched alone.
@@ -95,7 +97,7 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
     return {
       id: ch.id, kind: dm ? 'dm' : 'space', title: p?.title ?? ch.name, partner: p?.partner,
       hueKey: p?.partner?.userId || ch.id, unread: 0, memberCount: ch.member_count ?? 0, lastActivity: 0,
-      starred: !!ch.starred,
+      starred: !!ch.starred, isWorkspaceWide: !dm && ch.channel_type === 'workspace',
     }
   }, [listed, single.data, me?.id, me?.username, people, dmMembers])
 
@@ -252,6 +254,8 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
   // The unread list is the source of the level and the star; the hook's own answer covers a conversation it does not list yet.
   const level = conv?.level ?? notify.level
   const starred = !!conv?.starred
+  // Not offered until the conversation is known: a #general still loading must not show it for a moment.
+  const canLeave = kind === 'space' && !!conv && !conv.isWorkspaceWide
 
   return (
     <div ref={viewRef} className="relative flex flex-1 min-h-0 min-w-0">
@@ -303,9 +307,11 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
                 level={level}
                 starred={starred}
                 phone={phone}
+                canLeave={canLeave}
                 onChooseLevel={notify.setLevel}
                 onToggleStar={() => void star({ channelId, name: title, starred: !starred })}
                 onOpenInfo={() => setPanel({ kind: 'info' })}
+                onLeave={() => setLeaveOpen(true)}
               />
             ) : (
               <div className="skeleton h-5 w-40 rounded-sm" />
@@ -553,6 +559,8 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
             people={people}
             me={me?.id}
             startAdding={panel.adding}
+            canLeave={canLeave}
+            onLeave={() => setLeaveOpen(true)}
             onClose={() => setPanel(null)}
           />
         )}
@@ -588,6 +596,16 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
           />
         )}
       </AnimatePresence>
+
+      <LeaveGroupDialog
+        open={leaveOpen}
+        channelId={channelId}
+        workspaceId={workspaceId}
+        groupName={title}
+        memberCount={membersQ.data?.members?.length}
+        onClose={() => setLeaveOpen(false)}
+        onLeft={() => setPanel(null)}
+      />
     </div>
   )
 }

@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rời nhóm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Bricolage+Grotesque:opsz,wght@12..96,600..700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* Leaving a group (2026-10-18): a member takes themselves out of a group. Three ways in, one confirmation.
+   Not offered in a direct message or #general. Not optimistic: the group leaves the rail once the server agrees. */
+* { box-sizing: border-box; }
+body { background: var(--color-base); color: var(--color-ink); font-family: var(--font-body); font-size: 0.875rem; line-height: 1.5; padding-inline: 16px; padding-block: 0 64px; margin: 0; }
+svg.i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+p { margin: 0; }
+h1, h2, h3 { margin: 0; font-family: var(--font-display); text-wrap: balance; }
+
+.page { max-width: 1200px; margin-inline: auto; display: grid; gap: 56px; }
+.page > header { padding-block: 40px 0; display: grid; gap: 12px; }
+.page > header h1 { font-size: 1.75rem; line-height: 1.2; font-weight: 700; }
+.page > header p, .screen-head p { max-width: 78ch; font-size: 1rem; line-height: 1.6; color: var(--color-ink-muted); }
+.screen { display: grid; gap: 16px; }
+.screen-head { display: grid; gap: 6px; }
+.screen-head h2 { font-size: 1.375rem; }
+.notes { display: grid; gap: 6px; max-width: 78ch; padding-left: 18px; margin: 0; color: var(--color-ink-muted); }
+.notes b { color: var(--color-ink); }
+.row-of { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
+.stage { background: var(--color-sunk); border-radius: 14px; padding: 24px; display: grid; gap: 12px; justify-items: start; min-width: 0; max-width: 100%; }
+.cap { font: 600 0.75rem/1 var(--font-body); color: var(--color-ink-muted); }
+
+/* menu (Popover) */
+.menu { width: 344px; max-width: 100%; background: var(--color-raised); border-radius: 12px; box-shadow: var(--shadow-overlay); padding: 6px; display: grid; gap: 2px; }
+.mi { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 10px; border-radius: 8px; font-weight: 500; }
+.mi:hover, .mi.hl { background: var(--color-hover); }
+.mi .muted { color: var(--color-ink-muted); }
+.mi.danger { color: var(--color-danger); }
+.sep { height: 1px; background: var(--color-line); margin: 4px 6px; }
+.grp { padding: 4px 10px 2px; font: 600 0.75rem/1.4 var(--font-body); color: var(--color-ink-muted); }
+
+/* members panel */
+.panel { width: 360px; max-width: 100%; background: var(--color-raised); border-radius: 12px; overflow: hidden; display: grid; }
+.panel-h { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--color-line); }
+.panel-h b { font-family: var(--font-display); font-size: 1rem; }
+.btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 8px; border: 0; font: 600 0.8125rem/1 var(--font-body); cursor: pointer; }
+.btn.primary { background: var(--color-accent); color: var(--color-on-accent); }
+.btn.ghost { background: transparent; color: var(--color-ink); }
+.btn.danger { background: var(--color-danger); color: var(--color-on-accent); }
+.btn.lg { height: 40px; padding: 0 16px; }
+.person { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 16px; }
+.av { --p: var(--color-person-1); width: 32px; height: 32px; border-radius: 50%; display: inline-grid; place-items: center; flex: none; background: var(--p); color: var(--color-on-person); font: 600 0.75rem/1 var(--font-body); }
+.person small { display: block; color: var(--color-ink-muted); font-size: 0.75rem; }
+.leave-row { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 16px; color: var(--color-danger); font-weight: 600; border-top: 1px solid var(--color-line); margin-top: 8px; }
+
+/* phone */
+.phone { width: 360px; max-width: 100%; height: 520px; border-radius: 28px; background: var(--color-base); position: relative; overflow: hidden; border: 1px solid var(--color-line); }
+.phone .list { padding: 12px 16px; display: grid; gap: 4px; opacity: 0.5; }
+.phone .list div { height: 52px; border-radius: 10px; background: var(--color-sunk); }
+.scrim { position: absolute; inset: 0; background: var(--color-scrim); }
+.sheet { position: absolute; inset: auto 0 0 0; background: var(--color-raised); border-radius: 20px 20px 0 0; padding: 8px 8px 20px; display: grid; gap: 2px; }
+.grab { width: 36px; height: 4px; border-radius: 2px; background: var(--color-line); margin: 4px auto 8px; }
+.sheet .title { padding: 4px 12px 10px; font-weight: 600; }
+.sheet .mi { min-height: 48px; font-size: 0.9375rem; }
+
+/* dialog */
+.dialog { width: 440px; max-width: 100%; background: var(--color-raised); border-radius: 14px; box-shadow: var(--shadow-overlay); padding: 22px; display: grid; gap: 12px; }
+.dialog h3 { font-size: 1.125rem; }
+.dialog p { color: var(--color-ink-muted); }
+.dialog .warn { color: var(--color-danger); font-weight: 500; }
+.dialog .err { color: var(--color-danger); font-size: 0.8125rem; display: flex; gap: 6px; align-items: center; }
+.actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; }
+.phone .dialog { position: absolute; inset: auto 0 0 0; width: auto; border-radius: 20px 20px 0 0; box-shadow: none; padding-bottom: 24px; }
+.phone .dialog .actions { flex-direction: column-reverse; align-items: stretch; }
+
+.toast { display: inline-flex; align-items: center; gap: 12px; background: var(--color-ink); color: var(--color-base); border-radius: 10px; padding: 10px 14px; font-weight: 500; }
+@media (max-width: 480px) { .stage { padding: 12px; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="out" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></symbol>
+  <symbol id="star" viewBox="0 0 24 24"><path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></symbol>
+  <symbol id="info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+  <symbol id="bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></symbol>
+  <symbol id="alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></symbol>
+</svg>
+<div class="page">
+  <header>
+    <h1>Rời nhóm</h1>
+    <p>Thành viên tự rời một nhóm. Có ba lối vào, cùng dùng một hộp xác nhận. Không có ở tin trực tiếp và #general. Nhóm chỉ biến khỏi cột điều hướng khi máy chủ đã xong. Quay lại nhóm cần một người trong nhóm thêm bạn.</p>
+  </header>
+
+  <section class="screen">
+    <div class="screen-head"><h2>§1 Lối vào trên máy tính</h2>
+      <p>Menu tên ở đầu cuộc trò chuyện, và đáy panel Thành viên.</p></div>
+    <div class="row-of">
+      <div class="stage">
+        <span class="cap">Menu tên · nhóm “Đối soát Q4”</span>
+        <div class="menu" role="menu">
+          <div class="grp">Thông báo</div>
+          <div class="mi"><svg class="i"><use href="#bell"/></svg>Tin chính và thread đang theo dõi</div>
+          <div class="sep"></div>
+          <div class="mi"><svg class="i muted"><use href="#star"/></svg>Gắn sao</div>
+          <div class="mi"><svg class="i muted"><use href="#info"/></svg>Thông tin nhóm</div>
+          <div class="sep"></div>
+          <div class="mi danger hl"><svg class="i"><use href="#out"/></svg>Rời nhóm</div>
+        </div>
+      </div>
+      <div class="stage">
+        <span class="cap">Panel Thành viên (360) · cuối danh sách</span>
+        <div class="panel">
+          <div class="panel-h"><b>Thành viên · 4</b><button class="btn primary">Thêm người</button></div>
+          <div class="person"><span class="av">LA</span><span>Lan Anh<small>Kế toán</small></span></div>
+          <div class="person"><span class="av" style="--p:var(--color-person-3)">MT</span><span>Minh Tú<small>Kế toán</small></span></div>
+          <div class="person"><span class="av" style="--p:var(--color-person-5)">VH</span><span>Việt Hoàng (bạn)<small>Công nghệ</small></span></div>
+          <div class="leave-row"><svg class="i"><use href="#out"/></svg>Rời nhóm</div>
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li><b>Chỉ hiện cho nhóm</b>: tin trực tiếp và #general không có mục này.</li>
+      <li>Mục "Rời nhóm" có chữ màu <code>--color-danger</code> và đứng cuối, tách bằng đường kẻ, để không bấm nhầm.</li>
+    </ul>
+  </section>
+
+  <section class="screen">
+    <div class="screen-head"><h2>§2 Lối vào trên điện thoại</h2>
+      <p>Nhấn giữ một hàng trong cột điều hướng mở sheet; mục "Rời nhóm" ở cuối. Màn Thông tin nhóm có cùng hàng ở đáy như §1.</p></div>
+    <div class="row-of">
+      <div class="phone">
+        <div class="list"><div></div><div></div><div></div><div></div><div></div></div>
+        <div class="scrim"></div>
+        <div class="sheet">
+          <div class="grab"></div>
+          <div class="title">Đối soát Q4</div>
+          <div class="mi">Chuyển tới mục</div>
+          <div class="mi">Gắn sao</div>
+          <div class="mi">Tắt thông báo</div>
+          <div class="mi">Đánh dấu đã đọc</div>
+          <div class="sep"></div>
+          <div class="mi danger"><svg class="i"><use href="#out"/></svg>Rời nhóm</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="screen">
+    <div class="screen-head"><h2>§3 Hộp xác nhận</h2>
+      <p>Có bốn trạng thái: thường, bạn là người cuối cùng, đang rời, lỗi. Trên điện thoại hộp hiện dạng sheet đáy.</p></div>
+    <div class="row-of">
+      <div class="stage">
+        <span class="cap">Thường</span>
+        <div class="dialog" role="dialog" aria-labelledby="d1">
+          <h3 id="d1">Rời “Đối soát Q4”?</h3>
+          <p>Bạn sẽ không còn thấy tin nhắn và tệp của nhóm này. Một thành viên trong nhóm có thể thêm bạn lại.</p>
+          <div class="actions"><button class="btn ghost lg">Huỷ</button><button class="btn danger lg">Rời nhóm</button></div>
+        </div>
+      </div>
+      <div class="stage">
+        <span class="cap">Bạn là người cuối cùng</span>
+        <div class="dialog" role="dialog" aria-labelledby="d2">
+          <h3 id="d2">Rời “Đối soát Q4”?</h3>
+          <p>Bạn sẽ không còn thấy tin nhắn và tệp của nhóm này. Một thành viên trong nhóm có thể thêm bạn lại.</p>
+          <p class="warn">Bạn là người cuối cùng trong nhóm. Rời đi thì không còn ai đọc được nhóm này.</p>
+          <div class="actions"><button class="btn ghost lg">Huỷ</button><button class="btn danger lg">Rời nhóm</button></div>
+        </div>
+      </div>
+      <div class="stage">
+        <span class="cap">Đang rời</span>
+        <div class="dialog" role="dialog" aria-labelledby="d3">
+          <h3 id="d3">Rời “Đối soát Q4”?</h3>
+          <p>Bạn sẽ không còn thấy tin nhắn và tệp của nhóm này. Một thành viên trong nhóm có thể thêm bạn lại.</p>
+          <div class="actions"><button class="btn ghost lg" disabled>Huỷ</button><button class="btn danger lg" aria-busy="true"><span class="spin"></span>Đang rời…</button></div>
+        </div>
+      </div>
+      <div class="stage">
+        <span class="cap">Lỗi · hộp vẫn mở</span>
+        <div class="dialog" role="dialog" aria-labelledby="d4">
+          <h3 id="d4">Rời “Đối soát Q4”?</h3>
+          <p>Bạn sẽ không còn thấy tin nhắn và tệp của nhóm này. Một thành viên trong nhóm có thể thêm bạn lại.</p>
+          <p class="err" role="alert"><svg class="i"><use href="#alert"/></svg>Không rời được nhóm. Thử lại.</p>
+          <div class="actions"><button class="btn ghost lg">Huỷ</button><button class="btn danger lg">Rời nhóm</button></div>
+        </div>
+      </div>
+      <div class="phone">
+        <div class="list"><div></div><div></div><div></div><div></div><div></div></div>
+        <div class="scrim"></div>
+        <div class="dialog" role="dialog" aria-labelledby="d5">
+          <div class="grab"></div>
+          <h3 id="d5">Rời “Đối soát Q4”?</h3>
+          <p>Bạn sẽ không còn thấy tin nhắn và tệp của nhóm này. Một thành viên trong nhóm có thể thêm bạn lại.</p>
+          <div class="actions"><button class="btn ghost lg">Huỷ</button><button class="btn danger lg">Rời nhóm</button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="screen">
+    <div class="screen-head"><h2>§4 Sau khi rời</h2>
+      <p>Nhóm biến khỏi cột điều hướng, panel đóng, màn quay về cuộc trò chuyện trước đó (hoặc trạng thái trống của Chat), rồi hiện toast. Toast không có Hoàn tác.</p></div>
+    <div class="stage"><span class="toast">Đã rời “Đối soát Q4”</span></div>
+    <ul class="notes">
+      <li>Đang ở trong cuộc gọi của nhóm thì rời nhóm cũng ngắt cuộc gọi, như khi bị gỡ khỏi nhóm.</li>
+      <li>"Người cuối cùng" lấy theo số thành viên mà panel Thành viên đã tải. Chưa tải thì dùng hộp thường.</li>
+    </ul>
+  </section>
+</div>
+</body>
+</html>

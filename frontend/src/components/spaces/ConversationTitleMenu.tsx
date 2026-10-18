@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { Bell, BellOff, BellRing, Check, ChevronDown, Info, Star } from 'lucide-react'
+import { Bell, BellOff, BellRing, Check, ChevronDown, Info, LogOut, Star } from 'lucide-react'
 import type { NotificationLevel } from '../../api/notification-levels'
 import type { Conversation } from '../../lib/conversations'
 import { levelOptions, optionFor } from '../../lib/notification-level-copy'
@@ -26,14 +26,17 @@ function LevelMark({ level }: { level: NotificationLevel }) {
  * non-default level and the star of a starred conversation follow the name.
  * On a phone the name opens the info screen instead, where the level is set.
  */
-export function ConversationTitleMenu({ conversation: c, level, starred, phone = false, onChooseLevel, onToggleStar, onOpenInfo }: {
+export function ConversationTitleMenu({ conversation: c, level, starred, phone = false, canLeave = false, onChooseLevel, onToggleStar, onOpenInfo, onLeave }: {
   conversation: Pick<Conversation, 'kind' | 'title'>
   level: NotificationLevel
   starred: boolean
   phone?: boolean
+  /** Show the "Rời nhóm" item: true for a private group, never for DM or #general. */
+  canLeave?: boolean
   onChooseLevel: (level: NotificationLevel) => void
   onToggleStar: () => void
   onOpenInfo: () => void
+  onLeave?: () => void
 }) {
   const [open, setOpen] = useState(false)
   const anchor = useRef<HTMLButtonElement>(null)
@@ -115,6 +118,14 @@ export function ConversationTitleMenu({ conversation: c, level, starred, phone =
           <MenuItem icon={<Info size={16} strokeWidth={1.75} aria-hidden="true" />} onClick={onOpenInfo}>
             {infoLabel}
           </MenuItem>
+          {canLeave && (
+            <>
+              <MenuSeparator />
+              <MenuItem tone="danger" icon={<LogOut size={16} strokeWidth={1.75} aria-hidden="true" />} onClick={() => { setOpen(false); onLeave?.() }}>
+                Rời nhóm
+              </MenuItem>
+            </>
+          )}
         </Popover>
       )}
     </Heading>

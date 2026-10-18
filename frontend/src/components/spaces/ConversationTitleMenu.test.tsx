@@ -159,4 +159,43 @@ describe('ConversationTitleMenu', () => {
     expect(trigger().querySelector('svg.lucide-bell-off')).not.toBeNull()
     expect(trigger().querySelector('svg.lucide-star')).not.toBeNull()
   })
+
+  it('shows "Rời nhóm" for a leavable group after a separator', async () => {
+    const user = userEvent.setup()
+    mount({ canLeave: true, onLeave: vi.fn() })
+    await user.click(trigger())
+    const menu = await screen.findByRole('menu')
+    const items = within(menu).getAllByRole('menuitem')
+    const leaveItem = items.find((i) => i.textContent === 'Rời nhóm')
+    expect(leaveItem).toBeDefined()
+    // It comes after a separator (there should be at least two separators now)
+    const separators = menu.querySelectorAll('hr, [role="separator"]')
+    expect(separators.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('fires onLeave and closes the menu when "Rời nhóm" is clicked', async () => {
+    const user = userEvent.setup()
+    const p = mount({ canLeave: true, onLeave: vi.fn() })
+    await user.click(trigger())
+    await user.click(await screen.findByRole('menuitem', { name: 'Rời nhóm' }))
+    expect(p.onLeave).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+  })
+
+  it('hides "Rời nhóm" for a DM', async () => {
+    const user = userEvent.setup()
+    mount({ conversation: dm, canLeave: false })
+    await user.click(trigger())
+    const menu = await screen.findByRole('menu')
+    expect(within(menu).queryByRole('menuitem', { name: 'Rời nhóm' })).toBeNull()
+  })
+
+  it('hides "Rời nhóm" when canLeave is false (workspace-wide #general)', async () => {
+    const user = userEvent.setup()
+    mount({ canLeave: false })
+    await user.click(trigger())
+    const menu = await screen.findByRole('menu')
+    expect(within(menu).queryByRole('menuitem', { name: 'Rời nhóm' })).toBeNull()
+  })
 })
+
