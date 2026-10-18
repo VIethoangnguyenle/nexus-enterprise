@@ -3,6 +3,7 @@ package rest
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -106,4 +107,32 @@ func TestSearchAllRoute_TimeZone(t *testing.T) {
 	}
 	// An unknown one is a 400, not a silent fallback.
 	assert.Equal(t, http.StatusBadRequest, get("/api/messages/search?q=findable&after=2000-01-01&tz=Mars/Olympus", true).Code)
+}
+
+func TestSearchAllRoute_NoHitsIsAnEmptyListNotAnEmptyObject(t *testing.T) {
+	c := newChat(t)
+	get := c.activityRouter(t, true)
+	for _, q := range []string{"q=zzzznothing", "q=n", "", "from=nobody"} {
+		rec := get("/api/messages/search?"+q, true)
+		require.Equal(t, http.StatusOK, rec.Code, q)
+		body := decode(t, rec)
+		list, ok := body["messages"].([]any)
+		require.True(t, ok, "%q: messages must be a list, got %s", q, rec.Body.String())
+		assert.Empty(t, list)
+		assert.Equal(t, false, body["has_more"], q)
+	}
+}
+
+func TestSearchAllRoute_MalformedIDsAre400WellFormedUnknownOnesAreEmpty(t *testing.T) {
+	c := newChat(t)
+	get := c.activityRouter(t, true)
+	for _, bad := range []string{"from=%20", "from=a%20b", "from=%27%3B--", "channel_id=a/b", "channel_id=%20",
+		"from=" + strings.Repeat("x", 200)} {
+		assert.Equal(t, http.StatusBadRequest, get("/api/messages/search?q=findable&"+bad, true).Code, bad)
+	}
+	for _, unknown := range []string{"from=nobody", "from=11111111-aaaa-4bbb-8ccc-000000000009", "channel_id=11111111-aaaa-4bbb-8ccc-000000000009"} {
+		rec := get("/api/messages/search?q=findable&"+unknown, true)
+		require.Equal(t, http.StatusOK, rec.Code, unknown)
+		assert.Empty(t, decode(t, rec)["messages"], unknown)
+	}
 }

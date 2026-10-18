@@ -4,6 +4,7 @@ package domain
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -53,6 +54,10 @@ func (q SearchQuery) hasFilter() bool {
 	return q.HasFile || q.From != "" || q.ChannelID != "" ||
 		q.After != "" || q.BeforeDate != "" || q.HasLink || q.MentionsMe
 }
+
+// searchID is the shape of a user or conversation id a filter may name: letters, digits and . _ : -, at most 128.
+// An id of this shape that nobody has is simply not found; anything else is a mistake of the caller.
+var searchID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
 
 // searchZone is the zone named by the caller (an IANA name such as "America/New_York"), or Asia/Ho_Chi_Minh
 // when none is. A name the zone database does not know is invalid input, never a silent fallback.
@@ -128,6 +133,11 @@ func (s *Service) SearchAll(ctx context.Context, userID, userNodeID, workspaceID
 	}
 
 	// Validate date filters.
+	for name, id := range map[string]string{"from": q.From, "channel_id": q.ChannelID} {
+		if id != "" && !searchID.MatchString(id) {
+			return nil, fmt.Errorf("%w: %s is not an id", ErrInvalidInput, name)
+		}
+	}
 	loc, err := searchZone(q.TZ)
 	if err != nil {
 		return nil, err

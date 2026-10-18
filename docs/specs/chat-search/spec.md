@@ -61,6 +61,12 @@ With `from=<user-id>` only messages whose `sender_id` matches SHALL be returned.
 - **WHEN** `from` names a user who sent some of the matching messages
 - **THEN** only that user's messages are returned; messages by others are excluded
 
+### Requirement: Ids and empty answers
+`from` and `channel_id` SHALL be ids of the shape letters, digits and `. _ : -` (at most 128); anything else (blank, spaces,
+slashes, quotes, too long) is 400 via `ErrInvalidInput`. A well-formed id nobody has, or a conversation the caller cannot
+read, is not an error: the answer is empty. The answer always has `"messages"` as a list (`[]` when nothing is found) and
+`"has_more"` as a boolean.
+
 ### Requirement: Channel filter (`channel_id`)
 With `channel_id=<id>` results SHALL be restricted to that one conversation. The conversation must be in the caller's
 readable set; a `channel_id` outside the readable set simply yields no results — never an error that reveals the

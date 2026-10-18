@@ -230,9 +230,9 @@ export interface MessageSearchQuery extends MessageSearchFilters {
 
 /**
  * The one place that maps a search to `GET /api/messages/search`. A filter that is off sends nothing. The day
- * filters mean days in the reader's zone, so they travel with that zone's IANA name as `tz`. `from`,
- * `channel_id`, `after`, `before_date`, `has_link`, `mentions_me` and `tz` are read by the server only once it
- * supports them; until then it ignores them and answers without those narrowings.
+ * filters mean days in the reader's zone, so they travel with that zone's IANA name as `tz`. The server
+ * (docs/specs/chat-search) combines every filter given with AND, reads the days in `tz` (Asia/Ho_Chi_Minh when
+ * absent), answers 400 for a malformed id, day or zone, and an empty list for a well-formed id nobody has.
  */
 export function messageSearchParams(q: MessageSearchQuery): URLSearchParams {
   const qs = new URLSearchParams({ q: q.q })

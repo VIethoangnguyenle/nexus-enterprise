@@ -2,6 +2,7 @@ package domain_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -173,5 +174,16 @@ func TestSearchAll_UnknownTimeZoneIsInvalidInput(t *testing.T) {
 		_, err := k.f.svc.SearchAll(context.Background(), k.f.userID, userNode, k.f.wsID, domain.SearchQuery{
 			Text: "needle", After: "2025-03-15", TZ: tz})
 		require.ErrorIs(t, err, domain.ErrInvalidInput, tz)
+	}
+}
+
+func TestSearchAll_MalformedIDFiltersAreInvalidInput(t *testing.T) {
+	k := newTalk(t, "search-bad-ids")
+	for _, q := range []domain.SearchQuery{
+		{Text: "needle", From: " "}, {Text: "needle", From: "a b"}, {Text: "needle", ChannelID: "a/b"},
+		{Text: "needle", ChannelID: strings.Repeat("x", 200)},
+	} {
+		_, err := k.f.svc.SearchAll(context.Background(), k.f.userID, userNode, k.f.wsID, q)
+		require.ErrorIs(t, err, domain.ErrInvalidInput, "%+v", q)
 	}
 }

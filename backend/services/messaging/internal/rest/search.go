@@ -7,6 +7,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"ngac-platform/pkg/httputil"
+	pb "ngac-platform/proto/messaging"
 	"ngac-platform/services/messaging/internal/domain"
 )
 
@@ -43,5 +44,13 @@ func (h *Handler) SearchAllMessages(c echo.Context) error {
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}
-	return c.JSON(http.StatusOK, list)
+	// An empty answer is an empty list, never an empty object: the client reads `messages` as an array.
+	msgs := list.GetMessages()
+	if msgs == nil {
+		msgs = []*pb.Message{}
+	}
+	return c.JSON(http.StatusOK, struct {
+		Messages []*pb.Message `json:"messages"`
+		HasMore  bool          `json:"has_more"`
+	}{msgs, list.GetHasMore()})
 }
