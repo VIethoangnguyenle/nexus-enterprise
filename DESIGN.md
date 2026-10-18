@@ -357,6 +357,21 @@ trong ô soạn chính gửi một tin vào luồng, không mở gì thêm; tr�
 tóm tắt. Panel thread, panel Thread của nhóm và panel Thành viên dùng chung khe detail panel 360px (§5): mở cái
 này thì cái kia đóng.
 
+- **Rời nhóm** (mockup `design/mockups/leave-group.html`, 2026-10-18): thành viên tự rời một nhóm. Không có ở tin
+  trực tiếp và #general (người của #general là người của workspace). Ba lối vào, cùng một hộp xác nhận:
+  menu tên ở đầu cuộc trò chuyện (máy tính) có MenuSeparator rồi MenuItem "Rời nhóm" (icon LogOut, chữ
+  `--color-danger`) sau "Thông tin nhóm"; đáy panel Thành viên (máy tính và màn Thông tin nhóm trên điện thoại)
+  có hàng "Rời nhóm" (icon LogOut, `--color-danger`, cao 44), tách khỏi danh sách bằng đường kẻ `--color-line`;
+  sheet nhấn giữ hàng trong cột điều hướng trên điện thoại có "Rời nhóm" cuối, chữ danger.
+  Hộp xác nhận (ConfirmDialog; điện thoại hiện dạng sheet đáy như mọi ConfirmDialog): tiêu đề "Rời “{tên nhóm}”?",
+  thân "Bạn sẽ không còn thấy tin nhắn và tệp của nhóm này. Một thành viên trong nhóm có thể thêm bạn lại.";
+  khi bạn là người cuối cùng: thêm dòng `--color-danger` "Bạn là người cuối cùng trong nhóm. Rời đi thì không còn
+  ai đọc được nhóm này." Nút Huỷ · "Rời nhóm" (danger, loading "Đang rời…"). Không lạc quan: chờ máy chủ xong mới
+  bỏ nhóm khỏi cột điều hướng, đóng panel, về màn Chat (cuộc trò chuyện trước đó hoặc trạng thái trống) và toast
+  "Đã rời “{tên nhóm}”" (không Hoàn tác: quay lại cần người trong nhóm thêm). Lỗi: hộp vẫn mở, dòng lỗi
+  `role="alert"` "Không rời được nhóm. Thử lại." dưới thân, nút giữ nguyên. Đang trong cuộc gọi của nhóm: rời nhóm
+  cũng ngắt cuộc gọi như khi bị gỡ khỏi nhóm (§Gọi).
+
 - **Luồng (MessageStream):** nền `--color-base`, cũ trên mới dưới, tin xếp **hai bên**. Tin của người khác
   bên trái: Avatar 32 + tên hiển thị 600 + giờ `text-xs` mờ tabular phía trên bong bóng. **Tin của bạn bên
   phải**: không avatar, không tên (chữ ẩn "Bạn" cho trình đọc màn hình), chỉ giờ ở trên, căn phải. Bong bóng:
