@@ -219,57 +219,108 @@ func (s *Service) reparent(ctx context.Context, childOA, fromOA, toOA string) er
 	return nil
 }
 
-// CopyItem copies a file to a destination (possibly cross-context).
+// CopyItem copies a file into a folder of the same workspace; the folder may be
+// in another of that workspace's drives (a channel drive, say).
+//
+// A copy writes a new file into the destination, so it takes what an upload
+// there takes: read on the source, write on the destination folder, and room in
+// the quota, which it is charged against like a confirmed upload. Where the copy
+// lands (workspace, drive) comes from the destination folder and never from the
+// request: a caller naming another workspace would otherwise place a file there,
+// or, as REST sends none, leave it with no workspace at all.
 func (s *Service) CopyItem(ctx context.Context, req *pb.CopyItemRequest) (*pb.DriveItem, error) {
+	callerNode := grpcauth.CallerFrom(ctx).NGACNodeID
 	src, err := s.store.GetItem(ctx, req.ItemId)
-	if err != nil || src == nil {
+	if err != nil || src == nil || src.Status != "active" {
 		return nil, notFound("source not found")
 	}
 	if src.ItemType != "file" {
 		return nil, invalid("only files can be copied")
 	}
-	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, src.NGACNodeID, ngac.OpRead); err != nil {
+	if err := s.checkAccess(ctx, callerNode, src.NGACNodeID, ngac.OpRead); err != nil {
 		return nil, err
 	}
 
-	// Determine destination parent NGAC
+	// Everything that can be refused is refused before anything is stored.
 	dest, err := s.store.GetItem(ctx, req.DestParentId)
-	if err != nil || dest == nil {
+	if err != nil {
+		return nil, fmt.Errorf("load destination: %w", err)
+	}
+	if dest == nil || dest.Status != "active" {
 		return nil, notFound("destination not found")
 	}
+	if dest.ItemType != "folder" {
+		return nil, invalid("destination is not a folder")
+	}
+	if dest.WorkspaceID != src.WorkspaceID {
+		return nil, invalid("a file can only be copied within its own workspace")
+	}
+	if err := s.checkAccess(ctx, callerNode, dest.NGACNodeID, ngac.OpWrite); err != nil {
+		return nil, err
+	}
+	var size int64
+	if src.SizeBytes != nil {
+		size = *src.SizeBytes
+	}
+	// As for an upload, the quota is checked only once the caller may write.
+	ok, err := s.store.CheckQuota(ctx, dest.WorkspaceID, size)
+	if err != nil {
+		return nil, fmt.Errorf("check quota: %w", err)
+	}
+	if !ok {
+		return nil, quotaExceeded("storage quota exceeded")
+	}
 
-	// Files inherit the destination folder's OA node — no NGAC node created.
-	copyNGACNodeID := dest.NGACNodeID
-
-	// MinIO server-side copy
 	newID := uuid.New().String()
 	newKey := fmt.Sprintf("drive/%s/%s", newID, src.Name)
-	_, err = s.docStorage.CopyObject(ctx, &docpb.CopyObjectRequest{
+	copied, err := s.docStorage.CopyObject(ctx, &docpb.CopyObjectRequest{
 		SrcWorkspaceId: src.WorkspaceID, SrcObjectKey: *src.ObjectKey,
-		DstWorkspaceId: req.DestWorkspaceId, DstObjectKey: newKey,
+		DstWorkspaceId: dest.WorkspaceID, DstObjectKey: newKey,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("copy object: %w", err)
 	}
-
-	driveCtx := req.DestDriveContext
-	if driveCtx == "" {
-		driveCtx = "workspace"
+	// The size the store reports for the new object is the one charged.
+	if copied.GetSizeBytes() > 0 {
+		size = copied.GetSizeBytes()
 	}
-	destParent := req.DestParentId
+
+	destParent := dest.ID
 	newItem := &store.DriveItem{
-		ID: newID, WorkspaceID: req.DestWorkspaceId,
-		DriveContext: driveCtx, DriveContextID: req.DestDriveContextId,
+		ID: newID, WorkspaceID: dest.WorkspaceID,
+		DriveContext: dest.DriveContext, DriveContextID: dest.DriveContextID,
 		ParentID: &destParent, ItemType: "file", Name: src.Name,
-		MimeType: src.MimeType, SizeBytes: src.SizeBytes, ObjectKey: &newKey,
-		NGACNodeID: copyNGACNodeID, ScopeOAID: dest.ScopeOAID,
-		OwnerID: grpcauth.CallerFrom(ctx).UserID, Status: "active",
+		MimeType: src.MimeType, SizeBytes: &size, ObjectKey: &newKey,
+		// Files inherit the destination folder's OA node — no NGAC node created.
+		NGACNodeID: dest.NGACNodeID, ScopeOAID: dest.ScopeOAID,
+		OwnerID: grpcauth.CallerFrom(ctx).UserID, Status: "pending",
 	}
 	if err := s.store.InsertItem(ctx, newItem); err != nil {
+		s.dropCopiedObject(ctx, dest.WorkspaceID, newKey)
 		return nil, fmt.Errorf("insert copy: %w", err)
 	}
+	// Publish and charge in one step, the way ConfirmFile does: a file is never
+	// active without being counted.
+	if err := s.store.ActivateFile(ctx, newID, dest.WorkspaceID, size); err != nil {
+		if derr := s.store.DeleteItem(ctx, newID); derr != nil {
+			slog.Error("unpublished copy's row not removed", "item", newID, "err", derr)
+		}
+		s.dropCopiedObject(ctx, dest.WorkspaceID, newKey)
+		return nil, fmt.Errorf("publish copy: %w", err)
+	}
+	newItem.Status = "active"
 	s.announce(ctx, realtime.KindCreated, newItem)
 	return itemToProto(newItem), nil
+}
+
+// dropCopiedObject removes the object a copy stored when the copy then failed,
+// so a refused or broken copy leaves nothing behind in storage.
+func (s *Service) dropCopiedObject(ctx context.Context, workspaceID, objectKey string) {
+	if _, err := s.docStorage.DeleteObject(ctx, &docpb.DeleteObjectRequest{
+		WorkspaceId: workspaceID, ObjectKey: objectKey,
+	}); err != nil {
+		slog.Error("failed copy's stored object not removed", "key", objectKey, "err", err)
+	}
 }
 
 // TrashItem soft-deletes an item (recursive for folders).
