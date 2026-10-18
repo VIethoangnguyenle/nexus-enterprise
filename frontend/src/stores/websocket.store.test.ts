@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { ApiError } from '../api/client'
 import { endSession } from '../lib/session-end'
 
 const refresh = vi.hoisted(() => vi.fn())
@@ -565,6 +566,34 @@ describe('resync', () => {
     ackWorkspace('20')
     settle()
     expect(invalidated(keys.contacts.list('ws-1'))).toBe(true)
+  })
+
+  it('a resync does not ask again what the server refused (403, 404), but still refreshes successes, 5xx and network failures', () => {
+    const fail = (key: readonly unknown[], error: Error) => {
+      queryClient.getQueryCache().build(queryClient, { queryKey: key }).setState({
+        status: 'error', fetchStatus: 'idle', error, data: undefined, dataUpdatedAt: 0, errorUpdatedAt: Date.now(),
+      })
+    }
+    endSession()
+    useWebSocketStore.getState().followWorkspace('ws-1')
+    seed(keys.documents.list('ws-1'))
+    fail(keys.admin.members('ws-1'), new ApiError('Forbidden', 403))
+    fail(keys.admin.departments('ws-1'), new ApiError('Not found', 404))
+    fail(keys.drive.folder('ws-1', 'f'), new ApiError('Bad gateway', 502))
+    fail(keys.approval.pending(), new TypeError('Failed to fetch'))
+    authOk()
+    ackWorkspace('12')
+    settle()
+    expect(invalidated(keys.documents.list('ws-1'))).toBe(true)
+    expect(invalidated(keys.drive.folder('ws-1', 'f'))).toBe(true)
+    expect(invalidated(keys.approval.pending())).toBe(true)
+    expect(invalidated(keys.admin.members('ws-1'))).toBe(false)
+    expect(invalidated(keys.admin.departments('ws-1'))).toBe(false)
+
+    // A change heard live is a real reason to ask again.
+    deliver(domainEvent({ domain: 'workspace', kind: 'member_added', seq: '13' }))
+    settle()
+    expect(invalidated(keys.admin.members('ws-1'))).toBe(true)
   })
 
   it('a 30 second outage ends with every workspace query refreshed and the stream resumed', () => {

@@ -276,6 +276,64 @@ describe('Danh bạ on a phone (below 768): the stack', () => {
     expect(await layer('Kế toán')).toBeInTheDocument()
   })
 
+  describe('the way back does not replay the way in (the system back is already animated by the device)', () => {
+    /** What the eye sees of a layer right now: its own opacity and that of the level inside it. */
+    const seen = (dialog: HTMLElement) => {
+      const level = dialog.firstElementChild as HTMLElement
+      return { layer: dialog.style.opacity, level: level.style.opacity }
+    }
+
+    it('a level reached by the system back is there at once, not faded in again from nothing', async () => {
+      const user = userEvent.setup()
+      const router = await renderContacts()
+      await user.click(await within(tiles()).findByRole('button', { name: /^Phòng ban/ }))
+      await user.click(await within(await layer('Phòng ban')).findByRole('button', { name: /^Khối Vận hành/ }))
+      await layer('Khối Vận hành')
+
+      act(() => router.history.back())
+      const back = await layer('Phòng ban')
+      // Fully there (no opacity set, or 1): a level still on its way up from 0 is the flash.
+      expect(['', '1']).toContain(seen(back).level)
+    })
+
+    it('a level entered by a press still comes in', async () => {
+      const user = userEvent.setup()
+      await renderContacts()
+      await user.click(await within(tiles()).findByRole('button', { name: /^Phòng ban/ }))
+      await within(await layer('Phòng ban')).findByRole('button', { name: /^Khối Vận hành/ })
+      await user.click(within(await layer('Phòng ban')).getByRole('button', { name: /^Khối Vận hành/ }))
+      const next = await layer('Khối Vận hành')
+      expect(Number(seen(next).level)).toBeLessThan(0.5)
+    })
+
+    it('a profile closed by the system back is gone at once, not faded out over the list', async () => {
+      const user = userEvent.setup()
+      const router = await renderContacts()
+      await user.click(await within(tiles()).findByRole('button', { name: /^Kế toán/ }))
+      await user.click(await within(await layer('Kế toán')).findByRole('button', { name: /^Lê Thị Hoa/ }))
+      await layer(/Hồ sơ/)
+      await waitFor(() => expect(seen(screen.getByRole('dialog', { name: /Hồ sơ/ })).layer).toBe('1'))
+
+      act(() => router.history.back())
+      // A couple of frames later (a fade would be at two thirds): not on screen at all, or without a trace of itself.
+      await act(() => new Promise((r) => setTimeout(r, 40)))
+      const leaving = screen.queryByRole('dialog', { name: /Hồ sơ/ })
+      if (leaving) expect(Number(seen(leaving).layer)).toBe(0)
+    })
+
+    it('a profile closed by its own back button still fades out', async () => {
+      const user = userEvent.setup()
+      await renderContacts()
+      await user.click(await within(tiles()).findByRole('button', { name: /^Kế toán/ }))
+      await user.click(await within(await layer('Kế toán')).findByRole('button', { name: /^Lê Thị Hoa/ }))
+      const profile = await layer(/Hồ sơ/)
+      await waitFor(() => expect(seen(profile).layer).toBe('1'))
+      await user.click(within(profile).getByRole('button', { name: 'Quay lại' }))
+      // This one is the app's own step, with nothing from the device before it: it keeps its exit.
+      expect(Number(seen(profile).layer)).toBeGreaterThan(0)
+    })
+  })
+
   it('a link with ?person= opens the profile over the first screen, and back goes to it', async () => {
     const user = userEvent.setup()
     await renderContacts(`/contacts?person=${U.lan.id}`)

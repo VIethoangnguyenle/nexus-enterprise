@@ -1,9 +1,10 @@
 import { create } from 'zustand'
-import type { QueryKey } from '@tanstack/react-query'
+import type { Query, QueryKey } from '@tanstack/react-query'
 import { queryClient } from '../lib/query-client'
 import { keys } from '../hooks/keys'
 import { useAuthStore } from './auth.store'
 import { refreshAccessToken } from '../api/client'
+import { statusOf } from '../lib/errors'
 import {
   ClientEnvelope,
   ServerEnvelope,
@@ -119,6 +120,21 @@ let resyncPending = true
  */
 const invalidations = createBatcher((queryKey) => {
   void queryClient.invalidateQueries({ queryKey })
+})
+
+/** The server answered this query with a refusal (a 4xx): asking again changes nothing until something does. */
+function wasRefused(query: Query): boolean {
+  const status = statusOf(query.state.error)
+  return query.state.status === 'error' && status !== undefined && status >= 400 && status < 500
+}
+
+/**
+ * What a reconnect refreshes. Not a query whose last answer was a refusal: a screen that was told "not yours to see"
+ * is asked again by its own retry or by a change heard live (the batcher above), never by the socket coming up.
+ * Successes, 5xx and network failures are refreshed as before.
+ */
+const resyncInvalidations = createBatcher((queryKey) => {
+  void queryClient.invalidateQueries({ queryKey, predicate: (q) => !wasRefused(q) })
 })
 
 /**
@@ -393,6 +409,7 @@ export const useWebSocketStore = create<WebSocketState>()((set, get) => ({
     holeRepair.clear()
     userRepair = undefined
     invalidations.cancel()
+    resyncInvalidations.cancel()
     clearTimers()
     subscribeRetries = 0
     // What the session learned about who acted belongs to the session: it must not
@@ -1086,17 +1103,17 @@ function resyncAfterReconnect() {
   if (workspaceId) firstWorkspaceResync = false
   const all = workspaceResyncKeys(workspaceId).filter((key) => !(firstOfSession && isFreshDirectory(key)))
   if (!workspaceId || !chatStateCovers(workspaceId)) {
-    invalidations.add(all)
-    invalidations.flush()
+    resyncInvalidations.add(all)
+    resyncInvalidations.flush()
     return
   }
   const isPart = (key: readonly unknown[]) => CHAT_STATE_PARTS.includes(JSON.stringify(key))
-  invalidations.add(all.filter((key) => !isPart(key)))
-  invalidations.flush()
+  resyncInvalidations.add(all.filter((key) => !isPart(key)))
+  resyncInvalidations.flush()
   void revalidateChatState(workspaceId).then((answered) => {
     if (answered) return
-    invalidations.add(all.filter(isPart))
-    invalidations.flush()
+    resyncInvalidations.add(all.filter(isPart))
+    resyncInvalidations.flush()
   })
 }
 
