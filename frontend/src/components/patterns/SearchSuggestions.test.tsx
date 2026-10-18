@@ -496,6 +496,8 @@ describe('motion', () => {
   const surface = () => screen.getByRole('combobox').closest('div[style*="--sx-open-w"]') as HTMLElement
 
   it('grows the surface out of the box with a clip, and slides the rows in', async () => {
+    // Hold the clock still so the row cannot leave its first frame while the test looks.
+    vi.spyOn(performance, 'now').mockReturnValue(performance.now())
     const user = userEvent.setup()
     render(<Harness groups={[recent(['hợp đồng'])]} />)
     expect(surface().style.transition).toContain('clip-path')
