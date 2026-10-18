@@ -311,7 +311,9 @@ func (c *Client) holdWorkspace(workspaceID string) {
 	c.held = nil
 }
 
-// endHold releases the held frames numbered above after, in order. The
+// endHold releases the held frames numbered above after, in order, and
+// remembers after as the workspace's replayed floor (see replayedTo); a new
+// sync replaces it, so a counter that was reset does not leave a stale floor. The
 // session has just taken a burst, so each frame waits for room like a replayed
 // one (sendWait) instead of being dropped; if the session stops reading the rest
 // are dropped and it sees the hole. While the backlog drains the hold stays on,
@@ -321,6 +323,12 @@ func (c *Client) endHold(after uint64) {
 	for {
 		c.holdMu.Lock()
 		if len(c.held) == 0 {
+			if after != ^uint64(0) {
+				if c.replayedTo == nil {
+					c.replayedTo = map[string]uint64{}
+				}
+				c.replayedTo[c.holdWS] = after
+			}
 			c.holdWS = ""
 			c.holdMu.Unlock()
 			return
@@ -352,6 +360,12 @@ func (c *Client) offerWorkspace(workspaceID string, data []byte) {
 			c.held = append(c.held, data)
 		}
 		return
+	}
+	if floor := c.replayedTo[workspaceID]; floor > 0 {
+		var env pb.ServerEnvelope
+		if proto.Unmarshal(data, &env) == nil && env.GetDomainEvent().GetSeq() <= floor {
+			return
+		}
 	}
 	offer(c, data)
 }
