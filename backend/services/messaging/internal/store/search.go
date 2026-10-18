@@ -199,4 +199,3 @@ func (s *Store) SearchAllMessages(ctx context.Context, channelIDs []string, quer
 	}
 	return trimPage(msgs, limit)
 }
-

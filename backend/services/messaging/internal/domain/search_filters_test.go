@@ -3,6 +3,7 @@ package domain_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -142,4 +143,35 @@ func TestSearchAll_PaginationWithFilter(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, first.Messages, 2)
 	assert.True(t, first.HasMore)
+}
+
+func TestSearchAll_TimeZoneDecidesWhichDayAMessageIsOn(t *testing.T) {
+	k := newTalk(t, "search-tz")
+	ctx := context.Background()
+	m := k.send(t, k.f.userID, userNode, "needle tz boundary", "")
+	// 2025-03-15 20:00 UTC is already 2025-03-16 03:00 in Asia/Ho_Chi_Minh.
+	_, err := k.f.pool.Exec(ctx, `UPDATE messages SET created_at = $2 WHERE id = $1`, m.Id,
+		time.Date(2025, 3, 15, 20, 0, 0, 0, time.UTC))
+	require.NoError(t, err)
+
+	day := domain.SearchQuery{Text: "tz boundary", After: "2025-03-15", BeforeDate: "2025-03-15"}
+	assert.Empty(t, searchAllIDs(t, k, userNode, day), "no zone given: days are Asia/Ho_Chi_Minh, where it is the 16th")
+
+	day.TZ = "UTC"
+	assert.Equal(t, []string{m.Id}, searchAllIDs(t, k, userNode, day), "in UTC it is still the 15th")
+
+	day.TZ = "America/New_York"
+	assert.Equal(t, []string{m.Id}, searchAllIDs(t, k, userNode, day), "in New York it is the afternoon of the 15th")
+
+	day.TZ = "Asia/Ho_Chi_Minh"
+	assert.Empty(t, searchAllIDs(t, k, userNode, day))
+}
+
+func TestSearchAll_UnknownTimeZoneIsInvalidInput(t *testing.T) {
+	k := newTalk(t, "search-tz-bad")
+	for _, tz := range []string{"Mars/Olympus", "../etc/passwd", "UTC+7"} {
+		_, err := k.f.svc.SearchAll(context.Background(), k.f.userID, userNode, k.f.wsID, domain.SearchQuery{
+			Text: "needle", After: "2025-03-15", TZ: tz})
+		require.ErrorIs(t, err, domain.ErrInvalidInput, tz)
+	}
 }

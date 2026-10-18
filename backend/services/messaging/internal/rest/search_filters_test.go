@@ -93,3 +93,17 @@ func TestSearchAllRoute_FilterOnlySearchNoText(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	assert.Empty(t, decode(t, rec)["messages"])
 }
+
+func TestSearchAllRoute_TimeZone(t *testing.T) {
+	c := newChat(t)
+	get := c.activityRouter(t, true)
+	// A known zone is accepted, and so is none (Asia/Ho_Chi_Minh).
+	for _, q := range []string{"&tz=UTC", "&tz=Asia/Ho_Chi_Minh", ""} {
+		rec := get("/api/messages/search?q=findable&after=2000-01-01"+q, true)
+		require.Equal(t, http.StatusOK, rec.Code, q+rec.Body.String())
+		msgs, _ := decode(t, rec)["messages"].([]any)
+		require.Len(t, msgs, 1, q)
+	}
+	// An unknown one is a 400, not a silent fallback.
+	assert.Equal(t, http.StatusBadRequest, get("/api/messages/search?q=findable&after=2000-01-01&tz=Mars/Olympus", true).Code)
+}

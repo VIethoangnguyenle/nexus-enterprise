@@ -11,7 +11,7 @@ import (
 )
 
 // SearchAllMessages handles GET /api/messages/search?q=&limit=&before=&before_id=&has_file=
-// &from=&channel_id=&after=&before_date=&has_link=&mentions_me=:
+// &from=&channel_id=&after=&before_date=&tz=&has_link=&mentions_me=:
 // the messages, main and thread replies, whose text matches q, in the
 // conversations the caller reads in the workspace they are signed in to,
 // newest first. A q shorter than two characters answers an empty list, unless
@@ -36,6 +36,7 @@ func (h *Handler) SearchAllMessages(c echo.Context) error {
 		ChannelID:  c.QueryParam("channel_id"),
 		After:      c.QueryParam("after"),
 		BeforeDate: c.QueryParam("before_date"),
+		TZ:         c.QueryParam("tz"),
 		HasLink:    c.QueryParam("has_link") == "true",
 		MentionsMe: c.QueryParam("mentions_me") == "true",
 	})
@@ -44,4 +45,3 @@ func (h *Handler) SearchAllMessages(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, list)
 }
-

@@ -70,18 +70,23 @@ channel's existence.
 - **WHEN** `channel_id` names a conversation the caller cannot read
 - **THEN** the answer is an empty list, not an error
 
-### Requirement: Date filters (`after`, `before_date`)
-`after=YYYY-MM-DD` is an inclusive lower bound: only messages created at or after the start of that day in
-Asia/Ho_Chi_Minh (UTC+7). `before_date=YYYY-MM-DD` is an inclusive upper bound: only messages created before the end
-of that day in Asia/Ho_Chi_Minh. A malformed date is 400 via `ErrInvalidInput`. The existing `before` (RFC 3339
-pagination cursor) is unchanged and separate.
+### Requirement: Date filters (`after`, `before_date`, `tz`)
+`after=YYYY-MM-DD` is an inclusive lower bound: only messages created at or after the start of that day. `before_date=YYYY-MM-DD`
+is an inclusive upper bound: only messages created before the end of that day. The days are days of the zone named by the
+optional `tz` (an IANA name such as `America/New_York`; the browser sends the reader's own); with no `tz` they are days of
+Asia/Ho_Chi_Minh. A malformed date, or a `tz` the zone database does not know (or `Local`), is 400 via `ErrInvalidInput`; it is
+never replaced by a default. `tz` alone narrows nothing. The existing `before` (RFC 3339 pagination cursor) is unchanged and separate.
 
-#### Scenario: Inclusive boundaries in UTC+7
+#### Scenario: Inclusive boundaries in the default zone
 - **WHEN** a message is sent at 2025-03-15 00:30 Asia/Ho_Chi_Minh and `after=2025-03-15`
-- **THEN** the message is included (start-of-day is 00:00 HCM = 2025-03-14T17:00Z)
+- **THEN** the message is included (start-of-day is 00:00 there = 2025-03-14T17:00Z)
 
-#### Scenario: Invalid date
-- **WHEN** `after=not-a-date`
+#### Scenario: The zone decides the day
+- **WHEN** a message was sent at 2025-03-15 20:00 UTC and `after=before_date=2025-03-15`
+- **THEN** it is found with `tz=UTC` and `tz=America/New_York`, and not with `tz=Asia/Ho_Chi_Minh` or no `tz` (there it is already the 16th)
+
+#### Scenario: Invalid date or zone
+- **WHEN** `after=not-a-date`, or `tz=Mars/Olympus`
 - **THEN** the answer is 400
 
 ### Requirement: Link filter (`has_link`)

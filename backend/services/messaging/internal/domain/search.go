@@ -8,6 +8,9 @@ import (
 	"time"
 	"unicode/utf8"
 
+	// The zone database travels with the binary: a slim image has no /usr/share/zoneinfo.
+	_ "time/tzdata"
+
 	pb "ngac-platform/proto/messaging"
 	"ngac-platform/services/messaging/internal/store"
 )
@@ -23,8 +26,8 @@ const (
 	searchPageSize = 25
 )
 
-// hcmTZ is Asia/Ho_Chi_Minh (UTC+7), the timezone used for date filters.
-var hcmTZ = time.FixedZone("Asia/Ho_Chi_Minh", 7*60*60)
+// defaultSearchZone is the zone the days of a date filter are in when the caller names none.
+const defaultSearchZone = "Asia/Ho_Chi_Minh"
 
 // SearchQuery is one search across conversations. Before and BeforeID are the
 // send time (RFC 3339) and id of the last message of the previous page.
@@ -38,8 +41,9 @@ type SearchQuery struct {
 	// New filters — all optional.
 	From       string // sender user ID
 	ChannelID  string // restrict to one conversation
-	After      string // ISO date YYYY-MM-DD inclusive lower bound (Asia/Ho_Chi_Minh)
-	BeforeDate string // ISO date YYYY-MM-DD inclusive upper bound (Asia/Ho_Chi_Minh)
+	After      string // ISO date YYYY-MM-DD inclusive lower bound (in TZ)
+	BeforeDate string // ISO date YYYY-MM-DD inclusive upper bound (in TZ)
+	TZ         string // IANA zone the two days are in; empty means Asia/Ho_Chi_Minh
 	HasLink    bool   // only messages containing http:// or https://
 	MentionsMe bool   // only messages that mention the caller
 }
@@ -50,12 +54,29 @@ func (q SearchQuery) hasFilter() bool {
 		q.After != "" || q.BeforeDate != "" || q.HasLink || q.MentionsMe
 }
 
+// searchZone is the zone named by the caller (an IANA name such as "America/New_York"), or Asia/Ho_Chi_Minh
+// when none is. A name the zone database does not know is invalid input, never a silent fallback.
+func searchZone(name string) (*time.Location, error) {
+	if name == "" {
+		name = defaultSearchZone
+	}
+	// "Local" would be the server's own zone, which says nothing about the caller.
+	if name == "Local" {
+		return nil, fmt.Errorf("%w: tz must be an IANA zone name", ErrInvalidInput)
+	}
+	loc, err := time.LoadLocation(name)
+	if err != nil {
+		return nil, fmt.Errorf("%w: tz must be an IANA zone name", ErrInvalidInput)
+	}
+	return loc, nil
+}
+
 // parseSearchDates validates and converts After/BeforeDate to UTC times.
-// After becomes start-of-day in Asia/Ho_Chi_Minh; BeforeDate becomes
-// end-of-day (start of the next day) in Asia/Ho_Chi_Minh.
-func parseSearchDates(after, beforeDate string) (afterTime, beforeDateTime *time.Time, err error) {
+// After becomes start-of-day in loc; BeforeDate becomes end-of-day (the
+// start of the next day) in loc.
+func parseSearchDates(after, beforeDate string, loc *time.Location) (afterTime, beforeDateTime *time.Time, err error) {
 	if after != "" {
-		t, err := time.ParseInLocation("2006-01-02", after, hcmTZ)
+		t, err := time.ParseInLocation("2006-01-02", after, loc)
 		if err != nil {
 			return nil, nil, fmt.Errorf("%w: after must be an ISO date (YYYY-MM-DD)", ErrInvalidInput)
 		}
@@ -63,7 +84,7 @@ func parseSearchDates(after, beforeDate string) (afterTime, beforeDateTime *time
 		afterTime = &utc
 	}
 	if beforeDate != "" {
-		t, err := time.ParseInLocation("2006-01-02", beforeDate, hcmTZ)
+		t, err := time.ParseInLocation("2006-01-02", beforeDate, loc)
 		if err != nil {
 			return nil, nil, fmt.Errorf("%w: before_date must be an ISO date (YYYY-MM-DD)", ErrInvalidInput)
 		}
@@ -107,7 +128,11 @@ func (s *Service) SearchAll(ctx context.Context, userID, userNodeID, workspaceID
 	}
 
 	// Validate date filters.
-	afterTime, beforeDateTime, err := parseSearchDates(q.After, q.BeforeDate)
+	loc, err := searchZone(q.TZ)
+	if err != nil {
+		return nil, err
+	}
+	afterTime, beforeDateTime, err := parseSearchDates(q.After, q.BeforeDate, loc)
 	if err != nil {
 		return nil, err
 	}
