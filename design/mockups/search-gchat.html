@@ -1,0 +1,1060 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tìm kiếm kiểu Google Chat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Bricolage+Grotesque:opsz,wght@12..96,600..700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* Search, Google Chat style (2026-10-18, chờ duyệt). The search box is one surface that grows out of the bar when
+   focused (clip reveal, no scrim), suggestions live inside that surface, recent searches can be removed one by one or
+   all at once (with Hoàn tác), and Chat results get a filter chip row: Người gửi · Trong · Ngày · Có tệp · Có liên kết
+   · Nhắc đến tôi. Every timing below is a token from tokens.css. */
+* { box-sizing: border-box; }
+body { background: var(--color-base); color: var(--color-ink); font-family: var(--font-body); font-size: 0.875rem; line-height: 1.5; padding-inline: 16px; padding-block: 0 64px; margin: 0; }
+svg.i { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+svg.i.s { width: 16px; height: 16px; }
+:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+p { margin: 0; }
+h1, h2, h3 { margin: 0; font-family: var(--font-display); text-wrap: balance; }
+[hidden] { display: none !important; }
+button { font: inherit; color: inherit; }
+code { font-family: var(--font-mono); font-size: 0.8125rem; background: var(--color-sunk); padding: 1px 5px; border-radius: 4px; }
+mark { background: var(--color-warning-wash); color: inherit; border-radius: 3px; padding: 0 1px; }
+
+/* ---------- review chrome ---------- */
+.page { max-width: 1400px; margin-inline: auto; display: grid; gap: 64px; }
+.page > header { padding-block: 40px 0; display: grid; gap: 16px; }
+.page > header h1 { font-size: 1.75rem; line-height: 1.2; font-weight: 700; letter-spacing: -0.01em; }
+.page > header p, .screen-head p { max-width: 80ch; font-size: 1rem; line-height: 1.6; color: var(--color-ink-muted); }
+.controls { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; }
+.seg { display: inline-flex; flex-wrap: wrap; background: var(--color-sunk); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg button { font: 600 0.8125rem/1 var(--font-body); color: var(--color-ink-muted); background: transparent; border: 0; border-radius: 8px; padding: 9px 12px; cursor: pointer; min-height: 36px; }
+.seg button[aria-pressed="true"] { background: var(--color-raised); color: var(--color-ink); }
+.check { display: inline-flex; gap: 8px; align-items: center; font-weight: 500; }
+.check input { width: 18px; height: 18px; accent-color: var(--color-accent); }
+.toc { display: flex; gap: 6px; flex-wrap: wrap; }
+.toc a { color: var(--color-ink); text-decoration: none; font-weight: 600; padding: 6px 12px; border-radius: 999px; background: var(--color-sunk); }
+.screen { display: grid; gap: 20px; scroll-margin-top: 16px; min-width: 0; }
+.screen-head { display: grid; gap: 6px; }
+.screen-head h2 { font-size: 1.375rem; }
+.notes { display: grid; gap: 6px; max-width: 80ch; padding-left: 18px; margin: 0; color: var(--color-ink-muted); }
+.notes b { color: var(--color-ink); }
+.decide { padding: 14px 16px; border-radius: 10px; background: var(--color-accent-wash); max-width: 80ch; }
+.decide > b:first-child { display: block; font-weight: 600; margin-bottom: 4px; }
+.scene { display: grid; gap: 10px; min-width: 0; }
+.scene-bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.scene-bar > b { font-weight: 600; }
+.replay { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border: 0; border-radius: 999px; background: var(--color-sunk); font-weight: 600; cursor: pointer; }
+.replay:hover { background: var(--color-hover); }
+.out { color: var(--color-ink-muted); min-height: 21px; }
+.row-of { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; }
+.tbl { border-collapse: collapse; max-width: 100%; display: block; overflow-x: auto; }
+.tbl th, .tbl td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--color-line); vertical-align: top; }
+.tbl th { font-size: 0.75rem; color: var(--color-ink-muted); font-weight: 600; }
+.tbl td:first-child { font-weight: 600; white-space: nowrap; }
+
+/* ---------- atoms ---------- */
+.av { --p: var(--color-person-1); width: 32px; height: 32px; border-radius: 50%; display: inline-grid; place-items: center; flex: none; background: var(--p); color: var(--color-on-person); font: 600 0.75rem/1 var(--font-body); }
+.sp { --p: var(--color-person-4); width: 32px; height: 32px; border-radius: 9px; display: inline-grid; place-items: center; flex: none; background: var(--p); color: var(--color-on-person); font: 700 0.8125rem/1 var(--font-display); }
+.av.s20, .sp.s20 { width: 20px; height: 20px; font-size: 0.5625rem; border-radius: 6px; }
+.av.s20 { border-radius: 50%; }
+.ico { width: 32px; height: 32px; border-radius: 8px; display: inline-grid; place-items: center; flex: none; background: var(--color-sunk); color: var(--color-ink-muted); }
+.kbd { font: 600 0.6875rem/1 var(--font-mono); padding: 3px 6px; border-radius: 4px; background: var(--color-sunk); color: var(--color-ink-muted); }
+.ibtn { width: 32px; height: 32px; display: inline-grid; place-items: center; border: 0; border-radius: 999px; background: transparent; color: var(--color-ink-muted); cursor: pointer; flex: none; }
+.ibtn:hover { background: var(--color-hover); color: var(--color-ink); }
+.tbtn { border: 0; background: transparent; color: var(--color-accent); font: 600 0.75rem/1 var(--font-body); height: 28px; padding: 0 8px; border-radius: 8px; cursor: pointer; }
+.tbtn:hover { background: var(--color-accent-wash); }
+.btn { height: 36px; padding: 0 14px; border: 0; border-radius: 8px; font-weight: 600; cursor: pointer; background: var(--color-sunk); }
+.btn.primary { background: var(--color-accent); color: var(--color-on-accent); }
+.mention { color: var(--color-accent); font-weight: 600; background: var(--color-accent-wash); border-radius: 4px; padding: 0 3px; }
+.skeleton { border-radius: 6px; background: linear-gradient(90deg, var(--color-sunk) 0%, var(--color-hover) 50%, var(--color-sunk) 100%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+
+/* ---------- suggestion rows (shared by desktop surface and phone panel) ---------- */
+.sg-label { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 32px; padding: 8px 10px 2px 16px; color: var(--color-ink-muted); font: 600 0.75rem/1 var(--font-body); }
+.sg-row { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 44px; padding: 4px 6px 4px 10px; border-radius: 8px; margin-inline: 6px; cursor: pointer; }
+.sg-row:hover { background: var(--color-hover); }
+.sg-row[aria-selected="true"] { background: var(--color-accent-wash); }
+.sg-row b { display: block; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sg-row small { display: block; color: var(--color-ink-muted); font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sg-row .when { color: var(--color-ink-muted); font-size: 0.75rem; padding-right: 8px; font-variant-numeric: tabular-nums; }
+.sg-row .rm { width: 32px; height: 32px; border: 0; border-radius: 999px; background: transparent; color: var(--color-ink-muted); display: grid; place-items: center; cursor: pointer; opacity: 0; transition: opacity var(--duration-quick) var(--ease-out); }
+.sg-row .rm:hover { background: var(--color-hover); color: var(--color-ink); }
+.sg-row:hover .rm, .sg-row[aria-selected="true"] .rm { opacity: 1; }
+button.sg-row { border: 0; background: transparent; width: 100%; text-align: left; font: inherit; color: inherit; }
+.phone .sg-row.ph-rec { grid-template-columns: minmax(0, 1fr) auto; padding: 0; gap: 0; }
+.ph-main { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 14px; align-items: center; min-height: 52px; padding: 4px 0 4px 16px; border: 0; background: transparent; text-align: left; cursor: pointer; font: inherit; color: inherit; }
+.ph-main .ico { width: 36px; height: 36px; }
+.sg-row.all { grid-template-columns: 32px minmax(0, 1fr) auto; }
+.sg-row.all b { font-weight: 600; }
+.sg-skel { display: grid; grid-template-columns: 32px 1fr; gap: 12px; align-items: center; min-height: 44px; padding: 4px 16px; }
+.sg-empty { display: flex; gap: 12px; align-items: center; padding: 16px; color: var(--color-ink-muted); }
+/* row collapse when a recent search is removed: fade + height 160ms ease-in (grid 1fr -> 0fr) */
+.rr { display: grid; grid-template-rows: 1fr; transition: grid-template-rows var(--duration-quick) var(--ease-in), opacity var(--duration-quick) var(--ease-in); }
+.rr > .rr-in { min-height: 0; overflow: hidden; }
+.rr.gone { grid-template-rows: 0fr; opacity: 0; }
+.rr.gone .sg-row { min-height: 0; }
+/* rows entering when a panel opens: translateY(-4px) + fade 160ms ease-out, 60ms after the surface starts, 20ms apart */
+.enter-rows .anim { animation: row-in var(--duration-quick) var(--ease-out) both; animation-delay: calc(60ms + var(--i, 0) * 20ms); }
+@keyframes row-in { from { opacity: 0; transform: translateY(-4px); } }
+@keyframes fade-in { from { opacity: 0; } }
+
+/* ---------- desktop frame ---------- */
+.fit { width: 100%; overflow: hidden; }
+.desk { position: relative; width: 1180px; height: 620px; border-radius: 14px; background: var(--color-base); box-shadow: 0 0 0 8px var(--color-sunk); overflow: hidden; display: grid; grid-template-columns: 72px 280px minmax(0, 1fr); margin: 8px; }
+.rail { background: var(--color-sunk); padding: 12px 4px; display: grid; align-content: start; justify-items: center; gap: 4px; }
+.rail .ws { width: 40px; height: 40px; border-radius: 10px; background: var(--color-person-4); color: var(--color-on-person); display: grid; place-items: center; font: 700 1rem/1 var(--font-display); margin-bottom: 8px; }
+.rail .it { width: 64px; height: 56px; display: grid; justify-items: center; align-content: center; gap: 2px; color: var(--color-ink-muted); font: 500 0.6875rem/1.2 var(--font-body); }
+.rail .it span { width: 48px; height: 28px; border-radius: 10px; display: grid; place-items: center; }
+.rail .it[aria-current] { color: var(--color-ink); font-weight: 600; }
+.rail .it[aria-current] span { background: var(--color-accent-wash); color: var(--color-accent); }
+.lp { background: var(--color-base); display: grid; align-content: start; min-width: 0; position: relative; z-index: 2; }
+.lp .new { display: flex; align-items: center; gap: 10px; height: 40px; margin: 0 12px 8px; padding: 0 14px; border-radius: 10px; background: var(--color-raised); font-weight: 600; }
+.lp .nr { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 12px; margin-inline: 8px; border-radius: 10px; font-size: 0.9375rem; color: var(--color-ink); white-space: nowrap; }
+.lp .nr[aria-current] { background: var(--color-raised); font-weight: 600; }
+.lp .sec { padding: 14px 20px 4px; font-weight: 600; color: var(--color-ink-muted); }
+.ct { background: var(--color-raised); border-radius: 10px; margin: 8px 8px 8px 0; display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; position: relative; }
+.ct-head { display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 20px; border-bottom: 1px solid var(--color-line); }
+.ct-head h3 { font-size: 1.1875rem; font-weight: 600; }
+.ct-head small { color: var(--color-ink-muted); }
+.msgs { display: grid; align-content: end; gap: 18px; padding: 20px 24px; }
+.msg { display: grid; grid-template-columns: 32px 1fr; gap: 12px; font-size: 0.9375rem; line-height: 1.53; }
+.msg .who b { font-weight: 600; margin-right: 8px; }
+.msg .who time { color: var(--color-ink-muted); font-size: 0.75rem; }
+.toasts { position: absolute; right: 24px; bottom: 24px; z-index: 50; display: grid; gap: 8px; }
+.toast { display: inline-flex; align-items: center; gap: 12px; background: var(--color-ink); color: var(--color-base); border-radius: 10px; padding: 8px 8px 8px 14px; font-weight: 500; box-shadow: var(--shadow-overlay); animation: toast-in var(--duration-base) var(--ease-out) both; }
+.toast.out { animation: toast-out var(--duration-quick) var(--ease-in) both; }
+.toast button { border: 0; background: transparent; color: var(--color-base); font-weight: 600; height: 32px; padding: 0 10px; border-radius: 8px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(12px); } }
+@keyframes toast-out { to { opacity: 0; transform: translateY(12px); } }
+
+/* ---------- the desktop search surface ----------
+   .sx keeps a 256x40 slot in the list panel. .sx-surface is always laid out at its open size (640 wide, 48 input row +
+   list) and is revealed with clip-path: idle shows only the 256x40 pill, open shows everything (negative insets keep the
+   shadow). The input is the same DOM node in both states, so focus, caret and IME never move. */
+.sx { --bar-w: 256px; position: relative; height: 40px; margin: 12px 12px 8px; }
+.sx-surface { position: absolute; left: 0; top: -4px; width: 640px; background: var(--color-overlay); border-radius: 12px; z-index: 10; cursor: text;
+  clip-path: inset(4px calc(100% - var(--bar-w)) calc(100% - 44px) 0 round 20px);
+  transition: clip-path var(--duration-layout) var(--ease-out-expo); }
+.sx-surface::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--color-sunk); pointer-events: none; transition: opacity var(--duration-press) var(--ease-out); }
+.sx-surface::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: var(--shadow-overlay); opacity: 0; pointer-events: none; transition: opacity var(--duration-base) var(--ease-out); }
+.sx.open .sx-surface { clip-path: inset(-24px -24px -56px -24px round 12px); cursor: default; }
+.sx.open .sx-surface::before { opacity: 0; }
+.sx.open .sx-surface::after { opacity: 1; }
+.sx.closing .sx-surface { transition-duration: 210ms; transition-timing-function: var(--ease-in); }
+.sx.closing .sx-list, .sx.closing .sx-foot { opacity: 0; transition: opacity 120ms var(--ease-in); }
+.sx-row { position: relative; z-index: 1; display: flex; align-items: center; gap: 12px; height: 48px; padding: 0 8px 0 14px; color: var(--color-ink-muted); }
+.sx-row input { flex: 1; min-width: 0; height: 40px; border: 0; outline: 0; background: transparent; font: 400 1rem/1 var(--font-body); color: var(--color-ink); cursor: inherit; }
+.sx-row input::placeholder { color: var(--color-ink-muted); }
+.sx-kbd { position: absolute; left: calc(var(--bar-w) - 30px); top: 15px; transition: opacity var(--duration-quick) var(--ease-out); }
+.sx.open .sx-kbd, .sx.has-q .sx-kbd { opacity: 0; pointer-events: none; }
+.sx-clear { position: absolute; left: calc(var(--bar-w) - 38px); top: 8px; }
+.sx.open .sx-clear { left: auto; right: 8px; }
+.sx-list { position: relative; z-index: 1; border-top: 1px solid var(--color-line); max-height: 448px; overflow: auto; padding: 4px 0 6px; scrollbar-width: thin; }
+.sx-foot { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 14px; padding: 8px 16px 10px; border-top: 1px solid var(--color-line); color: var(--color-ink-muted); font-size: 0.75rem; }
+.sx:focus-within .sx-surface { outline: 0; }
+
+/* ---------- results view (desktop content column) ---------- */
+.rv { display: grid; grid-template-rows: auto auto minmax(0, 1fr); min-height: 0; }
+.rv-head { display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 16px 0 12px; }
+.rv-head h3 { font-size: 1.1875rem; font-weight: 600; }
+.rv-head .count { margin-left: auto; color: var(--color-ink-muted); font-variant-numeric: tabular-nums; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 20px 12px; align-items: center; position: relative; }
+.cg { position: relative; display: inline-flex; align-items: center; height: 32px; border-radius: 999px; background: var(--color-sunk); flex: none; }
+.cg::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--color-accent-wash); box-shadow: inset 0 0 0 1px var(--color-accent); opacity: 0; transition: opacity var(--duration-quick) var(--ease-out); pointer-events: none; }
+.cg.on::before { opacity: 1; }
+.chip { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 100%; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; font: 600 0.8125rem/1 var(--font-body); cursor: pointer; white-space: nowrap; }
+.cg:not(.on):hover { background: var(--color-hover); }
+.cg.on .chip { padding-right: 4px; }
+.chip .chev { color: var(--color-ink-muted); transition: transform var(--duration-quick) var(--ease-out); }
+.chip[aria-expanded="true"] .chev { transform: rotate(180deg); }
+.chip .ck { color: var(--color-accent); animation: pop var(--duration-quick) var(--ease-out) both; }
+@keyframes pop { from { opacity: 0; transform: scale(.6); } }
+.cx { position: relative; width: 28px; height: 28px; margin-right: 2px; border: 0; border-radius: 999px; background: transparent; display: grid; place-items: center; cursor: pointer; color: var(--color-ink-muted); animation: pop var(--duration-quick) var(--ease-out) both; }
+.cx:hover { background: var(--color-hover); color: var(--color-ink); }
+.chips .clear-all { margin-left: 4px; }
+.dd { position: absolute; z-index: 20; width: 320px; background: var(--color-overlay); border-radius: 12px; box-shadow: var(--shadow-overlay); padding: 6px; animation: pop-in var(--duration-quick) var(--ease-out) both; }
+.dd.out { animation: pop-out 120ms var(--ease-in) both; }
+@keyframes pop-in { from { opacity: 0; transform: translateY(-4px); } }
+@keyframes pop-out { to { opacity: 0; transform: translateY(-4px); } }
+.dd-search { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px; margin: 2px 2px 6px; border-radius: 8px; background: var(--color-sunk); color: var(--color-ink-muted); }
+.dd-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font: 400 0.875rem/1 var(--font-body); color: var(--color-ink); }
+.dd-list { max-height: 296px; overflow: auto; display: grid; gap: 2px; }
+.opt { display: grid; grid-template-columns: 32px minmax(0, 1fr) 16px; gap: 10px; align-items: center; min-height: 44px; padding: 4px 10px; border-radius: 8px; border: 0; background: transparent; text-align: left; cursor: pointer; width: 100%; }
+.opt:hover, .opt.hl { background: var(--color-hover); }
+.opt b { display: block; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.opt small { display: block; color: var(--color-ink-muted); font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.opt .tick { color: var(--color-accent); visibility: hidden; }
+.opt[aria-checked="true"] .tick, .opt[aria-selected="true"] .tick { visibility: visible; }
+.opt.radio { grid-template-columns: minmax(0, 1fr) 16px; min-height: 36px; font-weight: 500; }
+.dd-sep { height: 1px; background: var(--color-line); margin: 4px 6px; }
+.range { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 6px 8px 4px; }
+.range label { display: grid; gap: 4px; font: 600 0.75rem/1.2 var(--font-body); color: var(--color-ink-muted); }
+.range input { height: 36px; border: 0; border-radius: 8px; background: var(--color-sunk); padding: 0 8px; font: 400 0.875rem/1 var(--font-body); color: var(--color-ink); min-width: 0; }
+.range .btn { grid-column: 1 / -1; }
+.rv-body { overflow: auto; min-height: 0; padding: 0 12px 16px; position: relative; }
+.rv-body .sg-label { padding-left: 12px; }
+.res { transition: opacity var(--duration-quick) var(--ease-out); }
+.res.busy { opacity: .5; }
+.rc { display: grid; gap: 6px; padding: 12px; border-radius: 10px; cursor: pointer; color: inherit; text-decoration: none; }
+.rc:hover { background: var(--color-hover); }
+.rc + .rc { box-shadow: 0 -1px 0 var(--color-line); }
+.rc:hover + .rc, .rc + .rc:hover { box-shadow: none; }
+.rc-in { display: flex; align-items: center; gap: 8px; font-size: 0.8125rem; font-weight: 600; color: var(--color-ink-muted); }
+.rc-msg { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 12px; }
+.rc-who { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.rc-who b { font-weight: 600; font-size: 0.9375rem; }
+.rc-who time { color: var(--color-ink-muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.rc-text { font-size: 0.9375rem; line-height: 1.53; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.att { display: inline-flex; align-items: center; gap: 8px; margin-top: 6px; height: 36px; padding: 0 12px 0 8px; border-radius: 8px; background: var(--color-sunk); font-weight: 500; max-width: 100%; }
+.att .i { color: var(--color-info); }
+.att.lnk .i { color: var(--color-accent); }
+.rc.enter { animation: res-in var(--duration-base) var(--ease-out) both; animation-delay: calc(var(--i, 0) * 30ms); }
+.rc.swap { animation: fade-in var(--duration-quick) var(--ease-out) both; }
+@keyframes res-in { from { opacity: 0; transform: translateY(8px); } }
+.rk { display: grid; gap: 10px; padding: 14px 12px; }
+.rk-row { display: grid; grid-template-columns: 32px 1fr; gap: 12px; align-items: start; }
+.state { display: grid; justify-items: center; gap: 12px; text-align: center; padding: 64px 24px; color: var(--color-ink-muted); animation: fade-in var(--duration-quick) var(--ease-out) both; }
+.state p { max-width: 42ch; color: var(--color-ink); }
+.state .i { width: 24px; height: 24px; }
+
+/* ---------- phone ---------- */
+.phones { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+.phone-wrap { display: grid; gap: 10px; min-width: 0; }
+.phone-wrap > .scene-bar { max-width: 390px; }
+.phone { position: relative; width: min(390px, calc(100vw - 48px)); height: 760px; border-radius: 32px; background: var(--color-base); overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr); box-shadow: 0 0 0 8px var(--color-sunk); margin: 8px; }
+.ph-top { padding: 14px 12px 4px; position: relative; z-index: 2; }
+.ph-pill { position: relative; display: flex; align-items: center; gap: 4px; height: 52px; padding: 0 4px; border-radius: 999px; background: var(--color-sunk); }
+.ph-pill::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 2px var(--color-accent); opacity: 0; pointer-events: none; transition: opacity var(--duration-quick) var(--ease-out); }
+.phone.searching .ph-pill::after, .ph-pill.focused::after { opacity: 1; }
+.ph-pill .ibtn { width: 44px; height: 44px; color: var(--color-ink); }
+.ph-lead { position: relative; width: 44px; height: 44px; flex: none; }
+.ph-lead .ibtn { position: absolute; inset: 0; transition: opacity var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-out); }
+.ph-lead .ph-back { opacity: 0; transform: rotate(90deg); pointer-events: none; }
+.phone.searching .ph-lead .ph-menu { opacity: 0; transform: rotate(-90deg); pointer-events: none; }
+.phone.searching .ph-lead .ph-back { opacity: 1; transform: none; pointer-events: auto; }
+.ph-pill input { flex: 1; min-width: 0; height: 44px; border: 0; outline: 0; background: transparent; font: 400 1rem/1 var(--font-body); color: var(--color-ink); }
+.ph-pill input::placeholder { color: var(--color-ink-muted); }
+.ph-av { width: 44px; height: 44px; display: grid; place-items: center; flex: none; transition: opacity var(--duration-quick) var(--ease-out); }
+.phone.searching .ph-av { opacity: 0; pointer-events: none; }
+.ph-stack { position: relative; min-height: 0; }
+.ph-layer { position: absolute; inset: 0; overflow: auto; scrollbar-width: none; }
+.ph-home { transition: opacity 120ms var(--ease-in); }
+.phone.searching .ph-home { opacity: 0; pointer-events: none; }
+.ph-panel { opacity: 0; transform: translateY(8px); pointer-events: none; transition: opacity var(--duration-base) var(--ease-out) 60ms, transform var(--duration-base) var(--ease-out) 60ms; }
+.phone.searching .ph-panel { opacity: 1; transform: none; pointer-events: auto; }
+.ph-title { padding: 10px 16px 6px; font: 700 1.625rem/1.2 var(--font-display); }
+.ph-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 72px; padding: 8px 16px; }
+.ph-row .av, .ph-row .sp { width: 44px; height: 44px; }
+.ph-row .sp { border-radius: 12px; }
+.ph-row b { display: block; font-size: 1rem; font-weight: 600; }
+.ph-row small { display: block; color: var(--color-ink-muted); font-size: 0.875rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ph-row time { color: var(--color-ink-muted); font-size: 0.75rem; align-self: start; padding-top: 6px; }
+.phone .sg-label { padding: 16px 4px 6px 16px; font-size: 0.8125rem; min-height: 44px; }
+.phone .sg-label .tbtn { height: 44px; padding: 0 12px; font-size: 0.8125rem; }
+.phone .sg-row { min-height: 52px; margin-inline: 0; border-radius: 0; padding: 4px 0 4px 16px; gap: 14px; grid-template-columns: 36px minmax(0, 1fr) auto; }
+.phone .sg-row b { font-size: 0.9375rem; }
+.phone .sg-row small { font-size: 0.8125rem; }
+.phone .sg-row .rm { opacity: 1; width: 44px; height: 44px; }
+.phone .sg-row .av, .phone .sg-row .sp, .phone .sg-row .ico { width: 36px; height: 36px; }
+.phone .sg-row .sp { border-radius: 10px; }
+.phone .sg-empty { display: grid; justify-items: center; text-align: center; padding: 48px 32px; gap: 8px; }
+.ph-chips { display: flex; flex-wrap: nowrap; gap: 8px; overflow-x: auto; padding: 6px 12px 10px; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 24px), transparent 100%); mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 24px), transparent 100%); }
+.phone .cg { height: 36px; }
+.phone .chip { font-size: 0.875rem; padding: 0 14px; }
+.phone .cg.on .chip { padding-right: 4px; }
+.phone .cx { width: 32px; height: 32px; }
+.phone .rc { border-radius: 0; padding: 12px 16px; }
+.phone .rc-text { font-size: 1rem; line-height: 1.5; }
+.phone .rc-who b { font-size: 1rem; }
+.ph-res { display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.ph-res .rv-count { padding: 0 16px 4px; color: var(--color-ink-muted); font-size: 0.8125rem; }
+.ph-toast { position: absolute; left: 16px; right: 16px; bottom: 16px; display: grid; justify-items: center; z-index: 50; }
+.scrim { position: absolute; inset: 0; background: var(--color-scrim); z-index: 30; animation: fade-in var(--duration-base) var(--ease-out) both; }
+.scrim.out { animation: fade-out var(--duration-quick) var(--ease-in) both; }
+@keyframes fade-out { to { opacity: 0; } }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 40; max-height: 85%; display: grid; grid-template-rows: auto auto minmax(0, 1fr); background: var(--color-overlay); border-radius: 24px 24px 0 0; box-shadow: var(--shadow-overlay); padding-bottom: 16px; animation: sheet-in var(--duration-layout) var(--ease-out-expo) both; }
+.sheet.out { animation: sheet-out 210ms var(--ease-in) both; }
+@keyframes sheet-in { from { transform: translateY(100%); } }
+@keyframes sheet-out { to { transform: translateY(100%); } }
+.sheet .handle { width: 32px; height: 4px; border-radius: 999px; background: var(--color-line); margin: 8px auto 4px; }
+.sheet h4 { margin: 0; padding: 8px 16px 8px; font: 600 1.1875rem/1.3 var(--font-display); display: flex; align-items: center; justify-content: space-between; }
+.sheet .dd-search { height: 44px; margin: 0 16px 8px; border-radius: 999px; padding: 0 14px; }
+.sheet .dd-search input { font-size: 1rem; }
+.sheet .dd-list { max-height: none; overflow: auto; padding: 0 8px; }
+.sheet .opt { min-height: 56px; grid-template-columns: 36px minmax(0, 1fr) 20px; }
+.sheet .opt .av, .sheet .opt .sp { width: 36px; height: 36px; }
+.sheet .opt.radio { min-height: 52px; grid-template-columns: minmax(0, 1fr) 20px; font-size: 1rem; }
+.sheet .range input { height: 44px; font-size: 1rem; }
+.sheet .range .btn { height: 44px; }
+
+/* ---------- reduced motion: no transform, no clip animation, fades <= 120ms ---------- */
+.reduce *, .reduce *::before, .reduce *::after { animation-duration: 1ms !important; animation-delay: 0ms !important; }
+.reduce .sx-surface, .reduce .rr, .reduce .ph-lead .ibtn, .reduce .ph-panel { transition: none !important; }
+.reduce .sx.open .sx-surface { animation: fade-in 120ms linear !important; }
+.reduce .ph-panel { transform: none !important; }
+.reduce .phone.searching .ph-panel { animation: fade-in 120ms linear !important; }
+.reduce .skeleton { animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; animation-delay: 0ms !important; }
+  .sx-surface, .rr, .ph-lead .ibtn, .ph-panel { transition: none !important; }
+  .sx.open .sx-surface { animation: fade-in 120ms linear !important; }
+  .ph-panel { transform: none !important; }
+  .skeleton { animation: none !important; }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+<symbol id="i-back" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></symbol>
+<symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+<symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+<symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+<symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9L9.6 3.9A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+<symbol id="i-clip" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></symbol>
+<symbol id="i-pkg" viewBox="0 0 24 24"><path d="M21 8 12 3 3 8v8l9 5 9-5Z"/><path d="m3 8 9 5 9-5M12 13v8"/></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></symbol>
+<symbol id="i-file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></symbol>
+<symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></symbol>
+<symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="i-replay" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></symbol>
+<symbol id="i-searchx" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3M8.5 8.5l5 5M13.5 8.5l-5 5"/></symbol>
+<symbol id="i-pen" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></symbol>
+<symbol id="i-home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></symbol>
+<symbol id="i-at" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/></symbol>
+</svg>
+
+<!-- shared desktop chrome, cloned into every [data-desk] by the script -->
+<template id="t-rail">
+  <div class="ws" aria-hidden="true">K</div>
+  <span class="it" aria-current="page"><span><svg class="i"><use href="#i-chat"/></svg></span>Tin nhắn</span>
+  <span class="it"><span><svg class="i"><use href="#i-cal"/></svg></span>Lịch</span>
+  <span class="it"><span><svg class="i"><use href="#i-folder"/></svg></span>Tài liệu</span>
+  <span class="it"><span><svg class="i"><use href="#i-clip"/></svg></span>Phê duyệt</span>
+  <span class="it"><span><svg class="i"><use href="#i-pkg"/></svg></span>Tài sản</span>
+  <span class="it"><span><svg class="i"><use href="#i-users"/></svg></span>Danh bạ</span>
+</template>
+<template id="t-lp">
+  <span class="new"><svg class="i s"><use href="#i-pen"/></svg>Trò chuyện mới</span>
+  <span class="nr"><svg class="i s"><use href="#i-home"/></svg>Trang chủ</span>
+  <span class="nr"><svg class="i s"><use href="#i-at"/></svg>Được nhắc tới</span>
+  <span class="sec">Tin nhắn trực tiếp</span>
+  <span class="nr"><span class="av s20" style="--p:var(--color-person-2)">LV</span>Lê Quang Vinh</span>
+  <span class="nr"><span class="av s20" style="--p:var(--color-person-6)">LA</span>Trần Lan Anh</span>
+  <span class="sec">Nhóm</span>
+  <span class="nr" aria-current="page"><span class="sp s20">ĐS</span>Đối soát Q4</span>
+  <span class="nr"><span class="sp s20" style="--p:var(--color-person-5)">KT</span>Kế toán tổng hợp</span>
+  <span class="nr"><span class="sp s20" style="--p:var(--color-person-7)">TH</span>Thuế &amp; hoá đơn</span>
+</template>
+<template id="t-conv">
+  <div class="ct-head"><span class="sp" style="width:28px;height:28px">ĐS</span><h3>Đối soát Q4</h3><small>14 thành viên</small></div>
+  <div class="msgs">
+    <div class="msg"><span class="av" style="--p:var(--color-person-5)">HY</span><div><div class="who"><b>Phạm Hải Yến</b><time>08:02</time></div>Sáng nay mình chốt số dư đầu kỳ, mọi người cập nhật trước 10h nhé.</div></div>
+    <div class="msg"><span class="av" style="--p:var(--color-person-2)">LV</span><div><div class="who"><b>Lê Quang Vinh</b><time>08:30</time></div><span class="mention">@Hoàng Nguyễn</span> em kiểm tra lại số đối soát với Vietcombank trước 15h giúp anh.</div></div>
+    <div class="msg"><span class="av" style="--p:var(--color-person-6)">LA</span><div><div class="who"><b>Trần Lan Anh</b><time>09:12</time></div>Mình gửi bảng đối soát công nợ tháng 10, mọi người xem giúp cột chênh lệch nhé.</div></div>
+  </div>
+</template>
+<!-- the search surface, cloned into every .sx -->
+<template id="t-sx">
+  <div class="sx-surface">
+    <div class="sx-row">
+      <svg class="i s"><use href="#i-search"/></svg>
+      <input type="text" role="combobox" aria-label="Tìm trong chat" placeholder="Tìm trong chat" aria-expanded="false" aria-autocomplete="list" aria-haspopup="listbox" autocomplete="off" spellcheck="false">
+      <span class="sx-kbd kbd" aria-hidden="true">/</span>
+      <button class="ibtn sx-clear" type="button" aria-label="Xoá chữ đã nhập" hidden><svg class="i s"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="sx-list" role="listbox" aria-label="Gợi ý tìm kiếm" hidden></div>
+    <div class="sx-foot" aria-hidden="true" hidden><span><span class="kbd">↑</span> <span class="kbd">↓</span> chọn</span><span><span class="kbd">Enter</span> mở</span><span><span class="kbd">Delete</span> xoá lần tìm cũ</span><span><span class="kbd">Esc</span> đóng</span></div>
+  </div>
+</template>
+
+<div class="page" id="root">
+<header>
+  <h1>Tìm kiếm kiểu Google Chat</h1>
+  <p><b>Chờ duyệt 2026-10-18.</b> Thay cho <a href="search-suggestions.html">Gợi ý trong ô tìm</a> (2026-10-17) và phần “Tìm trong chat”. Ô tìm là <b>một bề mặt</b>: khi focus nó nở ra từ chính viên thuốc, nổi lên bằng bóng overlay và chứa luôn gợi ý bên trong, như Google Chat. Tìm gần đây xoá được từng mục hoặc tất cả (có Hoàn tác). Gõ chữ thì gợi ý tức thì người, nhóm, tin nhắn; Enter mở trang kết quả của Chat có hàng chip lọc <b>Người gửi · Trong · Ngày · Có tệp · Có liên kết · Nhắc đến tôi</b>. Mọi cảnh đều bấm được; nút <b>Phát lại</b> chạy lại chuyển động.</p>
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Giao diện"><button type="button" data-theme-set="system" aria-pressed="true">Theo hệ thống</button><button type="button" data-theme-set="light" aria-pressed="false">Sáng</button><button type="button" data-theme-set="dark" aria-pressed="false">Tối</button></div>
+    <label class="check"><input type="checkbox" id="reduce">Giảm chuyển động</label>
+  </div>
+  <nav class="toc" aria-label="Các phần"><a href="#s1">1 · Nở ra khi focus</a><a href="#s2">2 · Tìm gần đây</a><a href="#s3">3 · Gõ chữ</a><a href="#s4">4 · Kết quả và bộ lọc</a><a href="#s5">5 · Điện thoại</a><a href="#s6">6 · Bàn phím, a11y, phạm vi</a></nav>
+</header>
+
+<!-- ============================ 1 ============================ -->
+<section class="screen" id="s1" aria-labelledby="h1s">
+  <div class="screen-head">
+    <h2 id="h1s">1 · Ô tìm nghỉ → focus: nở ra và nổi lên</h2>
+    <p>Máy tính: ô tìm của Chat nằm đầu cột danh sách (viên thuốc 256×40, <code>--color-sunk</code>, gợi ý phím <span class="kbd">/</span>). Bấm vào ô, hoặc bấm <span class="kbd">/</span> ở bất cứ đâu trong Chat: bề mặt nở sang phải tới 640, cao 48, bo 12, nền <code>--color-overlay</code>, bóng <code>--shadow-overlay</code>, gợi ý nằm ngay dưới trong cùng bề mặt. Không scrim. Bấm ra ngoài hoặc Esc thì thu về.</p>
+  </div>
+  <div class="decide"><b>Điều cần duyệt 1: nở bằng clip-path, ngoại lệ có chủ đích của §7.</b> §7 chỉ cho animate <code>transform</code>/<code>opacity</code>. Dùng <code>scale</code> thì chữ và bo góc bị méo trong lúc nở; dùng <code>width</code> thì phải tính lại bố cục mỗi khung. <code>clip-path: inset()</code> trên một bề mặt đã dàn sẵn ở kích thước mở không làm méo, không đổi bố cục, và ô nhập vẫn là một phần tử nên focus và bộ gõ tiếng Việt không bị ngắt. Ngoại lệ chỉ áp cho bề mặt ô tìm.</div>
+  <div class="scene">
+    <div class="scene-bar"><b>Máy tính</b><button class="replay" type="button" data-replay="sx1"><svg class="i s"><use href="#i-replay"/></svg>Phát lại</button><span class="out" id="out-sx1">Bấm vào ô tìm, gõ, dùng ↑ ↓ Enter Esc.</span></div>
+    <div class="fit"><div class="desk" data-desk><nav class="rail" data-rail aria-label="Điều hướng (minh hoạ)"></nav><aside class="lp"><div class="sx" id="sx1"></div><div data-lp></div></aside><main class="ct" data-conv></main><div class="toasts"></div></div></div>
+  </div>
+  <ul class="notes">
+    <li><b>Nở (mở):</b> <code>clip-path</code> từ khung viên thuốc (inset trên 4, phải 100%−256, dưới 100%−44, bo 20) tới toàn bề mặt (bo 12), <code>--duration-layout</code> 280ms <code>--ease-out-expo</code>. Lớp nền <code>--color-sunk</code> mờ đi trong <code>--duration-press</code> 100ms (lộ ra <code>--color-overlay</code>); lớp bóng hiện trong <code>--duration-base</code> 220ms <code>--ease-out</code>. Hàng gợi ý vào bằng <code>translateY(-4px)</code> + fade 160ms <code>--ease-out</code>, bắt đầu sau 60ms, mỗi hàng lệch 20ms, tối đa 8 hàng lệch (hàng sau vào cùng hàng thứ 8).</li>
+    <li><b>Thu (đóng):</b> nội dung danh sách fade ra 120ms <code>--ease-in</code>, clip về viên thuốc 210ms <code>--ease-in</code>, bóng tắt cùng lúc. Chữ đã gõ ở lại trong viên thuốc, cuối ô thay <span class="kbd">/</span> bằng nút ✕.</li>
+    <li><b>Kích thước:</b> chỗ của viên thuốc trong cột giữ nguyên 256×40 (cột không nhảy). Bề mặt mở: rộng <code>min(640px, mép phải viewport − mép trái ô − 16px)</code>, hàng nhập 48 (icon 16 cách trái 14, chữ 16px), danh sách cao tối đa 448 rồi cuộn, chân 36. Ô nhập không đổi chỗ khi nở, nên con trỏ đứng yên.</li>
+    <li><b>Lớp:</b> <code>--z-dropdown</code>; nổi trên luồng chat, không đẩy gì. Giảm chuyển động: bề mặt đổi ngay rồi fade 120ms, hàng không trượt, không lệch.</li>
+  </ul>
+</section>
+
+<!-- ============================ 2 ============================ -->
+<section class="screen" id="s2" aria-labelledby="h2s">
+  <div class="screen-head">
+    <h2 id="h2s">2 · Ô trống: Tìm gần đây xoá được, Trò chuyện gần đây</h2>
+    <p>Ô được focus mà còn trống: <b>Tìm gần đây</b> (tối đa 5 trên máy tính) với ✕ từng hàng và nút <b>Xoá tất cả</b> ở đầu nhóm, rồi nhóm gợi ý của module (Chat: <b>Trò chuyện gần đây</b>, 3 mục). Thử: rê chuột rồi bấm ✕, hoặc ↓ tới một lần tìm rồi Delete, hoặc Xoá tất cả rồi Hoàn tác.</p>
+  </div>
+  <div class="decide"><b>Điều cần duyệt 2: Xoá tất cả dùng toast Hoàn tác, không hỏi xác nhận.</b> Lần tìm cũ chỉ là tiện ích trên máy này, xoá nhầm không mất dữ liệu; hệ đã chọn cùng cách cho “Xoá mục” (§6: không hỏi, toast có Hoàn tác 5s). Hộp xác nhận chen một bước vào thao tác dọn dẹp nhỏ và làm bề mặt tìm mất focus. Xoá từng mục thì không có toast: hàng co lại là đủ phản hồi, và ✕ khó bấm nhầm.</div>
+  <div class="row-of">
+    <div class="scene" style="flex:1 1 640px">
+      <div class="scene-bar"><b>Máy tính</b><button class="replay" type="button" data-replay="sx2"><svg class="i s"><use href="#i-replay"/></svg>Khôi phục và phát lại</button><span class="out" id="out-sx2"></span></div>
+      <div class="fit"><div class="desk" data-desk><nav class="rail" data-rail aria-label="Điều hướng (minh hoạ)"></nav><aside class="lp"><div class="sx" id="sx2"></div><div data-lp></div></aside><main class="ct" data-conv></main><div class="toasts"></div></div></div>
+    </div>
+  </div>
+  <div class="phones">
+    <div class="phone-wrap">
+      <div class="scene-bar"><b>Điện thoại · có lần tìm cũ</b><button class="replay" type="button" data-replay="ph2"><svg class="i s"><use href="#i-replay"/></svg>Khôi phục</button></div>
+      <div class="phone" id="ph2"><div class="ph-top"><div class="ph-pill focused"><button class="ibtn" type="button" aria-label="Đóng tìm kiếm"><svg class="i"><use href="#i-back"/></svg></button><input type="search" placeholder="Tìm trong chat" aria-label="Tìm trong chat"></div></div><div class="ph-stack"><div class="ph-layer" data-panel></div></div><div class="ph-toast"></div></div>
+    </div>
+    <div class="phone-wrap">
+      <div class="scene-bar"><b>Điện thoại · chưa có gì để gợi ý</b></div>
+      <div class="phone"><div class="ph-top"><div class="ph-pill focused"><button class="ibtn" type="button" aria-label="Đóng tìm kiếm"><svg class="i"><use href="#i-back"/></svg></button><input type="search" placeholder="Tìm trong chat" aria-label="Tìm trong chat"></div></div><div class="ph-stack"><div class="ph-layer"><div class="sg-empty"><svg class="i" style="width:24px;height:24px"><use href="#i-search"/></svg><p style="color:var(--color-ink)">Tìm tin nhắn, người và nhóm.</p><p>Sau khi tìm, lọc theo người gửi, cuộc trò chuyện hay ngày.</p></div></div></div></div>
+    </div>
+  </div>
+  <ul class="notes">
+    <li><b>Nhãn nhóm</b> 12/600 <code>--color-ink-muted</code>, cao 32; <b>Xoá tất cả</b> là nút chữ 12/600 <code>--color-accent</code>, cao 28 (điện thoại 13px, cao 44), chỉ hiện khi có ≥ 2 lần tìm; một lần tìm thì chỉ có ✕.</li>
+    <li><b>Hàng</b> 44 (điện thoại 52), bo 8, icon đồng hồ 32 trên <code>--color-sunk</code>, chữ 14/500; ✕ là IconButton 32 (điện thoại 44, luôn hiện) — máy tính hiện khi rê hoặc khi hàng đang được chọn bằng phím (fade 160ms).</li>
+    <li><b>Xoá một mục</b> (✕ hoặc Delete): hàng fade + co chiều cao 160ms <code>--ease-in</code>, hàng dưới trôi lên theo; mục được chọn chuyển sang hàng kế tiếp (hết thì hàng trước). Mục cuối của nhóm: nhãn nhóm co cùng lúc.</li>
+    <li><b>Xoá tất cả:</b> mọi hàng của nhóm fade + co cùng lúc 160ms, nhóm sau trôi lên; focus về ô nhập; toast “Đã xoá 5 lần tìm gần đây” + <b>Hoàn tác</b>, vào <code>translateY(12px)</code> + fade 220ms, tự tắt 5s, ra 160ms. Hoàn tác: nhóm trở lại đúng thứ tự, hàng vào như khi mở (lệch 20ms). Toast máy tính: đáy phải; điện thoại: đáy giữa cách 16 + safe-area.</li>
+    <li><b>Hết lần tìm cũ:</b> nhóm Tìm gần đây biến mất hẳn, không để nhãn rỗng. Không có gì để gợi ý: máy tính vẫn nở bề mặt (để ô tìm luôn phản hồi) và hiện một hàng “Tìm tin nhắn, người và nhóm.” + icon 24; điện thoại như cảnh phải.</li>
+  </ul>
+</section>
+
+<!-- ============================ 3 ============================ -->
+<section class="screen" id="s3" aria-labelledby="h3s">
+  <div class="screen-head">
+    <h2 id="h3s">3 · Gõ chữ: gợi ý tức thì</h2>
+    <p>Mỗi chữ gõ thay nhóm gợi ý bằng ba nhóm khớp: <b>Người</b> (tối đa 3), <b>Nhóm và trò chuyện</b> (3), <b>Tin nhắn</b> (3, từ máy chủ sau khi ngừng gõ 250ms, 2 hàng Skeleton trong lúc chờ). Hàng cuối luôn là <b>Xem tất cả kết quả cho “…”</b> với gợi ý <span class="kbd">Enter</span>. Bỏ hoa thường và dấu khi khớp; phần khớp tô <code>--color-warning-wash</code>.</p>
+  </div>
+  <div class="row-of">
+    <div class="scene" style="flex:1 1 640px">
+      <div class="scene-bar"><b>Máy tính</b><button class="replay" type="button" data-replay="sx3"><svg class="i s"><use href="#i-replay"/></svg>Phát lại (gõ “đối soát”)</button><span class="out" id="out-sx3"></span></div>
+      <div class="fit"><div class="desk" data-desk><nav class="rail" data-rail aria-label="Điều hướng (minh hoạ)"></nav><aside class="lp"><div class="sx" id="sx3"></div><div data-lp></div></aside><main class="ct" data-conv></main><div class="toasts"></div></div></div>
+    </div>
+  </div>
+  <div class="phones">
+    <div class="phone-wrap">
+      <div class="scene-bar"><b>Điện thoại · đang gõ</b></div>
+      <div class="phone" id="ph3"><div class="ph-top"><div class="ph-pill focused"><button class="ibtn" type="button" aria-label="Đóng tìm kiếm"><svg class="i"><use href="#i-back"/></svg></button><input type="search" value="đối soát" aria-label="Tìm trong chat"><button class="ibtn" type="button" aria-label="Xoá chữ đã nhập"><svg class="i"><use href="#i-x"/></svg></button></div></div><div class="ph-stack"><div class="ph-layer" data-panel></div></div></div>
+    </div>
+  </div>
+  <ul class="notes">
+    <li><b>Hàng người:</b> Avatar 32 + tên hiển thị + “chức danh · phòng ban” (workspace cá nhân: chỉ chức danh). Chọn: mở trò chuyện trực tiếp với người đó (tạo nếu chưa có). Không có chính mình.</li>
+    <li><b>Hàng nhóm:</b> ô nhóm vuông 32 + tên + “Nhóm · N thành viên”; trò chuyện trực tiếp: Avatar + tên + “Trò chuyện trực tiếp”. Chọn: mở cuộc trò chuyện.</li>
+    <li><b>Hàng tin nhắn:</b> Avatar người gửi 32 + đoạn có từ khớp (1 dòng) + “Tên người gửi · Tên cuộc trò chuyện · giờ”. Chọn: mở cuộc trò chuyện, cuộn để tin vào giữa, bong bóng loé viền accent 2,4s (như Được nhắc tới).</li>
+    <li><b>Đổi nhóm khi gõ:</b> hàng mới fade 120ms, không trượt, không lệch (tránh nhấp nháy theo từng phím). Không mục nào được chọn sẵn: Enter khi chưa chọn = Xem tất cả kết quả. Ô có ≥ 1 ký tự không khoảng trắng mới gợi ý; tin nhắn cần ≥ 2 ký tự.</li>
+    <li><b>Không khớp gì:</b> chỉ còn hàng Xem tất cả kết quả và một dòng mờ “Không có gợi ý. Nhấn Enter để tìm trong mọi tin nhắn.” Lỗi tải tin nhắn: nhóm Tin nhắn ẩn, không báo lỗi trong gợi ý (trang kết quả mới báo).</li>
+  </ul>
+</section>
+
+<!-- ============================ 4 ============================ -->
+<section class="screen" id="s4" aria-labelledby="h4s">
+  <div class="screen-head">
+    <h2 id="h4s">4 · Trang kết quả và hàng chip lọc (chỉ Chat)</h2>
+    <p>Enter (hoặc Xem tất cả kết quả) thu bề mặt về viên thuốc, giữ chữ, và mở trang kết quả ở cột nội dung, như Google Chat thay khung chính. URL <code>/channels/search?q=…</code> mang cả bộ lọc, nên Quay lại của trình duyệt về cuộc trò chuyện trước. Thử: bấm từng chip, chọn giá trị, ✕ để bỏ; đổi trạng thái bằng nút dưới.</p>
+  </div>
+  <div class="decide"><b>Điều cần duyệt 3: bộ lọc là chip áp dụng ngay, không có nút “Tìm” hay bảng “Tìm nâng cao”.</b> Mỗi chip đổi kết quả ngay khi chọn (như Google Chat). Người gửi và Trong chọn một giá trị; Ngày là các khoảng có sẵn + Tuỳ chọn khoảng. Kết quả chỉ là tin nhắn; người và nhóm khớp nằm ở gợi ý (§3) và ở khối “Nhóm và người” đầu trang khi chưa bật bộ lọc nào. Kết quả xếp mới nhất trước; không có lựa chọn sắp xếp.</div>
+  <div class="scene">
+    <div class="scene-bar"><b>Máy tính</b>
+      <div class="seg" role="group" aria-label="Trạng thái kết quả" id="rstate"><button type="button" data-st="ok" aria-pressed="true">Có kết quả</button><button type="button" data-st="loading" aria-pressed="false">Đang tải</button><button type="button" data-st="empty" aria-pressed="false">Không có kết quả</button><button type="button" data-st="error" aria-pressed="false">Lỗi</button></div>
+      <button class="replay" type="button" data-replay="rv"><svg class="i s"><use href="#i-replay"/></svg>Phát lại</button></div>
+    <div class="fit"><div class="desk" data-desk><nav class="rail" data-rail aria-label="Điều hướng (minh hoạ)"></nav><aside class="lp"><div class="sx" id="sx4"></div><div data-lp></div></aside>
+      <main class="ct"><div class="rv" id="rv-desk"></div></main><div class="toasts"></div></div></div>
+  </div>
+  <ul class="notes">
+    <li><b>Đầu trang</b> cao 56: IconButton ← “Đóng tìm kiếm” (về cuộc trò chuyện trước, focus về ô tìm), tiêu đề “Kết quả tìm kiếm” display 19/600, bên phải “N tin nhắn” 14px mờ, <code>tabular-nums</code>, đổi số bằng fade 160ms. Không hiện tổng chính xác khi máy chủ chưa biết: “Hơn 25 tin nhắn” khi còn trang sau.</li>
+    <li><b>Chip</b> cao 32 (điện thoại 36), pill, đệm 0 12, chữ 13/600 (điện thoại 14). Mặc định: nền <code>--color-sunk</code>, hover <code>--color-hover</code>; chip mở danh sách có chevron 16 mờ (xoay 180° khi mở, 160ms). Bật: lớp <code>--color-accent-wash</code> + viền trong 1px <code>--color-accent</code> hiện bằng opacity 160ms <code>--ease-out</code>; chip bật/tắt (Có tệp, Có liên kết, Nhắc đến tôi) thêm dấu ✓ 16 accent vào bằng <code>scale(.6)</code>→1 + fade 160ms; chip giá trị đổi nhãn thành giá trị (“[Avatar 20] Trần Lan Anh”, “[ô nhóm 20] Đối soát Q4”, “7 ngày qua”, “01/10 – 15/10”) và thêm nút ✕ 28 bên phải. Chip phía sau dời chỗ bằng FLIP 220ms <code>--ease-out-expo</code>. Có ≥ 1 chip bật: cuối hàng hiện nút chữ “Xoá bộ lọc”.</li>
+    <li><b>Danh sách chọn</b> (Popover 320, <code>--color-overlay</code>, bo 12, bóng overlay, cách chip 6, vào <code>translateY(-4px)</code> + fade 160ms, ra 120ms): <b>Người gửi</b> = ô “Tìm người” 36 + “Bạn” đầu danh sách + mọi người trong workspace (Avatar 32, tên, chức danh · phòng ban), cao tối đa 296 rồi cuộn; <b>Trong</b> = ô “Tìm cuộc trò chuyện” + các cuộc bạn còn quyền đọc (ô nhóm/Avatar, tên, “Nhóm · N thành viên” / “Trò chuyện trực tiếp”); <b>Ngày</b> = Bất kỳ lúc nào · Hôm nay · 7 ngày qua · 30 ngày qua · divider · Tuỳ chọn khoảng… (mở hai ô “Từ ngày” “Đến ngày” 36 + nút Áp dụng). Chọn một giá trị: áp dụng và đóng ngay, mục đang chọn có ✓.</li>
+    <li><b>Thẻ kết quả:</b> hàng cuộc trò chuyện (ô nhóm/Avatar 20 + tên 13/600 mờ), dưới là Avatar 32 + tên người gửi 15/600 + giờ 12 mờ (“09:12”, “Hôm qua 16:05”, “Thứ Năm 10:41”, “02/10”) + nội dung 15/23 tối đa 3 dòng, từ khớp tô <code>--color-warning-wash</code>, @tên theo mẫu nhắc tên; tin có tệp/liên kết thêm chip tệp 36. Đệm 12, bo 10, hover <code>--color-hover</code>, divider 1px <code>--color-line</code> giữa thẻ. Bấm: mở cuộc trò chuyện tại tin đó (loé viền 2,4s), trang kết quả ở lại trong lịch sử.</li>
+    <li><b>Chuyển động:</b> lần đầu có kết quả: thẻ vào <code>translateY(8px)</code> + fade 220ms <code>--ease-out</code>, lệch 30ms, tối đa 8 thẻ. Đổi bộ lọc: danh sách cũ mờ còn 50% trong 160ms (<code>aria-busy</code>), kết quả mới thay bằng fade 160ms, không trượt lại. Trang sau (cuộn tới cuối, 25 mỗi trang): thẻ mới vào như lần đầu.</li>
+    <li><b>Trạng thái:</b> Đang tải lần đầu: 4 thẻ Skeleton cùng hình. Không có kết quả: icon 24 + “Không có tin nhắn nào khớp “đối soát” với các bộ lọc này.” + nút <b>Xoá bộ lọc</b> (không bộ lọc nào: “Không có tin nhắn nào khớp “…”. Thử từ khác hoặc viết ngắn hơn.”, không nút). Lỗi: icon 24 + “Chưa tìm được. Kiểm tra kết nối rồi thử lại.” + <b>Thử lại</b>.</li>
+  </ul>
+</section>
+
+<!-- ============================ 5 ============================ -->
+<section class="screen" id="s5" aria-labelledby="h5s">
+  <div class="screen-head">
+    <h2 id="h5s">5 · Điện thoại: màn tìm toàn màn, chip cuộn ngang, sheet lọc</h2>
+    <p>Chạm viên thuốc “Tìm trong chat”: viên thuốc đứng yên tại chỗ (không có màn mới trượt vào), ☰ xoay thành ← , avatar mờ đi, viền accent 2px hiện, danh sách Trang chủ mờ đi và panel gợi ý dâng lên. Trang kết quả có chip cuộn ngang; chip mở danh sách mở <b>bottom sheet</b> thay cho Popover.</p>
+  </div>
+  <div class="phones">
+    <div class="phone-wrap">
+      <div class="scene-bar"><b>Nghỉ → focus</b><button class="replay" type="button" data-replay="ph1"><svg class="i s"><use href="#i-replay"/></svg>Phát lại</button></div>
+      <div class="phone" id="ph1">
+        <div class="ph-top"><div class="ph-pill">
+          <span class="ph-lead"><button class="ibtn ph-menu" type="button" aria-label="Mở menu chính"><svg class="i"><use href="#i-menu"/></svg></button><button class="ibtn ph-back" type="button" aria-label="Đóng tìm kiếm"><svg class="i"><use href="#i-back"/></svg></button></span>
+          <input type="search" placeholder="Tìm trong chat" aria-label="Tìm trong chat" id="ph1-input">
+          <span class="ph-av"><span class="av" style="--p:var(--color-person-3)">HN</span></span>
+        </div></div>
+        <div class="ph-stack">
+          <div class="ph-layer ph-home">
+            <div class="ph-title">Trang chủ</div>
+            <div class="ph-row"><span class="sp">ĐS</span><span><b>Đối soát Q4</b><small>Trần Lan Anh: Mình gửi bảng đối soát công nợ…</small></span><time>09:12</time></div>
+            <div class="ph-row"><span class="av" style="--p:var(--color-person-2)">LV</span><span><b>Lê Quang Vinh</b><small>Bạn: Ok anh, chiều em gửi</small></span><time>08:47</time></div>
+            <div class="ph-row"><span class="sp" style="--p:var(--color-person-5)">KT</span><span><b>Kế toán tổng hợp</b><small>Phạm Hải Yến: Lịch chốt sổ tuần sau</small></span><time>Hôm qua</time></div>
+            <div class="ph-row"><span class="sp" style="--p:var(--color-person-7)">TH</span><span><b>Thuế &amp; hoá đơn</b><small>Đỗ Thu Hà: Hoá đơn tháng 9 đủ rồi</small></span><time>Thứ Hai</time></div>
+            <div class="ph-row"><span class="av" style="--p:var(--color-person-6)">LA</span><span><b>Trần Lan Anh</b><small>Cảm ơn bạn nhé!</small></span><time>12/10</time></div>
+          </div>
+          <div class="ph-layer ph-panel" data-panel></div>
+        </div>
+        <div class="ph-toast"></div>
+      </div>
+    </div>
+    <div class="phone-wrap">
+      <div class="scene-bar"><b>Kết quả + sheet lọc</b><button class="replay" type="button" data-replay="phr"><svg class="i s"><use href="#i-replay"/></svg>Phát lại</button></div>
+      <div class="phone" id="phr">
+        <div class="ph-top"><div class="ph-pill focused"><button class="ibtn" type="button" aria-label="Đóng tìm kiếm"><svg class="i"><use href="#i-back"/></svg></button><input type="search" value="đối soát" aria-label="Tìm trong chat"><button class="ibtn" type="button" aria-label="Xoá chữ đã nhập"><svg class="i"><use href="#i-x"/></svg></button></div></div>
+        <div class="ph-stack"><div class="ph-layer ph-res" id="rv-phone"></div></div>
+      </div>
+    </div>
+  </div>
+  <ul class="notes">
+    <li><b>Mở màn tìm:</b> ☰ → ←: icon cũ xoay −90° + fade, icon mới từ 90° → 0 + fade, 160ms <code>--ease-out</code>; avatar fade 160ms; viền accent 2px (lớp riêng) fade 160ms; danh sách sau fade ra 120ms <code>--ease-in</code>; panel <code>translateY(8px)</code> + fade 220ms <code>--ease-out</code> sau 60ms, hàng lệch 20ms. Bàn phím mở ngay khung đầu (focus đồng bộ trong cú chạm, để iOS chịu mở bàn phím). Đóng (← hoặc back hệ điều hành): ngược lại, 160ms, giữ vị trí cuộn của danh sách.</li>
+    <li><b>Hàng chip</b> cao 36, cách 8, đệm ngang 12, cuộn ngang với <code>ScrollFade</code> (mép còn chip mờ dần). Chip đang bật luôn cuộn vào tầm nhìn sau khi chọn.</li>
+    <li><b>Sheet lọc</b> (§5 hành vi sheet): nền <code>--color-scrim</code> fade 220ms, sheet <code>translateY(100%)</code>→0 280ms expo, ra 210ms <code>--ease-in</code>, bo 24 hai góc trên, tay kéo 32×4, cao tối đa 85%. Người gửi / Trong: tiêu đề 19/600 + ô tìm viên thuốc 44 (chữ 16px) + hàng 56 (Avatar 36). Ngày: hàng radio 52 + Tuỳ chọn khoảng mở hai ô ngày 44 + Áp dụng 44. Chọn = áp dụng + đóng. Kéo xuống quá 25%, chạm scrim, back: đóng không đổi gì.</li>
+    <li>Kết quả: thẻ đệm 12/16, chữ 16px, không bo (tràn mép), cùng trạng thái như máy tính; dòng “N tin nhắn” 13px mờ dưới hàng chip.</li>
+  </ul>
+</section>
+
+<!-- ============================ 6 ============================ -->
+<section class="screen" id="s6" aria-labelledby="h6s">
+  <div class="screen-head">
+    <h2 id="h6s">6 · Bàn phím, a11y, phạm vi theo module</h2>
+  </div>
+  <table class="tbl">
+    <thead><tr><th>Phím / thao tác</th><th>Ở đâu</th><th>Kết quả</th></tr></thead>
+    <tbody>
+      <tr><td>/</td><td>Bất cứ đâu trong Chat, trừ khi đang gõ trong ô nhập</td><td>Focus ô tìm, bề mặt nở. Nhớ phần tử đang focus để trả về khi đóng bằng Esc.</td></tr>
+      <tr><td>↑ / ↓</td><td>Ô tìm (bề mặt mở)</td><td>Đi qua mọi hàng của mọi nhóm, vòng đầu–cuối; focus vẫn ở ô (<code>aria-activedescendant</code>).</td></tr>
+      <tr><td>Enter</td><td>Ô tìm</td><td>Có hàng chọn: chọn hàng đó. Không có: Xem tất cả kết quả (ô trống thì không làm gì). Lưu chuỗi vào Tìm gần đây.</td></tr>
+      <tr><td>Delete</td><td>Ô tìm, hàng chọn là lần tìm cũ</td><td>Xoá lần tìm đó (co hàng), chọn hàng kế tiếp. Ô có chữ mà con trỏ ở giữa thì Delete xoá chữ như thường, chỉ xoá lần tìm khi ô trống.</td></tr>
+      <tr><td>Tab</td><td>Ô tìm, nhóm Tìm gần đây có “Xoá tất cả”</td><td>Focus vào Xoá tất cả (phần tử duy nhất Tab tới được trong bề mặt); Tab lần nữa rời bề mặt và đóng nó. Shift+Tab về ô.</td></tr>
+      <tr><td>Esc</td><td>Ô tìm</td><td>Lần 1: thu bề mặt, giữ chữ, focus ở ô. Lần 2 (đã thu, có chữ): xoá chữ. Lần 3 (ô trống): rời ô, focus về chỗ trước khi bấm <span class="kbd">/</span> (mở bằng chuột thì ở lại ô).</td></tr>
+      <tr><td>Esc</td><td>Danh sách chọn / sheet của chip</td><td>Đóng, không đổi bộ lọc, focus về chip.</td></tr>
+      <tr><td>Esc</td><td>Trang kết quả</td><td>Không đóng trang (tránh mất kết quả vì một phím). Đóng bằng ← “Đóng tìm kiếm”, ✕ trong ô, hoặc Quay lại.</td></tr>
+    </tbody>
+  </table>
+  <ul class="notes">
+    <li><b>Ô tìm</b> là <code>combobox</code> (<code>aria-expanded</code>, <code>aria-controls</code> → listbox, <code>aria-autocomplete="list"</code>, <code>aria-activedescendant</code>). Gợi ý là <code>listbox</code> chia <code>group</code> có nhãn; mỗi hàng là <code>option</code> có tên đầy đủ (“Tìm lại đối soát tháng 10”, “Trần Lan Anh, Kế toán viên”, “Tin của Lê Quang Vinh trong Đối soát Q4: …”). ✕ trên máy tính là của chuột (<code>aria-hidden</code>, <code>tabindex=-1</code>); bàn phím dùng Delete; chân bề mặt ghi phím.</li>
+    <li><b>Thông báo</b> (<code>aria-live="polite"</code>, một vùng chung): “5 gợi ý” khi mở, “Đã xoá đối soát tháng 10 khỏi Tìm gần đây”, “Đã xoá 5 lần tìm gần đây” (toast), “Đang tìm…”, “32 tin nhắn” / “Không có kết quả” khi trang kết quả đổi.</li>
+    <li><b>Chip:</b> chip mở danh sách là <code>button</code> có <code>aria-haspopup="dialog"</code> + <code>aria-expanded</code> (danh sách có ô tìm nên là dialog không modal chứa listbox); tên khi bật đọc cả loại: “Người gửi: Trần Lan Anh”. Chip bật/tắt là <code>button aria-pressed</code>. ✕ là nút riêng “Bỏ lọc Người gửi: Trần Lan Anh”; sau khi bỏ, focus về chính chip đó. Trong danh sách: focus vào ô tìm, ↑↓ chọn, Enter áp dụng; đóng thì focus về chip. Hàng chip là một <code>toolbar</code> (<code>aria-label="Bộ lọc"</code>), ←/→ đi giữa chip.</li>
+    <li><b>Trang kết quả:</b> <code>region aria-label="Kết quả tìm kiếm"</code>, <code>aria-busy</code> khi đang tải; danh sách là <code>list</code> các link (tên link = người gửi + cuộc trò chuyện + giờ + nội dung). Điện thoại: ô tìm là ô tìm thường; gợi ý là nút; ✕ của lần tìm cũ là nút riêng có tên; sheet là modal đầy đủ (focus trap, trả focus về chip). Cất bàn phím không đóng gợi ý.</li>
+    <li><b>Không định danh thô:</b> mọi người là tên hiển thị + Avatar, mọi cuộc là tên; URL mang khoá nội bộ để chia sẻ được nhưng không chuỗi nào lên màn hình. Người gửi và Trong luôn chọn từ danh sách, không gõ khoá.</li>
+  </ul>
+  <table class="tbl">
+    <thead><tr><th>Module</th><th>Nở ra + Tìm gần đây xoá được</th><th>Nhóm gợi ý khi trống</th><th>Gõ chữ</th><th>Chip lọc đợt này</th></tr></thead>
+    <tbody>
+      <tr><td>Chat</td><td>Có</td><td>Trò chuyện gần đây</td><td>Gợi ý tức thì (Người, Nhóm, Tin nhắn) + trang kết quả</td><td>Người gửi · Trong · Ngày · Có tệp · Có liên kết · Nhắc đến tôi</td></tr>
+      <tr><td>Tài liệu</td><td>Có</td><td>Sửa gần đây trong &lt;thư mục&gt; · Được chia sẻ với tôi</td><td>Bề mặt thu phần danh sách, lọc tại chỗ như cũ</td><td>Không (giữ chip loại tệp hiện có)</td></tr>
+      <tr><td>Danh bạ</td><td>Có</td><td>Nhắn gần đây</td><td>Lọc tại chỗ như cũ</td><td>Không</td></tr>
+      <tr><td>Tài sản</td><td>Có</td><td>Bạn đang giữ · Hoạt động gần đây</td><td>Lọc tại chỗ như cũ</td><td>Không</td></tr>
+      <tr><td>Phê duyệt</td><td>Có</td><td>Chờ bạn duyệt · Đề nghị của bạn</td><td>Lọc tab đang mở như cũ</td><td>Không</td></tr>
+    </tbody>
+  </table>
+</section>
+</div>
+
+<script>
+(function () {
+'use strict';
+var root = document.documentElement;
+function $(id) { return document.getElementById(id); }
+function reduced() { return $('root').classList.contains('reduce') || matchMedia('(prefers-reduced-motion: reduce)').matches; }
+function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+function fold(s) { return s.normalize('NFC').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase(); }
+/* highlight the folded match of q in text (NFC Vietnamese folds 1:1 per character) */
+function hl(text, q) {
+  text = text.normalize('NFC'); if (!q) return esc(text);
+  var f = fold(text), fq = fold(q.trim()); var i = fq ? f.indexOf(fq) : -1;
+  if (i < 0) return esc(text);
+  return esc(text.slice(0, i)) + '<mark>' + esc(text.slice(i, i + fq.length)) + '</mark>' + esc(text.slice(i + fq.length));
+}
+function svg(id, s) { return '<svg class="i' + (s === false ? '' : ' s') + '"><use href="#' + id + '"/></svg>'; }
+
+document.querySelectorAll('[data-theme-set]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var v = b.getAttribute('data-theme-set');
+    if (v === 'system') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', v);
+    document.querySelectorAll('[data-theme-set]').forEach(function (o) { o.setAttribute('aria-pressed', String(o === b)); });
+  });
+});
+$('reduce').addEventListener('change', function (e) { $('root').classList.toggle('reduce', e.target.checked); });
+
+/* desktop chrome + scale the 1180px frame down on narrow review screens (no horizontal scroll) */
+document.querySelectorAll('[data-rail]').forEach(function (n) { n.appendChild($('t-rail').content.cloneNode(true)); });
+document.querySelectorAll('[data-lp]').forEach(function (n) { n.appendChild($('t-lp').content.cloneNode(true)); });
+document.querySelectorAll('[data-conv]').forEach(function (n) { n.appendChild($('t-conv').content.cloneNode(true)); });
+function fit() {
+  document.querySelectorAll('.fit').forEach(function (f) {
+    var z = Math.min(1, f.clientWidth / 1196); var d = f.firstElementChild;
+    d.style.zoom = z < 1 ? z : ''; f.style.height = z < 1 ? (636 * z) + 'px' : '';
+  });
+}
+addEventListener('resize', fit); fit();
+
+/* ---------------- data (names only, never keys) ---------------- */
+var RECENTS = ['đối soát tháng 10', 'hợp đồng thuê văn phòng', 'biên bản kiểm kê', 'lương tháng 9', 'hoá đơn Viettel'];
+var RECENT_CONVS = [
+  { name: 'Đối soát Q4', g: 1, ab: 'ĐS', p: 4, meta: 'Trần Lan Anh: Mình gửi bảng đối soát công nợ…', when: '09:12' },
+  { name: 'Lê Quang Vinh', g: 0, ab: 'LV', p: 2, meta: 'Bạn: Ok anh, chiều em gửi', when: '08:47' },
+  { name: 'Kế toán tổng hợp', g: 1, ab: 'KT', p: 5, meta: 'Phạm Hải Yến: Lịch chốt sổ tuần sau', when: 'Hôm qua' }
+];
+var PEOPLE = [
+  { n: 'Trần Lan Anh', ab: 'LA', p: 6, meta: 'Kế toán viên · Phòng Tài chính' },
+  { n: 'Lê Quang Vinh', ab: 'LV', p: 2, meta: 'Trưởng nhóm đối soát · Phòng Tài chính' },
+  { n: 'Phạm Hải Yến', ab: 'HY', p: 5, meta: 'Kế toán trưởng · Phòng Tài chính' },
+  { n: 'Nguyễn Minh Đức', ab: 'MĐ', p: 1, meta: 'Chuyên viên kho · Phòng Vận hành' },
+  { n: 'Đỗ Thu Hà', ab: 'TH', p: 8, meta: 'Hành chính · Văn phòng' }
+];
+var ME = { n: 'Hoàng Nguyễn', ab: 'HN', p: 3 };
+var CONVS = [
+  { name: 'Đối soát Q4', g: 1, ab: 'ĐS', p: 4, meta: 'Nhóm · 14 thành viên' },
+  { name: 'Đối soát ngân hàng', g: 1, ab: 'NH', p: 3, meta: 'Nhóm · 6 thành viên' },
+  { name: 'Kế toán tổng hợp', g: 1, ab: 'KT', p: 5, meta: 'Nhóm · 22 thành viên' },
+  { name: 'Thuế & hoá đơn', g: 1, ab: 'TH', p: 7, meta: 'Nhóm · 9 thành viên' },
+  { name: 'Lê Quang Vinh', g: 0, ab: 'LV', p: 2, meta: 'Trò chuyện trực tiếp' }
+];
+function person(n) { if (n === ME.n) return ME; return PEOPLE.filter(function (x) { return x.n === n; })[0]; }
+function conv(n) { return CONVS.filter(function (x) { return x.name === n; })[0]; }
+var MSGS = [
+  { from: 'Trần Lan Anh', in: 'Đối soát Q4', d: 0, t: '09:12', text: 'Mình gửi bảng đối soát công nợ tháng 10, mọi người xem giúp cột chênh lệch nhé.', file: 'Đối soát công nợ T10.xlsx' },
+  { from: 'Lê Quang Vinh', in: 'Đối soát Q4', d: 0, t: '08:30', text: '@Hoàng Nguyễn em kiểm tra lại số đối soát với Vietcombank trước 15h giúp anh.', me: 1 },
+  { from: 'Phạm Hải Yến', in: 'Kế toán tổng hợp', d: 1, t: 'Hôm qua 16:05', text: 'Lịch chốt sổ: thứ Năm đối soát ngân hàng, thứ Sáu khoá sổ. Ai vướng thì báo mình trước thứ Tư.' },
+  { from: 'Trần Lan Anh', in: 'Đối soát ngân hàng', d: 3, t: 'Thứ Năm 10:41', text: 'Sao kê tháng 10 ở đây, đối soát xong dòng nào mình tô xanh dòng đó nhé.', link: 'Sao kê Vietcombank tháng 10' },
+  { from: 'Lê Quang Vinh', in: 'Lê Quang Vinh', d: 6, t: 'Thứ Hai 14:20', text: 'Biên bản đối soát quý 3 anh ký rồi, em lưu vào thư mục Quyết toán nhé.', file: 'Biên bản đối soát Q3.pdf' },
+  { from: 'Nguyễn Minh Đức', in: 'Kế toán tổng hợp', d: 12, t: '06/10', text: 'Kho đã đối soát tồn thực tế với sổ, lệch 3 thùng giấy A4, em đang tìm nguyên nhân.' },
+  { from: 'Đỗ Thu Hà', in: 'Thuế & hoá đơn', d: 20, t: '28/09', text: '@Hoàng Nguyễn hoá đơn Viettel tháng 9 cần đối soát lại thông tin người mua trước khi kê khai.', me: 1 },
+  { from: 'Phạm Hải Yến', in: 'Đối soát Q4', d: 25, t: '23/09', text: 'Mẫu đối soát mới đã lên Tài liệu, từ tháng sau mọi người dùng bản này.', link: 'Mẫu đối soát công nợ 2026' },
+  { from: 'Trần Lan Anh', in: 'Đối soát ngân hàng', d: 41, t: '07/09', text: 'Đã đối soát xong tháng 8, không có chênh lệch.' }
+];
+function mark(p) { return p.g === 0 || p.g === undefined && p.n ? '<span class="av" style="--p:var(--color-person-' + p.p + ')">' + esc(p.ab) + '</span>' : '<span class="sp" style="--p:var(--color-person-' + p.p + ')">' + esc(p.ab) + '</span>'; }
+function mark20(p) { var isGroup = p.g === 1; return '<span class="' + (isGroup ? 'sp' : 'av') + ' s20" style="--p:var(--color-person-' + p.p + ')">' + esc(p.ab) + '</span>'; }
+function msgText(m, q) { return hl(m.text, q).replace(/@Hoàng Nguyễn/g, '<span class="mention">@Hoàng Nguyễn</span>'); }
+
+/* ---------------- suggestion list rendering (desktop listbox or phone buttons) ---------------- */
+var uid = 0;
+function renderPanel(state, phone) {
+  var h = '', i = 0, q = state.q.trim();
+  function a() { return ' anim" style="--i:' + Math.min(i++, 7); }
+  var tagOpt = phone ? 'button type="button"' : 'div role="option" aria-selected="false"';
+  var endOpt = phone ? 'button' : 'div';
+  if (!q) {
+    if (state.recents.length) {
+      h += '<div class="rr-grp" data-grp="recent"><div class="sg-label' + a() + '"><span id="gl-r' + (++uid) + '">Tìm gần đây</span>' + (state.recents.length > 1 ? '<button class="tbtn" type="button" data-clear-all>Xoá tất cả</button>' : '') + '</div><div role="group" aria-labelledby="gl-r' + uid + '">';
+      state.recents.slice(0, phone ? 8 : 5).forEach(function (r) {
+        var body = '<span class="ico">' + svg('i-clock') + '</span><span><b>' + esc(r) + '</b></span>';
+        h += '<div class="rr" data-recent="' + esc(r) + '"><div class="rr-in">' + (phone
+          ? '<div class="sg-row ph-rec' + a() + '"><button class="ph-main" type="button" data-q="' + esc(r) + '" aria-label="Tìm lại ' + esc(r) + '">' + body + '</button><button class="rm" type="button" aria-label="Xoá “' + esc(r) + '” khỏi Tìm gần đây">' + svg('i-x') + '</button></div>'
+          : '<div role="option" aria-selected="false" class="sg-row' + a() + '" data-q="' + esc(r) + '">' + body + '<button class="rm" type="button" tabindex="-1" aria-hidden="true">' + svg('i-x') + '</button></div>') + '</div></div>';
+      });
+      h += '</div></div>';
+    }
+    h += '<div class="sg-label' + a() + '"><span>Trò chuyện gần đây</span></div><div role="group" aria-label="Trò chuyện gần đây">';
+    RECENT_CONVS.forEach(function (c) { h += '<' + tagOpt + ' class="sg-row' + a() + '" data-open="' + esc(c.name) + '">' + mark(c) + '<span><b>' + esc(c.name) + '</b><small>' + esc(c.meta) + '</small></span><span class="when">' + esc(c.when) + '</span></' + endOpt + '>'; });
+    h += '</div>';
+    return h;
+  }
+  var fq = fold(q);
+  var ppl = PEOPLE.filter(function (p) { return fold(p.n).indexOf(fq) >= 0; }).slice(0, 3);
+  var cvs = CONVS.filter(function (c) { return fold(c.name).indexOf(fq) >= 0; }).slice(0, 3);
+  var ms = q.length >= 2 ? MSGS.filter(function (m) { return fold(m.text).indexOf(fq) >= 0; }).slice(0, 3) : [];
+  if (ppl.length) {
+    h += '<div class="sg-label"><span>Người</span></div><div role="group" aria-label="Người">';
+    ppl.forEach(function (p) { h += '<' + tagOpt + ' class="sg-row" data-open="' + esc(p.n) + '">' + mark(p) + '<span><b>' + hl(p.n, q) + '</b><small>' + esc(p.meta) + '</small></span><span></span></' + endOpt + '>'; });
+    h += '</div>';
+  }
+  if (cvs.length) {
+    h += '<div class="sg-label"><span>Nhóm và trò chuyện</span></div><div role="group" aria-label="Nhóm và trò chuyện">';
+    cvs.forEach(function (c) { h += '<' + tagOpt + ' class="sg-row" data-open="' + esc(c.name) + '">' + mark(c) + '<span><b>' + hl(c.name, q) + '</b><small>' + esc(c.meta) + '</small></span><span></span></' + endOpt + '>'; });
+    h += '</div>';
+  }
+  if (state.msgLoading && q.length >= 2) {
+    h += '<div class="sg-label"><span>Tin nhắn</span></div><div aria-hidden="true"><div class="sg-skel"><span class="skeleton" style="width:32px;height:32px;border-radius:50%"></span><span class="skeleton" style="height:12px;width:70%"></span></div><div class="sg-skel"><span class="skeleton" style="width:32px;height:32px;border-radius:50%"></span><span class="skeleton" style="height:12px;width:55%"></span></div></div>';
+  } else if (ms.length) {
+    h += '<div class="sg-label"><span>Tin nhắn</span></div><div role="group" aria-label="Tin nhắn">';
+    ms.forEach(function (m) { var p = person(m.from); h += '<' + tagOpt + ' class="sg-row" data-open="tin của ' + esc(m.from) + ' trong ' + esc(m.in) + '">' + mark(p) + '<span><b>' + hl(m.text, q) + '</b><small>' + esc(m.from) + ' · ' + esc(m.in) + ' · ' + esc(m.t) + '</small></span><span></span></' + endOpt + '>'; });
+    h += '</div>';
+  }
+  if (!ppl.length && !cvs.length && !ms.length && !state.msgLoading) h += '<p class="sg-empty" style="padding:12px 16px 4px">Không có gợi ý. Nhấn Enter để tìm trong mọi tin nhắn.</p>';
+  h += '<div style="height:4px"></div><' + tagOpt + ' class="sg-row all" data-all="1"><span class="ico">' + svg('i-search') + '</span><span><b>Xem tất cả kết quả cho “' + esc(q) + '”</b></span>' + (phone ? '<span></span>' : '<span class="kbd" style="margin-right:8px">Enter</span>') + '</' + endOpt + '>';
+  return h;
+}
+
+/* ---------------- desktop search surface ---------------- */
+function DeskSearch(id) {
+  var sx = $(id); sx.appendChild($('t-sx').content.cloneNode(true));
+  var input = sx.querySelector('input'), list = sx.querySelector('.sx-list'), foot = sx.querySelector('.sx-foot'), clear = sx.querySelector('.sx-clear');
+  var out = $('out-' + id), toasts = sx.closest('.desk').querySelector('.toasts');
+  var st = { q: '', recents: RECENTS.slice(), msgLoading: false }, active = -1, openNow = false, closeT, msgT, returnTo = null, toastT;
+  list.id = id + '-list'; input.setAttribute('aria-controls', list.id);
+  function say(t) { if (out) out.textContent = t; }
+  function opts() { return Array.prototype.slice.call(list.querySelectorAll('[role="option"]')); }
+  function setActive(i) {
+    var o = opts(); active = o.length ? (i + o.length) % o.length : -1; if (i < 0 && i !== -1) active = (i + o.length) % o.length;
+    o.forEach(function (r, n) { r.id = id + '-o' + n; r.setAttribute('aria-selected', String(n === active)); });
+    if (active >= 0) { input.setAttribute('aria-activedescendant', o[active].id); o[active].scrollIntoView({ block: 'nearest' }); } else input.removeAttribute('aria-activedescendant');
+  }
+  function render(animate) {
+    list.innerHTML = renderPanel(st, false);
+    list.classList.toggle('enter-rows', !!animate && !reduced());
+    foot.hidden = false; active = -1; input.removeAttribute('aria-activedescendant');
+  }
+  function open(animate) {
+    clearTimeout(closeT); sx.classList.remove('closing');
+    if (!openNow) { render(animate !== false); list.hidden = false; }
+    openNow = true;
+    requestAnimationFrame(function () { sx.classList.add('open'); });
+    input.setAttribute('aria-expanded', 'true');
+    clear.hidden = !st.q;
+  }
+  function close() {
+    if (!openNow) return; openNow = false;
+    sx.classList.add('closing'); sx.classList.remove('open'); input.setAttribute('aria-expanded', 'false');
+    closeT = setTimeout(function () { list.hidden = true; foot.hidden = true; sx.classList.remove('closing'); }, reduced() ? 0 : 210);
+    sx.classList.toggle('has-q', !!st.q); clear.hidden = !st.q;
+  }
+  function setQ(v) {
+    st.q = v; sx.classList.toggle('has-q', !!v); clear.hidden = !v;
+    clearTimeout(msgT);
+    if (v.trim().length >= 2) { st.msgLoading = true; msgT = setTimeout(function () { st.msgLoading = false; if (openNow) { render(false); } }, 550); }
+    if (!openNow) open(false); else render(false);
+    if (!v) list.classList.add('enter-rows');
+  }
+  function persist(q) {
+    q = q.trim(); if (q.length < 2) return;
+    st.recents = [q].concat(st.recents.filter(function (r) { return fold(r) !== fold(q); })).slice(0, 8);
+  }
+  function choose(r) {
+    if (r.hasAttribute('data-q')) { input.value = r.getAttribute('data-q'); setQ(input.value); say('Điền “' + input.value + '” và gợi ý theo chữ đó, như khi vừa gõ.'); return; }
+    if (r.hasAttribute('data-all')) { persist(st.q); close(); say('Thu bề mặt, mở trang kết quả cho “' + st.q.trim() + '” (xem §4).'); return; }
+    persist(st.q); close(); say('Mở ' + r.getAttribute('data-open') + '.');
+  }
+  function removeRecent(text, row) {
+    var wrap = row.closest('.rr'); var grp = row.closest('.rr-grp');
+    var left = st.recents.filter(function (r) { return r !== text; });
+    var o = opts(), idx = o.indexOf(row);
+    st.recents = left;
+    function done() {
+      wrap.remove();
+      if (!left.length && grp) grp.remove();
+      else if (left.length < 2 && grp) { var b = grp.querySelector('[data-clear-all]'); if (b) b.remove(); }
+      var n = opts(); if (idx >= 0 && document.activeElement === input && active >= 0) setActive(Math.min(idx, n.length - 1));
+    }
+    if (left.length === 0 && grp) { grp.style.display = 'grid'; grp.style.gridTemplateRows = '1fr'; }
+    wrap.classList.add('gone');
+    if (!left.length && grp) grp.querySelectorAll('.sg-label').forEach(function (l) { l.style.opacity = '0'; l.style.transition = 'opacity 160ms var(--ease-in)'; });
+    setTimeout(done, reduced() ? 120 : 170);
+    say('Đã xoá “' + text + '” khỏi Tìm gần đây.');
+  }
+  function clearAll() {
+    var saved = st.recents.slice(); var grp = list.querySelector('.rr-grp'); if (!grp) return;
+    st.recents = [];
+    grp.querySelectorAll('.rr').forEach(function (w) { w.classList.add('gone'); });
+    var lab = grp.querySelector('.sg-label'); lab.style.transition = 'opacity 160ms var(--ease-in)'; lab.style.opacity = '0';
+    setTimeout(function () { grp.remove(); active = -1; input.removeAttribute('aria-activedescendant'); }, reduced() ? 120 : 170);
+    input.focus({ preventScroll: true });
+    toast('Đã xoá ' + saved.length + ' lần tìm gần đây', function () { st.recents = saved; if (openNow && !st.q) { render(true); } say('Đã khôi phục Tìm gần đây.'); });
+    say('Toast “Đã xoá ' + saved.length + ' lần tìm gần đây” + Hoàn tác, 5 giây.');
+  }
+  function toast(text, undo) {
+    clearTimeout(toastT); toasts.innerHTML = '';
+    var t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status');
+    t.innerHTML = '<span>' + esc(text) + '</span><button type="button">Hoàn tác</button>';
+    t.querySelector('button').addEventListener('mousedown', function (e) { e.preventDefault(); });
+    t.querySelector('button').addEventListener('click', function () { undo(); hide(); });
+    toasts.appendChild(t);
+    function hide() { t.classList.add('out'); setTimeout(function () { t.remove(); }, 160); }
+    toastT = setTimeout(hide, 5000);
+  }
+  input.addEventListener('focus', function () { open(true); });
+  input.addEventListener('input', function () { setQ(input.value); });
+  input.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { if (!openNow) open(false); e.preventDefault(); var o = opts(); if (!o.length) return; setActive(active < 0 ? (e.key === 'ArrowDown' ? 0 : o.length - 1) : active + (e.key === 'ArrowDown' ? 1 : -1)); }
+    else if (e.key === 'Enter') { e.preventDefault(); var o2 = opts(); if (openNow && active >= 0) choose(o2[active]); else if (st.q.trim()) { persist(st.q); close(); say('Mở trang kết quả cho “' + st.q.trim() + '” (xem §4).'); } }
+    else if (e.key === 'Delete') { var o3 = opts(); var r = o3[active]; if (openNow && !input.value && r && r.hasAttribute('data-q')) { e.preventDefault(); removeRecent(r.getAttribute('data-q'), r); } }
+    else if (e.key === 'Escape') { e.preventDefault(); if (openNow) close(); else if (input.value) { input.value = ''; st.q = ''; sx.classList.remove('has-q'); clear.hidden = true; } else { input.blur(); if (returnTo) returnTo.focus(); } }
+    else if (e.key === 'Tab' && !e.shiftKey && openNow) { var b = list.querySelector('[data-clear-all]'); if (b && !st.q) { e.preventDefault(); b.focus(); } }
+  });
+  sx.addEventListener('keydown', function (e) { if (e.key === 'Escape' && e.target.hasAttribute('data-clear-all')) { e.preventDefault(); input.focus(); } });
+  sx.addEventListener('focusout', function () { setTimeout(function () { if (!sx.contains(document.activeElement)) close(); }, 0); });
+  list.addEventListener('mousedown', function (e) { if (!e.target.closest('[data-clear-all]')) e.preventDefault(); });
+  list.addEventListener('click', function (e) {
+    if (e.target.closest('[data-clear-all]')) { clearAll(); return; }
+    var rm = e.target.closest('.rm'), r = e.target.closest('[role="option"]');
+    if (rm && r) { e.stopPropagation(); removeRecent(r.getAttribute('data-q'), r); } else if (r) choose(r);
+  });
+  clear.addEventListener('mousedown', function (e) { e.preventDefault(); });
+  clear.addEventListener('click', function () { input.value = ''; setQ(''); input.focus(); });
+  sx.querySelector('.sx-surface').addEventListener('mousedown', function (e) { if (e.target === input || e.target.closest('button,[role="option"]')) return; e.preventDefault(); input.focus(); });
+  document.addEventListener('mousedown', function (e) { if (!sx.contains(e.target) && !toasts.contains(e.target)) close(); });
+  return {
+    sx: sx, input: input,
+    reset: function () { st.recents = RECENTS.slice(); st.q = ''; input.value = ''; sx.classList.remove('has-q'); clear.hidden = true; },
+    replay: function (after) { close(); var self = this; setTimeout(function () { input.focus({ preventScroll: true }); if (after) after(); }, reduced() ? 50 : 520); },
+    openStatic: function () { openNow = false; render(false); list.hidden = false; foot.hidden = false; openNow = true; sx.classList.add('open'); input.setAttribute('aria-expanded', 'true'); },
+    type: function (text) { var n = 0; input.value = ''; setQ(''); var t = setInterval(function () { n++; input.value = text.slice(0, n); setQ(input.value); if (n >= text.length) clearInterval(t); }, reduced() ? 20 : 140); },
+    setQuery: function (q) { input.value = q; st.q = q; sx.classList.toggle('has-q', !!q); clear.hidden = !q; },
+    returnTo: function (el) { returnTo = el; }
+  };
+}
+
+var sx1 = DeskSearch('sx1'), sx2 = DeskSearch('sx2'), sx3 = DeskSearch('sx3'), sx4 = DeskSearch('sx4');
+sx2.openStatic();
+sx4.setQuery('đối soát');
+/* "/" focuses the first visible Chat search (mockup: §1) */
+document.addEventListener('keydown', function (e) {
+  if (e.key !== '/' || /INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
+  e.preventDefault(); sx1.returnTo(document.activeElement); sx1.input.focus();
+});
+
+/* ---------------- phone suggestion panels ---------------- */
+function PhonePanel(phone, startQ) {
+  var host = phone.querySelector('[data-panel]'), toastHost = phone.querySelector('.ph-toast');
+  var st = { q: startQ || '', recents: RECENTS.slice(), msgLoading: false }, tT;
+  function render(animate) { host.innerHTML = renderPanel(st, true); host.classList.toggle('enter-rows', !!animate && !reduced()); }
+  host.addEventListener('click', function (e) {
+    var ca = e.target.closest('[data-clear-all]');
+    if (ca) {
+      var saved = st.recents.slice(); st.recents = [];
+      var grp = host.querySelector('.rr-grp'); grp.querySelectorAll('.rr').forEach(function (w) { w.classList.add('gone'); });
+      grp.querySelector('.sg-label').style.opacity = '0';
+      setTimeout(function () { grp.remove(); }, reduced() ? 120 : 170);
+      if (toastHost) {
+        clearTimeout(tT); toastHost.innerHTML = '<div class="toast" role="status"><span>Đã xoá ' + saved.length + ' lần tìm gần đây</span><button type="button">Hoàn tác</button></div>';
+        toastHost.querySelector('button').addEventListener('click', function () { st.recents = saved; render(true); toastHost.innerHTML = ''; });
+        tT = setTimeout(function () { var t = toastHost.querySelector('.toast'); if (t) { t.classList.add('out'); setTimeout(function () { toastHost.innerHTML = ''; }, 160); } }, 5000);
+      }
+      return;
+    }
+    var rm = e.target.closest('.rm');
+    if (rm) {
+      e.stopPropagation(); var wrap = rm.closest('.rr'), text = wrap.getAttribute('data-recent');
+      st.recents = st.recents.filter(function (r) { return r !== text; }); wrap.classList.add('gone');
+      setTimeout(function () { wrap.remove(); var grp = host.querySelector('.rr-grp'); if (grp && !st.recents.length) grp.remove(); else if (grp && st.recents.length < 2) { var b = grp.querySelector('[data-clear-all]'); if (b) b.remove(); } }, reduced() ? 120 : 170);
+    }
+  });
+  render(false);
+  return { reset: function (anim) { st.recents = RECENTS.slice(); render(anim); }, render: render };
+}
+var ph2 = PhonePanel($('ph2')); PhonePanel($('ph3'), 'đối soát');
+var ph1Panel = PhonePanel($('ph1'));
+(function () {
+  var ph = $('ph1'), inp = $('ph1-input');
+  function openS() { if (ph.classList.contains('searching')) return; ph1Panel.reset(true); ph.classList.add('searching'); }
+  function closeS() { ph.classList.remove('searching'); inp.blur(); }
+  inp.addEventListener('focus', openS);
+  ph.querySelector('.ph-back').addEventListener('click', closeS);
+  window.__ph1 = { open: function () { openS(); }, close: closeS };
+})();
+
+/* ---------------- results (shared by desktop and phone) ---------------- */
+var DATE_OPTS = [['any', 'Bất kỳ lúc nào'], ['today', 'Hôm nay'], ['7d', '7 ngày qua'], ['30d', '30 ngày qua']];
+var FILTERS = [
+  { k: 'from', label: 'Người gửi', menu: 1 }, { k: 'in', label: 'Trong', menu: 1 }, { k: 'date', label: 'Ngày', menu: 1 },
+  { k: 'file', label: 'Có tệp' }, { k: 'link', label: 'Có liên kết' }, { k: 'me', label: 'Nhắc đến tôi' }
+];
+function Results(host, phone) {
+  var f = { from: null, in: null, date: null, file: false, link: false, me: false }, state = 'ok', dd = null, q = 'đối soát';
+  host.innerHTML = (phone ? '' : '<div class="rv-head"><button class="ibtn" type="button" aria-label="Đóng tìm kiếm">' + svg('i-back', false) + '</button><h3>Kết quả tìm kiếm</h3><span class="count" aria-live="polite"></span></div>') +
+    '<div class="chips' + (phone ? ' ph-chips' : '') + '" role="toolbar" aria-label="Bộ lọc"></div>' +
+    '<div class="' + (phone ? 'ph-layer' : 'rv-body') + '" role="region" aria-label="Kết quả tìm kiếm" style="' + (phone ? 'position:relative' : '') + '">' + (phone ? '<div class="rv-count" aria-live="polite"></div>' : '') + '<div class="res"></div></div>';
+  var chips = host.querySelector('.chips'), res = host.querySelector('.res'), count = host.querySelector(phone ? '.rv-count' : '.count');
+  var phoneEl = phone ? host.closest('.phone') : null;
+  function anyOn() { return f.from || f.in || f.date || f.file || f.link || f.me; }
+  function chipLabel(F) {
+    var v = f[F.k];
+    if (F.k === 'from' && v) { var p = person(v); return '<span class="av s20" style="--p:var(--color-person-' + p.p + ')">' + esc(p.ab) + '</span>' + esc(v === ME.n ? 'Bạn' : v); }
+    if (F.k === 'in' && v) return mark20(conv(v)) + esc(v);
+    if (F.k === 'date' && v) return esc(v.label);
+    return (F.menu ? '' : (v ? '<span class="ck">' + svg('i-check') + '</span>' : '')) + esc(F.label);
+  }
+  function aria(F) { var v = f[F.k]; if (F.k === 'from' && v) return 'Người gửi: ' + (v === ME.n ? 'Bạn' : v); if (F.k === 'in' && v) return 'Trong: ' + v; if (F.k === 'date' && v) return 'Ngày: ' + v.label; return F.label; }
+  function drawChips() {
+    var h = '';
+    FILTERS.forEach(function (F) {
+      var on = !!f[F.k];
+      h += '<span class="cg' + (on ? ' on' : '') + '" data-k="' + F.k + '"><button class="chip" type="button" ' + (F.menu ? 'aria-haspopup="dialog" aria-expanded="false"' : 'aria-pressed="' + on + '"') + ' aria-label="' + esc(aria(F)) + '">' + chipLabel(F) + (F.menu && !on ? '<svg class="i s chev"><use href="#i-chev"/></svg>' : '') + '</button>' + (on && F.menu ? '<button class="cx" type="button" aria-label="Bỏ lọc ' + esc(aria(F)) + '">' + svg('i-x') + '</button>' : '') + '</span>';
+    });
+    if (anyOn()) h += '<button class="tbtn clear-all" type="button" data-clear-filters style="' + (phone ? 'height:36px;flex:none' : '') + '">Xoá bộ lọc</button>';
+    chips.innerHTML = h;
+  }
+  function flip(mutate) {
+    var before = {}; chips.querySelectorAll('[data-k]').forEach(function (c) { before[c.getAttribute('data-k')] = c.getBoundingClientRect(); });
+    mutate();
+    if (reduced()) return;
+    chips.querySelectorAll('[data-k]').forEach(function (c) {
+      var b = before[c.getAttribute('data-k')]; if (!b) return; var a = c.getBoundingClientRect();
+      var z = c.offsetWidth ? a.width / c.offsetWidth : 1; var dx = (b.left - a.left) / z, dy = (b.top - a.top) / z;
+      if (!dx && !dy) return;
+      c.style.transition = 'none'; c.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+      requestAnimationFrame(function () { requestAnimationFrame(function () { c.style.transition = 'transform var(--duration-base) var(--ease-out-expo)'; c.style.transform = ''; }); });
+    });
+  }
+  function filtered() {
+    return MSGS.filter(function (m) {
+      if (f.from && m.from !== f.from) return false;
+      if (f.in && m.in !== f.in) return false;
+      if (f.date) { var d = f.date.k; if (d === 'today' && m.d > 0) return false; if (d === '7d' && m.d > 6) return false; if (d === '30d' && m.d > 29) return false; if (d === 'range' && (m.d < 3 || m.d > 17)) return false; }
+      if (f.file && !m.file) return false; if (f.link && !m.link) return false; if (f.me && !m.me) return false;
+      return true;
+    });
+  }
+  function card(m, cls, i) {
+    var p = person(m.from), c = conv(m.in);
+    return '<a class="rc ' + cls + '" style="--i:' + Math.min(i, 7) + '" href="#s4" onclick="return false"><span class="rc-in">' + mark20(c) + esc(m.in) + '</span><span class="rc-msg">' + mark(p) + '<span><span class="rc-who"><b>' + esc(m.from) + '</b><time>' + esc(m.t) + '</time></span><span class="rc-text">' + msgText(m, q) + '</span>' +
+      (m.file ? '<span class="att">' + svg('i-file') + esc(m.file) + '</span>' : '') + (m.link ? '<span class="att lnk">' + svg('i-link') + esc(m.link) + '</span>' : '') + '</span></span></a>';
+  }
+  function draw(mode) {
+    if (state === 'loading') {
+      count.textContent = 'Đang tìm…'; var k = '';
+      for (var i = 0; i < 4; i++) k += '<div class="rk" aria-hidden="true"><span class="skeleton" style="height:12px;width:120px"></span><div class="rk-row"><span class="skeleton" style="width:32px;height:32px;border-radius:50%"></span><div style="display:grid;gap:8px"><span class="skeleton" style="height:12px;width:160px"></span><span class="skeleton" style="height:12px;width:92%"></span><span class="skeleton" style="height:12px;width:64%"></span></div></div></div>';
+      res.innerHTML = k; res.parentElement.setAttribute('aria-busy', 'true'); return;
+    }
+    res.parentElement.removeAttribute('aria-busy');
+    if (state === 'error') { count.textContent = ''; res.innerHTML = '<div class="state" role="alert">' + svg('i-alert', false) + '<p>Chưa tìm được. Kiểm tra kết nối rồi thử lại.</p><button class="btn" type="button" data-retry>Thử lại</button></div>'; return; }
+    var list = state === 'empty' ? [] : filtered();
+    count.textContent = list.length ? list.length + ' tin nhắn' : 'Không có kết quả';
+    if (!list.length) {
+      res.innerHTML = '<div class="state">' + svg('i-searchx', false) + (anyOn() || state === 'empty' && anyOn() ? '<p>Không có tin nhắn nào khớp “' + esc(q) + '” với các bộ lọc này.</p><button class="btn" type="button" data-clear-filters>Xoá bộ lọc</button>' : '<p>Không có tin nhắn nào khớp “' + esc(q) + '”. Thử từ khác hoặc viết ngắn hơn.</p>') + '</div>';
+      return;
+    }
+    var h = '';
+    if (!anyOn() && !phone) {
+      h += '<div class="sg-label"><span>Nhóm và người</span></div>';
+      [conv('Đối soát Q4'), conv('Đối soát ngân hàng')].forEach(function (c) { h += '<div class="sg-row" style="margin-inline:0">' + mark(c) + '<span><b>' + hl(c.name, q) + '</b><small>' + esc(c.meta) + '</small></span><span></span></div>'; });
+      h += '<div class="sg-label"><span>Tin nhắn</span></div>';
+    }
+    list.forEach(function (m, i) { h += card(m, mode || '', i); });
+    res.innerHTML = h;
+  }
+  function refetch() {
+    if (state !== 'ok') { draw('swap'); return; }
+    res.classList.add('busy'); res.parentElement.setAttribute('aria-busy', 'true');
+    setTimeout(function () { res.classList.remove('busy'); draw('swap'); }, reduced() ? 150 : 420);
+  }
+  function apply(k, v) { flip(function () { f[k] = v; drawChips(); }); refetch(); var c = chips.querySelector('[data-k="' + k + '"]'); if (c && phone) c.scrollIntoView({ inline: 'nearest', block: 'nearest' }); }
+  /* ---- menus: popover on desktop, bottom sheet on phone ---- */
+  function closeDd(focusChip) {
+    if (!dd) return; var d = dd; dd = null;
+    var chip = chips.querySelector('[data-k="' + d.k + '"] .chip'); if (chip) chip.setAttribute('aria-expanded', 'false');
+    d.el.classList.add('out'); if (d.scrim) d.scrim.classList.add('out');
+    setTimeout(function () { d.el.remove(); if (d.scrim) d.scrim.remove(); }, reduced() ? 0 : (phone ? 210 : 120));
+    if (focusChip && chip) chip.focus({ preventScroll: true });
+  }
+  function menuHtml(k) {
+    var h = '';
+    if (k === 'from' || k === 'in') {
+      h += '<label class="dd-search">' + svg('i-search') + '<input type="text" placeholder="' + (k === 'from' ? 'Tìm người' : 'Tìm cuộc trò chuyện') + '" aria-label="' + (k === 'from' ? 'Tìm người' : 'Tìm cuộc trò chuyện') + '" data-filter-input></label><div class="dd-list" role="listbox" aria-label="' + (k === 'from' ? 'Người gửi' : 'Trong') + '">';
+      var rows = k === 'from' ? [ME].concat(PEOPLE) : CONVS;
+      rows.forEach(function (r) {
+        var name = r.n || r.name, sel = f[k] === name;
+        h += '<button class="opt" type="button" role="option" aria-selected="' + sel + '" data-v="' + esc(name) + '" data-s="' + esc(fold(name)) + '">' + mark(r) + '<span><b>' + esc(r === ME ? 'Bạn (' + ME.n + ')' : name) + '</b><small>' + esc(r === ME ? 'Tin bạn đã gửi' : r.meta) + '</small></span><svg class="i s tick"><use href="#i-check"/></svg></button>';
+      });
+      h += '</div>';
+    } else {
+      h += '<div class="dd-list" role="listbox" aria-label="Ngày">';
+      DATE_OPTS.forEach(function (o) { var sel = (f.date ? f.date.k : 'any') === o[0]; h += '<button class="opt radio" type="button" role="option" aria-selected="' + sel + '" data-date="' + o[0] + '"><span>' + o[1] + '</span><svg class="i s tick"><use href="#i-check"/></svg></button>'; });
+      h += '<div class="dd-sep"></div><button class="opt radio" type="button" role="option" aria-selected="' + (f.date && f.date.k === 'range') + '" data-range><span>Tuỳ chọn khoảng…</span><svg class="i s tick"><use href="#i-check"/></svg></button>';
+      h += '<div class="range" hidden><label>Từ ngày<input type="date" value="2026-10-01"></label><label>Đến ngày<input type="date" value="2026-10-15"></label><button class="btn primary" type="button" data-apply-range>Áp dụng</button></div></div>';
+    }
+    return h;
+  }
+  function openDd(k, chipBtn) {
+    if (dd && dd.k === k) { closeDd(true); return; } closeDd(false);
+    var el = document.createElement('div'), scrim = null;
+    var title = { from: 'Người gửi', in: 'Trong', date: 'Ngày' }[k];
+    if (phone) {
+      scrim = document.createElement('div'); scrim.className = 'scrim'; phoneEl.appendChild(scrim);
+      el.className = 'sheet'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', title);
+      el.innerHTML = '<div class="handle" aria-hidden="true"></div><h4>' + title + '<button class="ibtn" type="button" data-close aria-label="Đóng" style="width:44px;height:44px">' + svg('i-x', false) + '</button></h4>' + '<div style="display:grid;grid-template-rows:auto minmax(0,1fr);min-height:0">' + menuHtml(k) + '</div>';
+      phoneEl.appendChild(el); scrim.addEventListener('click', function () { closeDd(true); });
+    } else {
+      el.className = 'dd'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', title);
+      el.innerHTML = menuHtml(k);
+      var cg = chipBtn.closest('.cg'); el.style.left = cg.offsetLeft + 'px'; el.style.top = (cg.offsetTop + cg.offsetHeight + 6) + 'px';
+      chips.appendChild(el);
+    }
+    chipBtn.setAttribute('aria-expanded', 'true');
+    dd = { k: k, el: el, scrim: scrim };
+    var fi = el.querySelector('[data-filter-input]');
+    if (fi) { fi.focus({ preventScroll: true }); fi.addEventListener('input', function () { var v = fold(fi.value); el.querySelectorAll('.opt').forEach(function (o) { o.hidden = o.getAttribute('data-s').indexOf(v) < 0; }); }); }
+    else el.querySelector('.opt').focus({ preventScroll: true });
+    el.addEventListener('keydown', function (e) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeDd(true); } });
+    el.addEventListener('click', function (e) {
+      if (e.target.closest('[data-close]')) { closeDd(true); return; }
+      var o = e.target.closest('.opt');
+      if (e.target.closest('[data-apply-range]')) { closeDd(true); apply('date', { k: 'range', label: '01/10 – 15/10' }); return; }
+      if (!o) return;
+      if (o.hasAttribute('data-range')) { el.querySelector('.range').hidden = false; el.querySelectorAll('.opt').forEach(function (x) { x.setAttribute('aria-selected', String(x === o)); }); return; }
+      if (o.hasAttribute('data-date')) { var dk = o.getAttribute('data-date'); closeDd(true); apply('date', dk === 'any' ? null : { k: dk, label: DATE_OPTS.filter(function (d) { return d[0] === dk; })[0][1] }); return; }
+      closeDd(true); apply(k, o.getAttribute('data-v'));
+    });
+  }
+  chips.addEventListener('click', function (e) {
+    if (e.target.closest('.dd')) return;
+    if (e.target.closest('[data-clear-filters]')) { closeDd(false); flip(function () { f = { from: null, in: null, date: null, file: false, link: false, me: false }; drawChips(); }); refetch(); return; }
+    var cx = e.target.closest('.cx'); var cg = e.target.closest('.cg'); if (!cg) return; var k = cg.getAttribute('data-k');
+    if (cx) { apply(k, null); var c = chips.querySelector('[data-k="' + k + '"] .chip'); if (c) c.focus({ preventScroll: true }); return; }
+    var F = FILTERS.filter(function (x) { return x.k === k; })[0];
+    if (F.menu) openDd(k, cg.querySelector('.chip')); else { apply(k, !f[k]); var c2 = chips.querySelector('[data-k="' + k + '"] .chip'); if (c2) c2.focus({ preventScroll: true }); }
+  });
+  chips.addEventListener('keydown', function (e) {
+    if ((e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') || e.target.closest('.dd')) return;
+    var b = Array.prototype.slice.call(chips.querySelectorAll(':scope > .cg .chip, :scope > .cg .cx, :scope > .tbtn')); var i = b.indexOf(document.activeElement); if (i < 0) return;
+    e.preventDefault(); b[(i + (e.key === 'ArrowRight' ? 1 : -1) + b.length) % b.length].focus();
+  });
+  res.addEventListener('click', function (e) {
+    if (e.target.closest('[data-clear-filters]')) { flip(function () { f = { from: null, in: null, date: null, file: false, link: false, me: false }; drawChips(); }); if (state === 'empty') setState('ok'); else refetch(); }
+    if (e.target.closest('[data-retry]')) { setState('loading'); setTimeout(function () { setState('ok', 'enter'); }, 700); }
+  });
+  document.addEventListener('mousedown', function (e) { if (!phone && dd && !dd.el.contains(e.target) && !e.target.closest('.cg')) closeDd(false); });
+  function setState(s, mode) { state = s; draw(mode || 'swap'); if (stateSeg) stateSeg.forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-st') === s)); }); }
+  var stateSeg = null;
+  drawChips(); draw('');
+  return {
+    replay: function () { closeDd(false); f = { from: null, in: null, date: null, file: false, link: false, me: false }; drawChips(); state = 'loading'; draw(); setTimeout(function () { state = 'ok'; draw('enter'); if (stateSeg) setState('ok', 'enter'); }, reduced() ? 200 : 700); },
+    setState: setState, bindSeg: function (btns) { stateSeg = btns; }
+  };
+}
+var rvDesk = Results($('rv-desk'), false), rvPhone = Results($('rv-phone'), true);
+var segBtns = Array.prototype.slice.call(document.querySelectorAll('#rstate button'));
+rvDesk.bindSeg(segBtns);
+segBtns.forEach(function (b) { b.addEventListener('click', function () { rvDesk.setState(b.getAttribute('data-st')); }); });
+
+/* ---------------- replay buttons ---------------- */
+document.querySelectorAll('[data-replay]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var k = b.getAttribute('data-replay');
+    if (k === 'sx1') { sx1.reset(); sx1.replay(); }
+    if (k === 'sx2') { sx2.reset(); sx2.replay(); }
+    if (k === 'sx3') { sx3.reset(); sx3.replay(function () { setTimeout(function () { sx3.type('đối soát'); }, reduced() ? 0 : 400); }); }
+    if (k === 'ph2') ph2.reset(true);
+    if (k === 'ph1') { window.__ph1.close(); setTimeout(window.__ph1.open, reduced() ? 50 : 600); }
+    if (k === 'rv') rvDesk.replay();
+    if (k === 'phr') rvPhone.replay();
+  });
+});
+setTimeout(function () { window.__ph1.open(); }, 900);
+})();
+</script>
+</body>
+</html>
