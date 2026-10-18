@@ -217,3 +217,73 @@ describe('ContactProfile: closing', () => {
     expect(p.onClose).toHaveBeenCalled()
   })
 })
+
+describe('ContactProfile on a phone (mockup mobile-shell.html §12)', () => {
+  const phone = (over: Partial<React.ComponentProps<typeof ContactProfile>> = {}) =>
+    props({ mode: 'screen', onCalendar: vi.fn(), onAddToGroup: vi.fn(), onInviteToMeeting: vi.fn(), ...over })
+
+  it('has four equal actions: Nhắn tin, Gọi, Lịch and Email', async () => {
+    const p = phone()
+    const user = userEvent.setup()
+    render(<ContactProfile {...p} />)
+    const actions = screen.getByRole('group', { name: 'Thao tác' })
+    expect(within(actions).getAllByRole('button').map((b) => b.textContent)).toEqual(['Nhắn tin', 'Gọi', 'Lịch', 'Email'])
+    expect(actions.className).toMatch(/grid-cols-4/)
+    await user.click(within(actions).getByRole('button', { name: 'Lịch' }))
+    expect(p.onCalendar).toHaveBeenCalled()
+  })
+
+  it('Email shows the address, which can be copied or mailed', async () => {
+    const user = userEvent.setup() // installs its own clipboard; spy on that
+    const write = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined)
+    render(<ContactProfile {...phone()} />)
+    await user.click(screen.getByRole('button', { name: 'Email' }))
+    const sheet = await screen.findByRole('dialog', { name: 'Email' })
+    expect(within(sheet).getByText('lan@novapay.vn')).toBeInTheDocument()
+    expect(within(sheet).getByRole('link', { name: 'Gửi email' })).toHaveAttribute('href', 'mailto:lan@novapay.vn')
+    await user.click(within(sheet).getByRole('button', { name: 'Sao chép email' }))
+    expect(write).toHaveBeenCalledWith('lan@novapay.vn')
+  })
+
+  it('⋯ offers Sao chép email, Thêm vào nhóm… and Mời vào cuộc họp', async () => {
+    const p = phone()
+    const user = userEvent.setup()
+    render(<ContactProfile {...p} />)
+    await user.click(screen.getByRole('button', { name: 'Thêm tuỳ chọn' }))
+    const sheet = await screen.findByRole('dialog', { name: 'Nguyễn Thu Lan' })
+    expect(within(sheet).getAllByRole('button').map((b) => b.textContent)).toEqual(['Sao chép email', 'Thêm vào nhóm…', 'Mời vào cuộc họp'])
+    await user.click(within(sheet).getByRole('button', { name: 'Mời vào cuộc họp' }))
+    expect(p.onInviteToMeeting).toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Thêm tuỳ chọn' }))
+    await user.click(within(await screen.findByRole('dialog', { name: 'Nguyễn Thu Lan' })).getByRole('button', { name: 'Thêm vào nhóm…' }))
+    expect(p.onAddToGroup).toHaveBeenCalled()
+  })
+
+  it('draws the 120 cover, avatar 80 and the name at 22/700, and what the screen adds under it (Đã cùng làm việc)', () => {
+    render(<ContactProfile {...phone()}><section aria-label="Đã cùng làm việc">x</section></ContactProfile>)
+    expect(document.querySelector('.h-30')).not.toBeNull()
+    expect(document.querySelector('[title="Nguyễn Thu Lan"]')!.className).toMatch(/!w-20/)
+    expect(screen.getByRole('heading', { name: 'Nguyễn Thu Lan' }).className).toMatch(/text-\[1\.375rem\]/)
+    expect(screen.getByRole('region', { name: 'Đã cùng làm việc' })).toBeInTheDocument()
+  })
+
+  it('one\'s own card is Sửa hồ sơ alone, with no ⋯', async () => {
+    const p = phone({ isMe: true })
+    render(<ContactProfile {...p} />)
+    expect(screen.queryByRole('button', { name: 'Thêm tuỳ chọn' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Lịch' })).toBeNull()
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Sửa hồ sơ' }))
+    expect(p.onEdit).toHaveBeenCalled()
+  })
+
+  it('a personal workspace shows no department and no Cùng phòng on a phone either', () => {
+    render(<ContactProfile {...phone({ isPersonal: true })} />)
+    expect(document.body.textContent).not.toMatch(/Phòng ban|Cùng phòng/)
+  })
+
+  it('the desktop panel keeps its three actions', () => {
+    render(<ContactProfile {...props({ onCalendar: vi.fn() })} />)
+    expect(screen.queryByRole('button', { name: 'Lịch' })).toBeNull()
+    expect(screen.getByRole('link', { name: 'Gửi email' })).toBeInTheDocument()
+  })
+})

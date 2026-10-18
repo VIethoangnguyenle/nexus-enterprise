@@ -4,6 +4,7 @@ import { act, cleanup, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { resetClient } from '../../test/render'
+import { WS_ID } from '../../test/chat-fixtures'
 import { apiFetch, logoutSession } from '../../api/client'
 import { Button, Pressable, SearchField } from '../primitives'
 import { PhoneSearchBar } from './PhoneSearchBar'
@@ -43,12 +44,21 @@ afterEach(() => {
 })
 
 describe('where it shows', () => {
-  it('draws the menu, the hint of the module and the avatar on a list screen', async () => {
+  it('draws the workspace tile, the hint of the module and the avatar on a list screen, and no ☰', async () => {
     await renderShell(<Shell body={<h1>Phê duyệt</h1>} />, '/approval')
     const header = await bar()
-    expect(within(header).getByRole('button', { name: /Mở menu chính/ })).toHaveAttribute('aria-haspopup', 'dialog')
-    expect(within(header).getByText('Phê duyệt')).toBeInTheDocument()
-    expect(within(header).getByRole('button', { name: 'Tài khoản của bạn' })).toBeInTheDocument()
+    const tile = await within(header).findByRole('button', { name: /^Đổi workspace, đang ở/ })
+    expect(tile).toHaveAttribute('aria-haspopup', 'dialog')
+    expect(within(header).queryByRole('button', { name: /menu chính/i })).toBeNull()
+    expect(within(header).getByRole('button', { name: 'Tìm đề nghị' })).toBeInTheDocument()
+    expect(within(header).getByRole('button', { name: 'Tôi' })).toBeInTheDocument()
+  })
+
+  it('steps aside on the settings pages, which are full screens with their own way back', async () => {
+    await renderShell(<Shell body={<h1>Tôi</h1>} />, '/settings')
+    await screen.findByRole('heading', { name: 'Tôi' })
+    expect(screen.queryByRole('banner')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Tôi' })).toBeNull()
   })
 
   it('steps aside inside a conversation and a document, which carry their own header', async () => {
@@ -73,7 +83,7 @@ describe('where it shows', () => {
 describe('the search hint', () => {
   it.each([
     ['/drive', 'Tìm tài liệu'], ['/approval', 'Tìm đề nghị'], ['/assets', 'Tìm tài sản'],
-    ['/contacts', 'Tìm người'], ['/settings', 'Tìm cài đặt'], ['/admin', 'Tìm cài đặt'],
+    ['/contacts', 'Tìm người'], ['/admin', 'Tìm cài đặt'],
   ])('on %s says "%s" once the screen has a search', async (url, hint) => {
     await renderShell(<Shell body={<Button data-module-search>Tìm</Button>} />, url)
     expect(await within(await bar()).findByRole('button', { name: hint })).toBeInTheDocument()
@@ -81,16 +91,16 @@ describe('the search hint', () => {
 
   it('takes focus to the screen\'s own search box', async () => {
     const user = userEvent.setup()
-    await renderShell(<Shell body={<SearchField label="Tìm tài sản" moduleSearch />} />, '/assets')
-    await user.click(await within(await bar()).findByRole('button', { name: 'Tìm tài sản' }))
-    expect(screen.getByRole('searchbox', { name: 'Tìm tài sản' })).toHaveFocus()
+    await renderShell(<Shell body={<SearchField label="Tìm cài đặt" moduleSearch />} />, '/admin')
+    await user.click(await within(await bar()).findByRole('button', { name: 'Tìm cài đặt' }))
+    expect(screen.getByRole('searchbox', { name: 'Tìm cài đặt' })).toHaveFocus()
   })
 
   it('presses the search button of a screen whose search is a panel', async () => {
     const user = userEvent.setup()
     const open = vi.fn()
-    await renderShell(<Shell body={<Button data-module-search onClick={open}>Tìm trong nhóm</Button>} />, '/drive')
-    await user.click(await within(await bar()).findByRole('button', { name: 'Tìm tài liệu' }))
+    await renderShell(<Shell body={<Button data-module-search onClick={open}>Tìm trong nhóm</Button>} />, '/contacts')
+    await user.click(await within(await bar()).findByRole('button', { name: 'Tìm người' }))
     expect(open).toHaveBeenCalledTimes(1)
   })
 
@@ -114,10 +124,40 @@ describe('the search hint', () => {
   })
 
   it('names the module, with no button, on a screen without a search of its own', async () => {
-    await renderShell(<Shell body={<SearchField label="Tìm vai trò" />} />, '/approval')
+    await renderShell(<Shell body={<SearchField label="Tìm vai trò" />} />, '/admin')
     const header = await bar()
-    expect(within(header).queryByRole('button', { name: 'Tìm đề nghị' })).toBeNull()
-    expect(within(header).getByText('Phê duyệt')).toBeInTheDocument()
+    expect(within(header).queryByRole('button', { name: 'Tìm cài đặt' })).toBeNull()
+    expect(within(header).getByText('Quản trị')).toBeInTheDocument()
+  })
+
+  describe('in Tài liệu, Phê duyệt and Tài sản', () => {
+    it.each([
+      ['/drive', 'Tìm tài liệu', 'Tài liệu'], ['/approval', 'Tìm đề nghị', 'Phê duyệt'], ['/assets', 'Tìm tài sản', 'Tài sản'],
+    ])('on %s opens the one search, scoped to the module, whatever the screen draws', async (url, hint, scope) => {
+      const user = userEvent.setup()
+      const screenSearch = vi.fn()
+      await renderShell(<Shell body={<Button data-module-search onClick={screenSearch}>Tìm</Button>} />, url)
+      const pill = await within(await bar()).findByRole('button', { name: hint })
+      expect(pill).toHaveAttribute('aria-haspopup', 'dialog')
+      await user.click(pill)
+      const search = await dialogOf('Tìm kiếm')
+      expect(screenSearch).not.toHaveBeenCalled()
+      expect(within(search).getByRole('searchbox', { name: `Tìm trong ${scope}` })).toHaveFocus()
+      expect(within(search).getByRole('button', { name: scope, pressed: true })).toBeInTheDocument()
+      await user.click(within(search).getByRole('button', { name: 'Đóng tìm kiếm' }))
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Tìm kiếm' })).toBeNull())
+    })
+
+    it('offers no Phê duyệt or Tài sản scope in a personal workspace', async () => {
+      server.personal = true
+      const user = userEvent.setup()
+      await renderShell(<Shell body={<p>x</p>} />, '/drive')
+      await user.click(await within(await bar()).findByRole('button', { name: 'Tìm tài liệu' }))
+      const search = await dialogOf('Tìm kiếm')
+      await waitFor(() => expect(within(search).queryByRole('button', { name: 'Phê duyệt' })).toBeNull())
+      expect(within(search).queryByRole('button', { name: 'Tài sản' })).toBeNull()
+      expect(within(search).getByRole('button', { name: 'Người' })).toBeInTheDocument()
+    })
   })
 
   it('follows the screen: the hint becomes a button when a search appears, and a name when it goes', async () => {
@@ -127,75 +167,77 @@ describe('the search hint', () => {
       return (
         <>
           <Pressable onClick={() => setOn(!on)}>Đổi màn</Pressable>
-          {on && <SearchField label="Tìm tài sản" moduleSearch />}
+          {on && <SearchField label="Tìm cài đặt" moduleSearch />}
         </>
       )
     }
-    await renderShell(<Shell body={<Swapper />} />, '/assets')
+    await renderShell(<Shell body={<Swapper />} />, '/admin')
     const header = await bar()
-    expect(within(header).queryByRole('button', { name: 'Tìm tài sản' })).toBeNull()
+    expect(within(header).queryByRole('button', { name: 'Tìm cài đặt' })).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Đổi màn' }))
-    await within(header).findByRole('button', { name: 'Tìm tài sản' })
+    await within(header).findByRole('button', { name: 'Tìm cài đặt' })
     await user.click(screen.getByRole('button', { name: 'Đổi màn' }))
-    await waitFor(() => expect(within(header).queryByRole('button', { name: 'Tìm tài sản' })).toBeNull())
+    await waitFor(() => expect(within(header).queryByRole('button', { name: 'Tìm cài đặt' })).toBeNull())
   })
 })
 
-describe('the news dot on the menu button', () => {
-  it('shows when a request waits for the person', async () => {
+describe('the workspace tile', () => {
+  it('shows the first letter of the workspace, named for assistive tech with where you are', async () => {
     await renderShell(<Shell body={<p>x</p>} />, '/drive')
-    expect(await screen.findByRole('button', { name: 'Mở menu chính, có việc mới' })).toBeInTheDocument()
+    const tile = await screen.findByRole('button', { name: 'Đổi workspace, đang ở Khối Vận hành' })
+    expect(tile).toHaveTextContent('K')
   })
 
-  it('shows when a notification is unread', async () => {
-    server.pending = 0
-    server.notificationsUnread = 3
+  it('is the accent in an organization and the person\'s own hue in a personal workspace', async () => {
     await renderShell(<Shell body={<p>x</p>} />, '/drive')
-    expect(await screen.findByRole('button', { name: 'Mở menu chính, có việc mới' })).toBeInTheDocument()
-  })
-
-  it('is off when nothing is new, and never counts approvals in a personal workspace', async () => {
-    server.pending = 5
+    const org = (await screen.findByRole('button', { name: /^Đổi workspace/ })).firstElementChild as HTMLElement
+    expect(org.className).toContain('bg-accent')
+    expect(org.getAttribute('style') ?? '').not.toContain('--p')
+    cleanup()
+    resetClient()
     server.personal = true
     await renderShell(<Shell body={<p>x</p>} />, '/drive')
-    await waitFor(() => expect(api).toHaveBeenCalledWith('/workspaces'))
-    expect(await screen.findByRole('button', { name: 'Mở menu chính' })).toBeInTheDocument()
-    expect(api).not.toHaveBeenCalledWith('/approval/pending')
+    const own = (await screen.findByRole('button', { name: /^Đổi workspace/ })).firstElementChild as HTMLElement
+    await waitFor(() => expect(own.className).toContain('bg-(--p)'))
+    expect(own.getAttribute('style')).toContain('--p')
+  })
+
+  it('has a dot and says so when an invitation is waiting', async () => {
+    server.offers = 2
+    await renderShell(<Shell body={<p>x</p>} />, '/drive')
+    expect(await screen.findByRole('button', { name: 'Đổi workspace, đang ở Khối Vận hành, có lời mời' })).toBeInTheDocument()
+    expect(screen.getByTestId('invitation-dot')).toBeInTheDocument()
+  })
+
+  it('has no dot when nothing waits', async () => {
+    await renderShell(<Shell body={<p>x</p>} />, '/drive')
+    await screen.findByRole('button', { name: /^Đổi workspace/ })
+    expect(screen.queryByTestId('invitation-dot')).toBeNull()
+  })
+
+  it('opens the workspace sheet, and returns focus to the tile on Esc', async () => {
+    const user = userEvent.setup()
+    await renderShell(<Shell body={<p>x</p>} />, '/drive')
+    const tile = await screen.findByRole('button', { name: /^Đổi workspace/ })
+    await user.click(tile)
+    const sheet = await dialogOf('Đổi workspace')
+    expect(await within(sheet).findByRole('option', { name: /NovaPay Kế toán/ })).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(tile).toHaveFocus()
   })
 })
 
 describe('the layers it opens', () => {
-  it('opens the menu from ☰ and returns focus to it on Esc', async () => {
-    server.pending = 0
+  it('the avatar opens Tôi (Cài đặt), keeping the workspace, and no account sheet', async () => {
     const user = userEvent.setup()
-    await renderShell(<Shell body={<p>x</p>} />, '/drive')
-    const menu = await screen.findByRole('button', { name: 'Mở menu chính' })
-    await user.click(menu)
-    await dialogOf('Menu chính')
-    await user.keyboard('{Escape}')
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    expect(menu).toHaveFocus()
-  })
-
-  it('opens the account sheet from the avatar, and signs out through it', async () => {
-    const user = userEvent.setup()
-    await renderShell(<Shell body={<p>x</p>} />, '/drive')
-    await user.click(await screen.findByRole('button', { name: 'Tài khoản của bạn' }))
-    const sheet = await dialogOf('Tài khoản')
-    await user.click(within(sheet).getByRole('button', { name: 'Đăng xuất' }))
-    expect(logoutSession).toHaveBeenCalledTimes(1)
-  })
-
-  it('opens the notifications screen from the menu, and Quay lại closes it', async () => {
-    server.notificationsUnread = 1
-    const user = userEvent.setup()
-    await renderShell(<Shell body={<p>x</p>} />, '/drive')
-    await user.click(await screen.findByRole('button', { name: /Mở menu chính/ }))
-    const menu = await dialogOf('Menu chính')
-    await user.click(within(menu).getByRole('button', { name: /Thông báo/ }))
-    const notifications = await dialogOf('Thông báo')
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Menu chính' })).toBeNull())
-    await user.click(within(notifications).getByRole('button', { name: 'Quay lại' }))
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    const router = await renderShell(<Shell body={<p>x</p>} />, `/drive?ws=${WS_ID}`)
+    const avatar = await screen.findByRole('button', { name: 'Tôi' })
+    expect(avatar).not.toHaveAttribute('aria-haspopup')
+    await user.click(avatar)
+    await waitFor(() => expect(router.state.location.pathname).toBe('/settings'))
+    expect(router.state.location.search).toEqual({ ws: WS_ID })
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 })
+

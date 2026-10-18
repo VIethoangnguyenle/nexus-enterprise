@@ -21,6 +21,17 @@ interface Props {
   label?: string
   /** Keep drawing the rows although the panel has closed: the surface is still folding back into the box. */
   keep?: boolean
+  /**
+   * A link beside a group's label that widens the search to that group ("Xem tất cả · 24" of the one search of
+   * every module, DESIGN.md §6 "Tìm cho mọi tác vụ"); none when it answers nothing.
+   */
+  more?: (group: ShownGroup) => GroupMore | undefined
+}
+
+/** What a group's "Xem tất cả" link says and does. */
+export interface GroupMore {
+  label: string
+  onSelect: () => void
 }
 
 /** Presses inside never take focus from the box; a row acts on click. */
@@ -59,7 +70,7 @@ function rowMotion(m: MotionPresets, index: number, typing: boolean, phone: bool
  * phone, groups of buttons that cover the list under the box. A recent search has its own ✕ and, from two on, the
  * group a "Xoá tất cả".
  */
-export function SearchSuggestions({ panel, emptyText, emptyHint, label = 'Gợi ý tìm kiếm', keep = false }: Props) {
+export function SearchSuggestions({ panel, emptyText, emptyHint, label = 'Gợi ý tìm kiếm', keep = false, more }: Props) {
   const m = useMotionPresets()
   const phone = panel.variant === 'screen'
   if (!panel.visible && !keep) return null
@@ -86,7 +97,7 @@ export function SearchSuggestions({ panel, emptyText, emptyHint, label = 'Gợi 
           </div>
         ) : (
           <div role="region" aria-label={label} className="grid pb-6">
-            <Groups panel={panel} m={m} phone />
+            <Groups panel={panel} m={m} phone more={more} />
             {panel.note && <p className="m-0 px-4 py-3 text-small text-ink-muted">{panel.note}</p>}
           </div>
         )}
@@ -104,7 +115,7 @@ export function SearchSuggestions({ panel, emptyText, emptyHint, label = 'Gợi 
         </div>
       ) : (
         <div id={panel.id} role="listbox" aria-label={label} className="grid py-1.5">
-          <Groups panel={panel} m={m} />
+          <Groups panel={panel} m={m} more={more} />
           {panel.note && <p className="m-0 px-3.5 pt-1.5 pb-1 text-small text-ink-muted">{panel.note}</p>}
         </div>
       )}
@@ -113,13 +124,15 @@ export function SearchSuggestions({ panel, emptyText, emptyHint, label = 'Gợi 
 }
 
 /** The groups and their rows. Rows that leave are drawn until they have folded away. */
-function Groups({ panel, m, phone = false }: { panel: SuggestionPanel; m: MotionPresets; phone?: boolean }) {
+function Groups({ panel, m, phone = false, more }: {
+  panel: SuggestionPanel; m: MotionPresets; phone?: boolean; more?: Props['more']
+}) {
   let index = 0
   return (
     <AnimatePresence initial>
       {panel.groups.map((g) => (
         <GroupShell key={g.uid} m={m} labelId={`${panel.id}-${g.domId}`} busy={g.loading}>
-          <GroupLabel group={g} panel={panel} phone={phone} />
+          <GroupLabel group={g} panel={panel} phone={phone} more={more?.(g)} />
           {g.items.length === 0 && g.loading ? (
             [0, 1].map((n) => <SkeletonRow key={n} phone={phone} />)
           ) : (
@@ -180,10 +193,10 @@ function RowShell({ m, index, typing, phone, children }: {
   )
 }
 
-function GroupLabel({ group, panel, phone }: { group: ShownGroup; panel: SuggestionPanel; phone: boolean }) {
+function GroupLabel({ group, panel, phone, more }: { group: ShownGroup; panel: SuggestionPanel; phone: boolean; more?: GroupMore }) {
   const labelId = `${panel.id}-${group.domId}`
   const clearable = !!group.onClearAll && group.items.length >= 2
-  if (group.hideLabel && !clearable) return <span id={labelId} className="sr-only">{group.label}</span>
+  if (group.hideLabel && !clearable && !more) return <span id={labelId} className="sr-only">{group.label}</span>
   return (
     <div className={`flex items-center justify-between gap-2 ${phone ? 'min-h-11 pl-4 pr-1 pt-4' : 'min-h-8 pl-3.5 pr-2 pt-2 pb-0.5'}`}>
       <div id={labelId} className={`text-ink-muted font-semibold ${phone ? 'text-sm' : 'text-xs'} ${group.hideLabel ? 'sr-only' : ''}`}>
@@ -196,6 +209,16 @@ function GroupLabel({ group, panel, phone }: { group: ShownGroup; panel: Suggest
             ${phone ? 'h-11 px-3 text-[0.8125rem]' : 'h-7 px-2 text-xs'}`}
         >
           Xoá tất cả
+        </Pressable>
+      )}
+      {more && (
+        <Pressable
+          onClick={more.onSelect}
+          aria-label={`${more.label} ${group.label}`}
+          className={`shrink-0 rounded-md font-semibold text-accent hover:bg-accent-wash transition-colors duration-quick
+            ${phone ? 'h-11 px-3 text-[0.8125rem]' : 'h-7 px-2 text-xs'}`}
+        >
+          {more.label}
         </Pressable>
       )}
     </div>

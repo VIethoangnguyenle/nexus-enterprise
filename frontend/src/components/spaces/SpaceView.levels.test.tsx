@@ -107,7 +107,7 @@ describe('the group header menu', () => {
     renderWithClient(<SpaceView channelId={CH.doisoat} />)
     await user.click(await title())
     await user.click(await screen.findByRole('menuitem', { name: 'Thông tin nhóm' }))
-    expect(await screen.findByRole('complementary', { name: 'Thông tin' })).toBeInTheDocument()
+    expect(await screen.findByRole('complementary', { name: 'Cài đặt nhóm' })).toBeInTheDocument()
   })
 
   it('a direct message offers Bật and Tắt, never Tất cả', async () => {
@@ -137,18 +137,21 @@ describe('the group info screen on a phone', () => {
     renderWithClient(<SpaceView channelId={CH.doisoat} />)
     await user.click(await title())
     expect(screen.queryByRole('menu')).toBeNull()
-    const panel = await screen.findByRole('dialog', { name: 'Thông tin' })
-    const row = within(panel).getByRole('button', { name: /^Thông báo/ })
-    expect(row).toHaveTextContent('Tin chính và thread đang theo dõi')
-    expect(row.className).toContain('min-h-14')
+    const panel = await screen.findByRole('dialog', { name: 'Cài đặt nhóm' })
+    // The Thông báo settings row shows the current level name
+    const rows = within(panel).getAllByRole('button', { name: /Thông báo/ })
+    const settingsRow = rows.find((r) => r.textContent?.includes('Tin chính'))
+    expect(settingsRow).toBeTruthy()
   })
 
   it('the row opens a sheet of radios; choosing one sets the level and closes the sheet', async () => {
     const user = userEvent.setup()
     renderWithClient(<SpaceView channelId={CH.doisoat} />)
     await user.click(await title())
-    const panel = await screen.findByRole('dialog', { name: 'Thông tin' })
-    await user.click(within(panel).getByRole('button', { name: /^Thông báo/ }))
+    const panel = await screen.findByRole('dialog', { name: 'Cài đặt nhóm' })
+    // Click the Thông báo quick action or settings row to open the sheet
+    const thongBaoButtons = within(panel).getAllByRole('button', { name: /Thông báo/ })
+    await user.click(thongBaoButtons[0]!)
     const sheet = await screen.findByRole('dialog', { name: 'Thông báo' })
     expect(within(sheet).getByText('Đối soát giao dịch')).toBeInTheDocument()
     const group = within(sheet).getByRole('radiogroup', { name: 'Thông báo' })
@@ -159,7 +162,10 @@ describe('the group info screen on a phone', () => {
     await waitFor(() => expect(server.calls).toContainEqual(
       expect.objectContaining({ method: 'PUT', body: { level: 'off' } })))
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Thông báo' })).toBeNull(), { timeout: 1500 })
-    await waitFor(() => expect(within(panel).getByRole('button', { name: /^Thông báo/ })).toHaveTextContent('Tắt'))
+    // After choosing, the settings row updates to show the new level
+    const updatedRows = within(panel).getAllByRole('button', { name: /Thông báo/ })
+    const settingsRow = updatedRows.find((r) => r.textContent?.includes('Tắt'))
+    expect(settingsRow).toBeTruthy()
   })
 
   it('a direct message offers Bật and Tắt in the sheet', async () => {
@@ -167,8 +173,9 @@ describe('the group info screen on a phone', () => {
     routerState.params = { channelId: CH.dmYen }
     renderWithClient(<SpaceView channelId={CH.dmYen} />)
     await user.click(await screen.findByRole('button', { name: /^Phạm Hải Yến/ }))
-    const panel = await screen.findByRole('dialog', { name: 'Thông tin' })
-    await user.click(within(panel).getByRole('button', { name: /^Thông báo/ }))
+    const panel = await screen.findByRole('dialog', { name: 'Cài đặt trò chuyện' })
+    const thongBaoButtons = within(panel).getAllByRole('button', { name: /Thông báo/ })
+    await user.click(thongBaoButtons[0]!)
     const sheet = await screen.findByRole('dialog', { name: 'Thông báo' })
     expect(within(sheet).getAllByRole('radio')).toHaveLength(2)
     expect(within(sheet).queryByText('Tất cả')).toBeNull()

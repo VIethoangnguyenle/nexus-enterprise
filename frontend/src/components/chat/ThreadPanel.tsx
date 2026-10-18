@@ -9,6 +9,8 @@ import { useAttachmentUploads } from '../../hooks/useAttachmentUploads'
 import { lastEditableOf, toEditorHtml } from '../../lib/message-model'
 import { useFollowThread, useMarkThreadRead } from '../../hooks/useThreads'
 import { useArrivals } from '../../hooks/useArrivals'
+import { useKeyboardDismissDrag } from '../../hooks/useKeyboardDismissDrag'
+import { canQuote } from '../../lib/message-actions'
 import { useMotionPresets } from '../../lib/motion'
 import { personStyle } from '../../lib/person-hue'
 import { explain } from '../../lib/errors'
@@ -24,7 +26,7 @@ import { MessageMenu, type MessageMenuTarget } from '../spaces/MessageMenu'
 import { MessageActionSheet } from '../spaces/MessageActionSheet'
 import { DeleteMessageDialog } from '../spaces/DeleteMessageDialog'
 import { keys } from '../../hooks/keys'
-import { threadScope } from '../../stores/drafts.store'
+import { quoteMessage, threadScope } from '../../stores/drafts.store'
 
 type Msg = Message & { _optimistic?: boolean }
 
@@ -81,6 +83,10 @@ export function ThreadPanel({ channelId, workspaceId, messageId, spaceName, peop
   const markRead = useMarkThreadRead(channelId)
   const bodyRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  // Dragging the replies down with the keyboard up puts the keyboard away (DESIGN.md §6 "Vuốt").
+  useKeyboardDismissDrag(bodyRef)
+  // A swipe right quotes into this thread's reply box, the root included (it is answered here).
+  const quoteHere = (x: Msg) => (canQuote(x) ? (m: Message) => quoteMessage(m, threadScope(messageId)) : undefined)
 
   const all = (data?.messages ?? []) as Msg[]
   const fromList = qc
@@ -194,6 +200,7 @@ export function ThreadPanel({ channelId, workspaceId, messageId, spaceName, peop
       closeLabel="thread"
       sheetBelow="lg"
       backOnSheet
+      edgeBack
       onBack={onBack}
       onClose={onClose}
       bodyRef={bodyRef}
@@ -285,6 +292,7 @@ export function ThreadPanel({ channelId, workspaceId, messageId, spaceName, peop
                 mine={root.sender_id === me}
                 me={me}
                 className="px-2"
+                onQuote={quoteHere(root)}
               />
             )}
           <div
@@ -333,6 +341,7 @@ export function ThreadPanel({ channelId, workspaceId, messageId, spaceName, peop
                       tag={byOther ? 'vừa trả lời' : undefined}
                       className="px-2"
                       pressed={sheetFor?.id === r.id}
+                      onQuote={quoteHere(r)}
                       onEdit={lifecycle.abilities(r).edit ? (m) => lifecycle.startEdit(m) : undefined}
                       onMore={(m, anchor) => {
                         anchorRef.current = anchor

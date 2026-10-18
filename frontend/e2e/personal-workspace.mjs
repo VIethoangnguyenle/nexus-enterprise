@@ -274,21 +274,22 @@ async function run() {
       await page.waitForTimeout(900)
       await shot(page, '01-phone-personal-tabbar')
       const phoneNav = await navState(page)
-      const tabs = await page.locator('nav a:visible').evaluateAll((els) => els.map((e) => `${e.textContent.trim()}→${e.getAttribute('href')}`))
-      await page.getByRole('button', { name: 'Mở menu chính' }).click().catch(() => {})
-      await page.getByRole('dialog', { name: 'Menu chính' }).waitFor({ timeout: 8000 }).catch(() => {})
+      const tabs = await page.locator('nav[aria-label="Phân hệ"] a:visible').evaluateAll((els) => els.map((e) => `${e.textContent.trim()}→${e.getAttribute('href')}`))
+      // The bottom bar's Thêm holds every module the workspace offers (the ☰ menu is gone).
+      await page.getByRole('button', { name: /^Thêm/ }).click().catch(() => {})
+      await page.getByRole('dialog', { name: 'Thêm' }).waitFor({ timeout: 8000 }).catch(() => {})
       await page.waitForTimeout(700)
-      await shot(page, '01-phone-personal-drawer')
-      const sheet = await page.locator('[role="dialog"][aria-label="Menu chính"] nav[aria-label="Các phần của Nexus"] a:visible').evaluateAll((els) => els.map((e) => e.getAttribute('href')))
+      await shot(page, '01-phone-personal-more')
+      const sheet = await page.locator('[role="dialog"][aria-label="Thêm"] a:visible').evaluateAll((els) => els.map((e) => e.getAttribute('href')))
       await page.keyboard.press('Escape')
       await page.waitForTimeout(400)
       await page.setViewportSize(DESKTOP)
       await page.waitForTimeout(500)
       const tabHrefs = tabs.map((t) => t.split('→')[1])
-      crit('1c', 'Phone tab bar and ☰ drawer have no Tài sản / Phê duyệt (personal)',
+      crit('1c', 'Phone bottom bar and Thêm have no Tài sản / Phê duyệt (personal)',
         !phoneNav.approval && !phoneNav.assets
           && !sheet.some((h) => /^\/(assets|approval)/.test(h)) && !tabHrefs.some((h) => /^\/(assets|approval)/.test(h)),
-        `tabs=${tabs.join(' | ')}; drawer=${sheet.join(', ')}`)
+        `bar=${tabs.join(' | ')}; Thêm=${sheet.join(', ')}`)
     })
 
     // ── 2. Deep links /assets and /approval redirect as in-app navigations ──
@@ -358,8 +359,18 @@ async function run() {
       await page.waitForTimeout(500)
     })
 
-    // ── 4. Convert to organization in Cài đặt → Workspace; no reload ──
-    await step('4-convert-to-organization', async () => {
+    // ── 4. Conversion removed: route returns 404 and no button in the UI ──
+    await step('4-conversion-absent', async () => {
+      if (!personalWsId) throw new Error('no personal workspace id from step 1')
+
+      // The backend route should no longer exist.
+      const convert = await apiCall(page, 'POST', `/api/workspaces/${personalWsId}/convert-to-organization`)
+      progress(`  POST convert-to-organization → ${convert.status} ${convert.body.slice(0, 140)}`)
+      crit('4a', 'POST /api/workspaces/{id}/convert-to-organization returns 404 (route removed)',
+        convert.status === 404,
+        `status ${convert.status}; body ${convert.body}`)
+
+      // Navigate to Settings → Workspace and verify there is no convert button.
       await page.locator('a[href^="/settings"]:visible').first().click()
       await page.waitForURL((u) => u.pathname.includes('/settings'), { timeout: 10000 })
       await page.waitForTimeout(600)
@@ -367,61 +378,63 @@ async function run() {
         await page.getByText('Workspace', { exact: true }).first().click()
       })
       await page.waitForTimeout(600)
-      await shot(page, '04-settings-workspace-before')
-      await page.getByRole('button', { name: 'Chuyển thành workspace tổ chức', exact: true }).click()
-      const title = page.getByText('Chuyển thành workspace tổ chức?', { exact: true })
-      await title.waitFor({ state: 'visible', timeout: 5000 })
-      await shot(page, '04-convert-dialog')
-      await page.getByRole('button', { name: 'Chuyển thành tổ chức', exact: true }).click()
-      await title.waitFor({ state: 'hidden', timeout: 10000 }).catch(() => {})
-      await page.waitForTimeout(1200)
+      await shot(page, '04-settings-workspace-no-convert')
+      const convertBtn = page.getByRole('button', { name: 'Chuyển thành workspace tổ chức' })
+      const btnCount = await convertBtn.count()
+      crit('4b', 'No "Chuyển thành workspace tổ chức" button in the UI',
+        btnCount === 0,
+        `button count=${btnCount}`)
+    })
 
-      const nav = await navState(page)
-      await shot(page, '04-desktop-organization-sidebar')
-      const after = await fetchWorkspaces(page)
-      const conv = after.workspaces.find((w) => w.id === personalWsId)
-      crit('4a', 'Convert card → organization without reload; Phê duyệt + Tài sản appear in sidebar',
-        conv?.type === 'organization' && nav.approval && nav.assets,
-        `type after=${conv?.type}; sidebar assets=${nav.assets}, approval=${nav.approval}`)
-
+    // ── 4c. Phone: Tôi is the one settings page, and shows only what a personal workspace has ──
+    await step('4c-phone-me-personal', async () => {
       await page.setViewportSize(PHONE)
-      await page.waitForTimeout(900)
-      await shot(page, '04-phone-organization-tabbar')
-      const tabs = await page.locator('nav a:visible').evaluateAll((els) => els.map((e) => e.getAttribute('href')))
-      await page.getByRole('button', { name: 'Mở menu chính' }).click().catch(() => {})
-      await page.getByRole('dialog', { name: 'Menu chính' }).waitFor({ timeout: 8000 }).catch(() => {})
       await page.waitForTimeout(600)
-      const sheet = await page.locator('[role="dialog"][aria-label="Menu chính"] nav[aria-label="Các phần của Nexus"] a:visible').evaluateAll((els) => els.map((e) => e.getAttribute('href')))
-      await shot(page, '04-phone-organization-drawer')
-      await page.keyboard.press('Escape')
-      await page.waitForTimeout(400)
-      await page.setViewportSize(DESKTOP)
+      await page.getByRole('button', { name: 'Tôi', exact: true }).click()
+      await page.waitForURL((u) => u.pathname === '/settings', { timeout: 10000 })
+      await page.getByRole('heading', { name: 'Tôi', exact: true }).waitFor({ timeout: 10000 })
       await page.waitForTimeout(500)
-      const tabPaths = tabs.map((h) => (h || '').split('?')[0])
-      crit('4b', 'Phone after convert: Phê duyệt and Tài sản in the ☰ drawer',
-        sheet.some((h) => h.startsWith('/approval')) && sheet.some((h) => h.startsWith('/assets')),
-        `tabs=${tabs.join(',')}; drawer=${sheet.join(',')}`)
+      await shot(page, '04c-phone-me-personal')
+      const text = (await page.locator('main, body').first().innerText()).replace(/\s+/g, ' ')
+      const must = ['Tài khoản và hồ sơ', 'Thông báo', 'Giao diện, ngôn ngữ', 'Thiết bị và phiên', 'Chat', 'Lịch', 'Tài liệu', 'Thanh đáy', 'Cài đặt workspace', 'Giới thiệu']
+      const never = ['Hồ sơ trong tổ chức', 'Phê duyệt', 'Tài sản', 'Thu gọn sidebar']
+      const logouts = await page.getByRole('button', { name: 'Đăng xuất', exact: true }).count()
+      const bar = await page.locator('nav[aria-label="Phân hệ"]:visible').count()
+      crit('4c', 'Phone Tôi (personal): account + workspace rows, no Hồ sơ trong tổ chức / Phê duyệt / Tài sản, one Đăng xuất, no bottom bar',
+        must.every((m) => text.includes(m)) && never.every((n) => !text.includes(n)) && logouts === 1 && bar === 0,
+        `missing=${must.filter((m) => !text.includes(m)).join(',')}; unexpected=${never.filter((n) => text.includes(n)).join(',')}; Đăng xuất=${logouts}; bar=${bar}`)
     })
 
-    await step('4-api-after-convert', async () => {
-      const list = await apiCall(page, 'GET', `/api/workspaces/${personalWsId}/assets`)
-      const create = await apiCall(page, 'POST', '/api/approval/requests', { template_id: '00000000-0000-0000-0000-000000000000', form_data_json: '{}' })
-      results.step4Api = { assetList: list, approvalCreate: create }
-      progress(`  after convert GET assets=${list.status} ${list.body.slice(0, 120)}`)
-      progress(`  after convert POST approval=${create.status} ${create.body.slice(0, 120)}`)
-      crit('4c', 'After convert: asset + approval calls no longer refused for reason "personal"',
-        !personalRefusal(list) && !personalRefusal(create),
-        `assets=${list.status}; approval=${create.status} ${create.body.slice(0, 100)}`)
+    await step('4d-phone-workspace-settings-personal', async () => {
+      await page.getByRole('button', { name: /^Cài đặt workspace/ }).click()
+      await page.waitForURL((u) => u.pathname === '/settings/workspace', { timeout: 10000 })
+      await page.getByText('Dung lượng Tài liệu').waitFor({ timeout: 10000 })
+      await page.waitForTimeout(500)
+      await shot(page, '04d-phone-workspace-settings-personal')
+      const text = (await page.locator('body').innerText()).replace(/\s+/g, ' ')
+      const never = ['Thành viên và tổ chức', 'Ai được tạo nhóm', 'Rời ', 'Vai trò và quyền', 'Chuyển thành workspace tổ chức']
+      const uuid = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(text)
+      crit('4d', 'Phone Cài đặt workspace (personal): only Tên workspace and Dung lượng; no members, rules, Rời or conversion; no ids',
+        text.includes('Tên workspace') && never.every((n) => !text.includes(n)) && !uuid,
+        `unexpected=${never.filter((n) => text.includes(n)).join(',')}; uuid=${uuid}`)
     })
 
-    // ── 4d. Precondition probe: can the new account verify its email (needed for Tạo workspace)? ──
-    await step('4d-verify-email-probe', async () => {
-      const req = await apiCall(page, 'POST', '/api/me/email/verify', {})
-      progress(`  POST /api/me/email/verify → ${req.status} ${req.body.slice(0, 140)}`)
-      results.emailVerifyProbe = req
-      crit('4d', 'Precondition: new account can verify email (required by Tạo workspace)',
-        req.status === 202 ? true : null,
-        `POST /api/me/email/verify → ${req.status} ${req.body.slice(0, 140)}`)
+    await step('4e-phone-sessions', async () => {
+      await page.goto(`${BASE}/settings/sessions?ws=${personalWsId}`)
+      await page.getByText('Máy này').waitFor({ timeout: 10000 })
+      await page.waitForTimeout(400)
+      await shot(page, '04e-phone-sessions')
+      const list = await apiCall(page, 'GET', '/api/auth/sessions')
+      let sessions = []
+      try { sessions = JSON.parse(list.body).sessions ?? [] } catch { /* recorded below */ }
+      results.page1Sessions = sessions.length
+      const text = (await page.locator('body').innerText()).replace(/\s+/g, ' ')
+      const leaked = sessions.some((x) => text.includes(x.session_id))
+      crit('4e', 'Thiết bị và phiên lists own sessions, this one marked, never a session id on screen',
+        list.status === 200 && sessions.filter((x) => x.current).length === 1 && !leaked,
+        `GET /api/auth/sessions → ${list.status}; sessions=${sessions.length}; current=${sessions.filter((x) => x.current).length}; id on screen=${leaked}`)
+      await page.setViewportSize(DESKTOP)
+      await page.waitForTimeout(400)
     })
 
     // ── 5–6 on page 2: a pre-existing account whose email is verified ──
@@ -448,6 +461,56 @@ async function run() {
         'BLOCKED: same gate as 5a; create screen has no Quay lại to exercise beyond the gate view')
       crit('6-personal-create', 'Admin → Roles on the workspace created in step 5', null,
         'BLOCKED: no workspace created in step 5; criterion 6 evaluated on the personal workspace in step 3b')
+    })
+
+    // ── 7. Another person's session is never listed nor revocable (page 1 against page 2's session) ──
+    await step('7-sessions-deny-cross-user', async () => {
+      const mine = await apiCall(page2, 'GET', '/api/auth/sessions')
+      const theirs = JSON.parse(mine.body).sessions ?? []
+      const target = theirs.find((x) => x.current)?.session_id
+      if (!target) throw new Error(`page 2 has no current session: ${mine.status} ${mine.body.slice(0, 120)}`)
+      const seenByOther = await apiCall(page, 'GET', '/api/auth/sessions')
+      const listedToOther = (JSON.parse(seenByOther.body).sessions ?? []).some((x) => x.session_id === target)
+      const revoke = await apiCall(page, 'DELETE', `/api/auth/sessions/${encodeURIComponent(target)}`)
+      const after = await apiCall(page2, 'GET', '/api/auth/sessions')
+      const still = (JSON.parse(after.body).sessions ?? []).some((x) => x.session_id === target)
+      crit('7', 'Another user\'s session: not in my list, DELETE refused (404), and it keeps working',
+        !listedToOther && revoke.status === 404 && after.status === 200 && still,
+        `listed to other=${listedToOther}; DELETE → ${revoke.status}; owner list after → ${after.status}, still there=${still}`)
+    })
+
+    // ── 8. Phone Cài đặt workspace in an organization: rows by the viewer's rights; admin screens usable at 390 ──
+    await step('8-phone-workspace-settings-org', async () => {
+      const { workspaces } = await fetchWorkspaces(page2)
+      const org = workspaces.find((w) => w.type === 'organization')
+      if (!org) {
+        crit('8', 'Phone Cài đặt workspace (organization)', null, 'BLOCKED: the pre-existing account has no organization workspace')
+        return
+      }
+      await page2.setViewportSize(PHONE)
+      await page2.goto(`${BASE}/settings/workspace?ws=${org.id}`)
+      await page2.getByText('Ai được tạo nhóm').waitFor({ timeout: 15000 })
+      await page2.waitForTimeout(600)
+      await shot(page2, '08-phone-workspace-settings-org')
+      const text = (await page2.locator('body').innerText()).replace(/\s+/g, ' ')
+      const admin = text.includes('Thành viên và tổ chức')
+      const uuid = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(text)
+      if (admin) {
+        await page2.getByRole('button', { name: /^Thành viên/ }).first().click()
+        await page2.waitForURL((u) => u.pathname === '/admin/users', { timeout: 10000 })
+        await page2.waitForTimeout(900)
+        await shot(page2, '08-phone-admin-users')
+        const overflow = await page2.evaluate(() => document.scrollingElement.scrollWidth - window.innerWidth)
+        crit('8', 'Phone Cài đặt workspace (org admin): members, rules, modules, Rời; Thành viên opens Quản trị at 390 without sideways scroll',
+          ['Vai trò và quyền', 'Mời thành viên', 'Mẫu phê duyệt', 'Dung lượng Tài liệu'].every((m) => text.includes(m)) && text.includes(`Rời ${org.name}`) && overflow <= 0 && !uuid,
+          `admin view; overflow=${overflow}px; uuid=${uuid}`)
+      } else {
+        crit('8', 'Phone Cài đặt workspace (org member): read-only info, the rule locked by "Quản trị viên … đã đặt", Hồ sơ trong tổ chức, Rời; no admin rows',
+          text.includes('đã đặt') && text.includes('Hồ sơ trong tổ chức') && text.includes(`Rời ${org.name}`)
+            && !text.includes('Vai trò và quyền') && !text.includes('Mời thành viên') && !uuid,
+          `member view; uuid=${uuid}`)
+      }
+      await page2.setViewportSize(DESKTOP)
     })
 
   } finally {

@@ -1,84 +1,85 @@
 import { useEffect, useRef } from 'react'
 import { Check, MessagesSquare } from 'lucide-react'
 import type { Arrival } from '../../hooks/useArrivals'
-import { usePersistedFlag } from '../../hooks/usePersistedFlag'
-import { useAuthStore } from '../../stores/auth.store'
+import { useBottomBarLayout } from '../../hooks/usePhone'
 import { useWebSocketStore } from '../../stores/websocket.store'
-import { filterConversations, type Conversation } from '../../lib/conversations'
+import { filterConversations, type Conversation, type ConversationFilter } from '../../lib/conversations'
+import { SwipeRow, SwipeRowGroup } from '../patterns/SwipeRow'
+import { useChatRowSwipe } from './chat-row-swipe'
 import { EmptyState } from './EmptyState'
 import { FeedRow } from './FeedRow'
 import { PressableRow } from './PressableRow'
-import { PhoneListTitle, ThreadButton, UnreadToggle } from './PhoneListControls'
 import { rowTargetOf, type SectionOverlays } from './SectionOverlays'
 
-export type FeedScope = 'home' | 'direct'
+export type FeedScope = 'all' | 'unread' | 'direct' | 'spaces'
 
-const COPY: Record<FeedScope, { title: string; empty: string }> = {
-  home: { title: 'Trang chủ', empty: 'Chưa có cuộc trò chuyện nào. Chạm + để bắt đầu.' },
-  direct: { title: 'Trực tiếp', empty: 'Chưa có tin nhắn trực tiếp. Chạm + để nhắn cho một người.' },
+const COPY: Record<FeedScope, { empty: string; filter: ConversationFilter }> = {
+  all: { empty: 'Chưa có cuộc trò chuyện nào. Chạm + để bắt đầu.', filter: 'all' },
+  unread: { empty: 'Chưa có cuộc trò chuyện nào. Chạm + để bắt đầu.', filter: 'unread' },
+  direct: { empty: 'Chưa có tin nhắn trực tiếp. Chạm + để nhắn cho một người.', filter: 'direct' },
+  spaces: { empty: 'Bạn chưa ở nhóm nào. Chạm + để tạo nhóm.', filter: 'spaces' },
 }
 
 /**
- * Trang chủ and Trực tiếp on a phone (DESIGN.md "Chat trên điện thoại"): the
- * title, the Thread button (Trang chủ only), the unread-only pill (remembered on
- * this device for this person), and the conversations newest activity first as
- * `FeedRow`s. Long-pressing a row opens its sheet.
+ * The list under the chips of Chat on a phone (DESIGN.md "Chat trên điện thoại"): Tất cả, Chưa đọc, Trực
+ * tiếp or Nhóm, the conversations of that chip newest activity first as `FeedRow`s. Long-pressing a row
+ * opens its sheet. Chưa đọc with nothing left says "Bạn đã đọc hết".
+ *
+ * A swipe on a row reveals its buttons (`useChatRowSwipe`); one row is open at a time.
  */
-export function PhoneHomeFeed({ scope, conversations, fresh, overlays, threadsWithNews, onOpenThreads }: {
+export function PhoneHomeFeed({ scope, conversations, fresh, overlays }: {
   scope: FeedScope
-  /** The conversations of this tab, newest activity first. */
+  /** Every conversation, newest activity first; the chip's share of them is picked here. */
   conversations: Conversation[]
   fresh: Map<string, Arrival>
   overlays: SectionOverlays
-  /** Followed threads with unread replies: the number on the Thread button. */
-  threadsWithNews: number
-  onOpenThreads: () => void
 }) {
-  const me = useAuthStore((s) => s.user?.id ?? '')
   const onlineUsers = useWebSocketStore((s) => s.onlineUsers)
-  const [unreadOnly, setUnreadOnly] = usePersistedFlag(`ngac-feed-unread-only:${me}:${scope}`)
   const copy = COPY[scope]
+  const phone = useBottomBarLayout()
+  const swipeOf = useChatRowSwipe(overlays)
 
   // The rows in the list as it mounts are drawn at full size: the device back remounts this list, and rows
   // growing in from nothing are a blank list for its first frames. A row that arrives later still enters.
   const listed = useRef(false)
   useEffect(() => { listed.current = true }, [])
 
-  const shown = unreadOnly ? filterConversations(conversations, 'unread') : conversations
+  const shown = filterConversations(conversations, copy.filter)
 
   return (
     <div className="grid">
-      <PhoneListTitle title={copy.title}>
-        {scope === 'home' && <ThreadButton news={threadsWithNews} onClick={onOpenThreads} />}
-        <UnreadToggle pressed={unreadOnly} onChange={setUnreadOnly} label="Chỉ hiện chưa đọc" />
-      </PhoneListTitle>
-
-      {conversations.length === 0 ? (
-        <EmptyState icon={<MessagesSquare size={24} strokeWidth={1.75} />} text={copy.empty} />
-      ) : shown.length === 0 ? (
-        <div role="status" className="grid justify-items-center gap-2 px-8 py-14 text-center text-ink-muted">
-          <Check size={32} strokeWidth={1.75} aria-hidden="true" className="text-accent" />
-          <b className="text-ink">Bạn đã đọc hết</b>
-          <span>Tắt bộ lọc để xem mọi cuộc trò chuyện.</span>
-        </div>
+      {shown.length === 0 ? (
+        scope === 'unread' && conversations.length > 0 ? (
+          <div role="status" className="grid justify-items-center gap-2 px-8 py-14 text-center text-ink-muted">
+            <Check size={32} strokeWidth={1.75} aria-hidden="true" className="text-accent" />
+            <b className="text-ink">Bạn đã đọc hết</b>
+            <span>Chọn Tất cả để xem mọi cuộc trò chuyện.</span>
+          </div>
+        ) : (
+          <EmptyState icon={<MessagesSquare size={24} strokeWidth={1.75} />} text={copy.empty} />
+        )
       ) : (
-        <ul aria-label="Cuộc trò chuyện" className="grid list-none m-0 p-0">
-          {shown.map((c) => (
-            <PressableRow
-              key={c.id}
-              // A muted conversation does not slide to the top when it speaks: silence is what muting means.
-              slide={c.level !== 'off'}
-              enter={listed.current}
-              onMenu={(el) => overlays.openRowMenu(rowTargetOf(c), el)}
-            >
-              <FeedRow
-                conversation={c}
-                arrival={fresh.get(`${c.id}:${c.lastActivity}`)}
-                online={!!c.partner && !!onlineUsers[c.partner.userId]}
-              />
-            </PressableRow>
-          ))}
-        </ul>
+        <SwipeRowGroup>
+          <ul aria-label="Cuộc trò chuyện" className="grid list-none m-0 p-0">
+            {shown.map((c) => (
+              <PressableRow
+                key={c.id}
+                // A muted conversation does not slide to the top when it speaks: silence is what muting means.
+                slide={c.level !== 'off'}
+                enter={listed.current}
+                onMenu={(el) => overlays.openRowMenu(rowTargetOf(c), el)}
+              >
+                <SwipeRow id={c.id} disabled={!phone} fullSwipe {...swipeOf(c)}>
+                  <FeedRow
+                    conversation={c}
+                    arrival={fresh.get(`${c.id}:${c.lastActivity}`)}
+                    online={!!c.partner && !!onlineUsers[c.partner.userId]}
+                  />
+                </SwipeRow>
+              </PressableRow>
+            ))}
+          </ul>
+        </SwipeRowGroup>
       )}
     </div>
   )

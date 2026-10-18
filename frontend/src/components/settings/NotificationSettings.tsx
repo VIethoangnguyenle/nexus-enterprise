@@ -1,132 +1,24 @@
-import { useEffect, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { Bell, BellOff, MessageSquare, AtSign, MessagesSquare, Moon, AlertTriangle, Phone } from 'lucide-react'
-import {
-  getOneSignalAppId,
-  getNotificationPermission,
-  isIosNotInstalled,
-  isSubscriptionOptedIn,
-  setSubscriptionOptIn,
-  initOneSignal,
-  pushApi,
-  pushQueryKeys,
-  type PushPreferences,
-} from '../../lib/push'
-import { Button, Pressable, Select, toast } from '../primitives'
+import type { PushPreferences } from '../../lib/push'
+import { usePushDevice } from '../../hooks/usePushDevice'
+import { browserZone, usePushPreferences } from '../../hooks/usePushPreferences'
+import { Button, Pressable, Select } from '../primitives'
 import { EmptyState } from '../spaces/EmptyState'
 
 const HOURS = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`)
 
-const DEFAULT_PREFERENCES: PushPreferences = {
-  kinds: {
-    direct: true,
-    mention: true,
-    thread_reply: true,
-    incoming_call: true,
-  },
-  quiet_hours: {
-    enabled: false,
-    start: '22:00',
-    end: '07:00',
-    time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Ho_Chi_Minh',
-  },
-}
-
+/**
+ * Cài đặt → Thông báo on a wide screen: this device's push, the kinds that push,
+ * and quiet hours. The phone's Tôi → Thông báo reads the same preferences
+ * (`usePushPreferences`) and the same device state (`usePushDevice`).
+ */
 export function NotificationSettings() {
-  const appId = getOneSignalAppId()
-  const queryClient = useQueryClient()
-
-  // M3: null = unknown/loading. Never show the switch as 'on' before the SDK confirms.
-  const [deviceOptedIn, setDeviceOptedIn] = useState<boolean | null>(null)
-  const [deviceFailed, setDeviceFailed] = useState(false)
-  const [attempt, setAttempt] = useState(0)
-  const [deviceBusy, setDeviceBusy] = useState(false)
-  const [permission, setPermission] = useState<NotificationPermission>(getNotificationPermission)
+  const device = usePushDevice()
+  const { prefs, isLoading, isError, refetch, isSaving, save } = usePushPreferences(device.available)
   const [quietError, setQuietError] = useState<string | null>(null)
-  const isBlocked = permission === 'denied'
-  const isIos = isIosNotInstalled()
 
-  useEffect(() => {
-    if (!appId) return
-
-    let cancelled = false
-    setDeviceFailed(false)
-    setDeviceOptedIn(null)
-
-    // Subscribe to permission changes via the Permissions API (fires when the user
-    // toggles "Allow notifications" in browser settings — fulfils the "công tắc sẽ tự bật" promise).
-    let permStatus: PermissionStatus | null = null
-    const onPermChange = () => setPermission(getNotificationPermission())
-    if (navigator.permissions?.query) {
-      navigator.permissions
-        .query({ name: 'notifications' })
-        .then((status) => {
-          if (cancelled) return
-          permStatus = status
-          permStatus.addEventListener('change', onPermChange)
-        })
-        .catch(() => {
-          // Permissions API unsupported for notifications (older Safari): the SDK events cover it.
-        })
-    }
-
-    // Initial state and reactive updates from the SDK. A failed or timed-out init must
-    // surface as a retryable state, never as an endless "checking".
-    let detach: (() => void) | null = null
-    isSubscriptionOptedIn(appId)
-      .then(async (on) => {
-        if (cancelled) return
-        setDeviceOptedIn(on)
-        const sdk = await initOneSignal(appId)
-        if (!sdk || cancelled) return
-        const subListener = () => setDeviceOptedIn(!!sdk.User.PushSubscription.optedIn)
-        sdk.User.PushSubscription.addEventListener('change', subListener)
-        sdk.Notifications.addEventListener('permissionChange', onPermChange)
-        detach = () => {
-          sdk.User.PushSubscription.removeEventListener('change', subListener)
-          sdk.Notifications.removeEventListener('permissionChange', onPermChange)
-        }
-      })
-      .catch((err) => {
-        console.warn('[push] could not read device subscription', err)
-        if (cancelled) return
-        setDeviceOptedIn(null)
-        setDeviceFailed(true)
-      })
-
-    return () => {
-      cancelled = true
-      permStatus?.removeEventListener('change', onPermChange)
-      detach?.()
-    }
-  }, [appId, attempt])
-
-  const { data: preferences, isLoading, isError, refetch } = useQuery({
-    queryKey: pushQueryKeys.preferences,
-    queryFn: pushApi.getPreferences,
-    enabled: !!appId,
-  })
-
-  const mutation = useMutation({
-    mutationFn: (newPrefs: PushPreferences) => pushApi.updatePreferences(newPrefs),
-    onMutate: async (newPrefs) => {
-      await queryClient.cancelQueries({ queryKey: pushQueryKeys.preferences })
-      const previous = queryClient.getQueryData<PushPreferences>(pushQueryKeys.preferences)
-      queryClient.setQueryData<PushPreferences>(pushQueryKeys.preferences, newPrefs)
-      return { previous }
-    },
-    onError: (_err, _vars, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(pushQueryKeys.preferences, context.previous)
-      }
-      toast.error('Không lưu được cài đặt thông báo')
-    },
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: pushQueryKeys.preferences })
-    },
-  })
-
-  if (!appId) {
+  if (!device.available) {
     return (
       <div className="flex-1 grid place-items-center bg-base py-12">
         <EmptyState
@@ -137,7 +29,7 @@ export function NotificationSettings() {
     )
   }
 
-  if (isError) {
+  if (isError || !prefs) {
     return (
       <div className="flex-1 grid place-items-center bg-base py-12">
         <div className="flex flex-col items-center gap-3 text-center">
@@ -151,70 +43,28 @@ export function NotificationSettings() {
     )
   }
 
-  // Use fetched preferences, or defaults only while still loading (never on error).
-  const prefs = preferences ?? DEFAULT_PREFERENCES
-
-  const handleDeviceToggle = async () => {
-    if (isBlocked || isIos || deviceBusy || deviceOptedIn === null) return
-    const next = !deviceOptedIn
-    setDeviceOptedIn(next)
-    setDeviceBusy(true)
-    try {
-      await setSubscriptionOptIn(next)
-      setPermission(getNotificationPermission())
-    } catch (err) {
-      console.warn('[push] could not change device subscription', err)
-      setDeviceOptedIn(!next)
-      toast.error('Không thay đổi được cài đặt thiết bị')
-    } finally {
-      setDeviceBusy(false)
-    }
-  }
-
   const updateKinds = (key: keyof PushPreferences['kinds']) => {
-    const nextPrefs: PushPreferences = {
-      ...prefs,
-      kinds: {
-        ...prefs.kinds,
-        [key]: !prefs.kinds[key],
-      },
-    }
-    mutation.mutate(nextPrefs)
+    void save((p) => ({ ...p, kinds: { ...p.kinds, [key]: !p.kinds[key] } }))
   }
 
   const updateQuietHours = (changes: Partial<PushPreferences['quiet_hours']>) => {
     const merged = { ...prefs.quiet_hours, ...changes }
-    // M5: validate start ≠ end (the server returns 400, but we catch it client-side with a clear message).
+    // The server refuses an empty window too; say so here, in words.
     if (merged.start === merged.end && merged.enabled) {
       setQuietError('Giờ bắt đầu và kết thúc không được trùng.')
       return
     }
     setQuietError(null)
-    const nextPrefs: PushPreferences = {
-      ...prefs,
-      quiet_hours: {
-        ...merged,
-        // M4: always send the browser's timezone so the server applies the correct window.
-        time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone || prefs.quiet_hours.time_zone,
-      },
-    }
-    mutation.mutate(nextPrefs)
+    // Always the browser's zone, so the server applies the window where the person is.
+    void save((p) => ({ ...p, quiet_hours: { ...p.quiet_hours, ...changes, time_zone: browserZone() || p.quiet_hours.time_zone } }))
   }
 
-  const deviceSubtext = isBlocked
-    ? 'Trình duyệt đang chặn'
-    : isIos
-      ? 'Cần thêm Nexus vào màn hình chính'
-      : deviceFailed
-        ? 'Chưa kết nối được dịch vụ thông báo'
-        : deviceOptedIn === null
-          ? 'Đang kiểm tra…'
-          : deviceOptedIn
-            ? 'Đang bật trên thiết bị này'
-            : 'Đang tắt trên thiết bị này'
-
-  const deviceDisabled = isBlocked || isIos || deviceBusy || deviceOptedIn === null
+  const isBlocked = device.blocked
+  const isIos = device.ios
+  const deviceOptedIn = device.optedIn
+  const deviceDisabled = device.disabled
   const dimmed = deviceOptedIn === false || deviceOptedIn === null || isBlocked
+  const busy = isLoading || isSaving
 
   return (
     <div className="flex-1 flex flex-col gap-6 max-w-2xl animate-fade-in">
@@ -258,13 +108,13 @@ export function NotificationSettings() {
               <span id="label-dev" className="text-sm font-semibold text-ink">
                 Thông báo đẩy
               </span>
-              <span className="text-xs text-ink-muted">{deviceSubtext}</span>
-              {deviceFailed && !isBlocked && !isIos ? (
+              <span className="text-xs text-ink-muted">{device.status}</span>
+              {device.failed && !isBlocked && !isIos ? (
                 <Button
                   variant="ghost"
                   size="sm"
                   className="justify-self-start"
-                  onClick={() => setAttempt((n) => n + 1)}
+                  onClick={device.retry}
                 >
                   Thử lại
                 </Button>
@@ -276,7 +126,7 @@ export function NotificationSettings() {
             aria-checked={deviceOptedIn ?? false}
             aria-label="Thông báo đẩy trên thiết bị này"
             disabled={deviceDisabled}
-            onClick={handleDeviceToggle}
+            onClick={() => void device.toggle()}
             className={`relative shrink-0 w-11 h-6 rounded-full transition-opacity ${
               deviceDisabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'
             }`}
@@ -319,7 +169,7 @@ export function NotificationSettings() {
             role="switch"
             aria-checked={prefs.kinds.direct}
             aria-label="Tin nhắn trực tiếp"
-            disabled={isLoading || mutation.isPending}
+            disabled={busy}
             onClick={() => updateKinds('direct')}
             className="relative shrink-0 w-11 h-6 rounded-full cursor-pointer"
           >
@@ -354,7 +204,7 @@ export function NotificationSettings() {
             role="switch"
             aria-checked={prefs.kinds.mention}
             aria-label="Được nhắc tên"
-            disabled={isLoading || mutation.isPending}
+            disabled={busy}
             onClick={() => updateKinds('mention')}
             className="relative shrink-0 w-11 h-6 rounded-full cursor-pointer"
           >
@@ -389,7 +239,7 @@ export function NotificationSettings() {
             role="switch"
             aria-checked={prefs.kinds.thread_reply}
             aria-label="Thread bạn theo dõi"
-            disabled={isLoading || mutation.isPending}
+            disabled={busy}
             onClick={() => updateKinds('thread_reply')}
             className="relative shrink-0 w-11 h-6 rounded-full cursor-pointer"
           >
@@ -421,7 +271,7 @@ export function NotificationSettings() {
             role="switch"
             aria-checked={prefs.kinds.incoming_call}
             aria-label="Cuộc gọi đến"
-            disabled={isLoading || mutation.isPending}
+            disabled={busy}
             onClick={() => updateKinds('incoming_call')}
             className="relative shrink-0 w-11 h-6 rounded-full cursor-pointer"
           >
@@ -466,7 +316,7 @@ export function NotificationSettings() {
               role="switch"
               aria-checked={prefs.quiet_hours.enabled}
               aria-label="Giờ yên lặng"
-              disabled={isLoading || mutation.isPending}
+              disabled={busy}
               onClick={() => updateQuietHours({ enabled: !prefs.quiet_hours.enabled })}
               className="relative shrink-0 w-11 h-6 rounded-full cursor-pointer"
             >

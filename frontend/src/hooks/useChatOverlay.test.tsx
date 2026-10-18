@@ -50,13 +50,13 @@ describe('a full-screen layer of the Chat list', () => {
 
   it('closes by going back when it pushed the entry, so no entry is left to come back to', async () => {
     const user = userEvent.setup()
-    const router = await renderShell(<Host />, '/channels?tab=more')
+    const router = await renderShell(<Host />, '/channels?tab=direct')
     await user.click(screen.getByRole('button', { name: 'open threads' }))
     expect(layer()).toBe('{"kind":"threads","chip":"following"}')
-    expect(search(router)).toMatchObject({ tab: 'more', threads: 'followed' })
+    expect(search(router)).toMatchObject({ tab: 'direct', threads: 'followed' })
     await user.click(screen.getByRole('button', { name: 'close' }))
     await waitFor(() => expect(layer()).toBe('none'))
-    expect(search(router)).toEqual({ tab: 'more' })
+    expect(search(router)).toEqual({ tab: 'direct' })
     expect(router.history.canGoBack()).toBe(false)
   })
 

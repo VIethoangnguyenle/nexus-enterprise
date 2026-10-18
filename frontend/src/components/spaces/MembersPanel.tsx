@@ -1,8 +1,11 @@
 import { useId, useMemo, useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
-import { MoreVertical, MessageSquare, UserMinus, UserPlus, CircleAlert, Users, LogOut } from 'lucide-react'
+import { MoreVertical, MessageSquare, UserMinus, UserPlus, CircleAlert, Users, LogOut, ShieldCheck, ShieldOff } from 'lucide-react'
 import { useAddChannelMember, useChannelMembers, useCreateDM, useRemoveChannelMember } from '../../hooks/useMessaging'
+import {
+  GROUP_ROLE_LABEL, groupActionError, useAppointManager, useGroupRole, useRemoveManager, type GroupRole,
+} from '../../hooks/useGroupManagement'
 import { useWebSocketStore } from '../../stores/websocket.store'
 import { useMotionPresets } from '../../lib/motion'
 import { explain, explainRemoval, isForbidden } from '../../lib/errors'
@@ -14,6 +17,7 @@ import {
 import { PersonLink } from '../primitives/PersonLink'
 import { SidePanel } from './SidePanel'
 import { EmptyState } from './EmptyState'
+import { OwnerMustTransferDialog } from './group-management/OwnerMustTransferDialog'
 
 interface MembersPanelProps {
   channelId: string
@@ -34,13 +38,16 @@ interface Row {
   member: ChannelMember
   person: Person
   isMe: boolean
+  /** Their role in the group; undefined in a DM, the workspace-wide channel, or until it loads. */
+  groupRole?: GroupRole
 }
 
 /**
  * Members of a space (design/mockups/spaces.html §4): search, add through the
  * people picker, and per person "Nhắn tin trực tiếp" or "Xoá khỏi nhóm".
  * Removing does not ask first; the toast offers "Hoàn tác" for 5s instead.
- * Manager roles are not shown: the API does not return a member's role.
+ * In a group each person carries their role (Chủ nhóm / Quản trị nhóm /
+ * Thành viên), and the owner and managers may appoint or demote managers here.
  */
 export function MembersPanel({ channelId, kind, spaceName, people, me, startAdding, canLeave, onLeave, onClose }: MembersPanelProps) {
   const m = useMotionPresets()
@@ -54,6 +61,14 @@ export function MembersPanel({ channelId, kind, spaceName, people, me, startAddi
   const [saving, setSaving] = useState(false)
   const editable = kind === 'space'
   const mayRemove = editable && data?.can_remove_members === true
+  const group = useGroupRole(channelId)
+  const appoint = useAppointManager(channelId)
+  const demote = useRemoveManager(channelId)
+  const [ownerLeave, setOwnerLeave] = useState(false)
+  const handleLeave = () => {
+    if (group.isOwner) setOwnerLeave(true)
+    else onLeave?.()
+  }
 
   const rows: Row[] = useMemo(() => {
     const list = (data?.members ?? []).map((mem) => {
@@ -66,10 +81,21 @@ export function MembersPanel({ channelId, kind, spaceName, people, me, startAddi
         role: '',
         avatarUrl: '',
       }
-      return { member: mem, person, isMe: !!me && mem.user_id === me }
+      return { member: mem, person, isMe: !!me && mem.user_id === me, groupRole: editable ? group.roleOf(mem.user_id) : undefined }
     })
     return list.sort((a, b) => (a.isMe === b.isMe ? a.person.name.localeCompare(b.person.name, 'vi') : a.isMe ? -1 : 1))
-  }, [data, people, me])
+  }, [data, people, me, editable, group])
+
+  const appointManager = (row: Row) =>
+    appoint.mutate(row.person.userId, {
+      onSuccess: () => toast(`Đã đặt ${row.person.name} làm quản trị nhóm`),
+      onError: (err) => toast.error(groupActionError(err, `đặt ${row.person.name} làm quản trị nhóm`)),
+    })
+  const demoteManager = (row: Row) =>
+    demote.mutate(row.person.userId, {
+      onSuccess: () => toast(`${row.person.name} không còn là quản trị nhóm`),
+      onError: (err) => toast.error(groupActionError(err, `gỡ quyền quản trị nhóm của ${row.person.name}`)),
+    })
 
   const visible = rows.filter((r) => matchesPerson(r.person, query))
   const memberIds = useMemo(() => new Set(rows.map((r) => r.person.userId).filter(Boolean)), [rows])
@@ -206,6 +232,10 @@ export function MembersPanel({ channelId, kind, spaceName, people, me, startAddi
                     online={!!onlineUsers[r.person.userId]}
                     canRemove={mayRemove && !r.isMe}
                     onRemove={() => removeMember(r)}
+                    canAppoint={group.isManager && r.groupRole === 'member'}
+                    canDemote={group.isManager && r.groupRole === 'manager'}
+                    onAppoint={() => appointManager(r)}
+                    onDemote={() => demoteManager(r)}
                   />
                 </motion.li>
               ))}
@@ -216,23 +246,29 @@ export function MembersPanel({ channelId, kind, spaceName, people, me, startAddi
 
       {canLeave && (
         <Pressable
-          onClick={onLeave}
+          onClick={handleLeave}
           className="flex items-center gap-2.5 min-h-11 px-3 text-danger font-semibold border-0 border-t border-line mt-2 hover:bg-hover rounded-none w-full"
         >
           <LogOut size={16} strokeWidth={1.75} aria-hidden="true" />
           Rời nhóm
         </Pressable>
       )}
+
+      <OwnerMustTransferDialog open={ownerLeave} groupName={spaceName} onClose={() => setOwnerLeave(false)} />
     </SidePanel>
   )
 }
 
-function MemberRow({ row, people, online, canRemove, onRemove }: {
+function MemberRow({ row, people, online, canRemove, onRemove, canAppoint, canDemote, onAppoint, onDemote }: {
   row: Row
   people: PeopleDirectory
   online: boolean
   canRemove: boolean
   onRemove: () => void
+  canAppoint: boolean
+  canDemote: boolean
+  onAppoint: () => void
+  onDemote: () => void
 }) {
   const navigate = useNavigate()
   const createDM = useCreateDM()
@@ -241,6 +277,8 @@ function MemberRow({ row, people, online, canRemove, onRemove }: {
   const { person, isMe } = row
   const nameId = useId()
   const roleId = useId()
+  // The group role first, then title and department: "Quản trị nhóm · Chuyên viên · Đối soát".
+  const roleLine = [row.groupRole ? GROUP_ROLE_LABEL[row.groupRole] : '', person.role].filter(Boolean).join(' · ')
 
   const message = () =>
     createDM.mutate(
@@ -255,13 +293,13 @@ function MemberRow({ row, people, online, canRemove, onRemove }: {
     <div className="grid grid-cols-[32px_minmax(0,1fr)_auto] gap-2.5 items-center px-3 py-2 rounded-surface hover:bg-hover">
       <PersonLink
         userId={person.userId} people={people} name={person.name} avatarUrl={person.avatarUrl || undefined}
-        labelledBy={person.role ? `${nameId} ${roleId}` : nameId} className="col-span-2 w-full rounded-surface"
+        labelledBy={roleLine ? `${nameId} ${roleId}` : nameId} className="col-span-2 w-full rounded-surface"
       >
         <span className="grid grid-cols-[32px_minmax(0,1fr)] gap-2.5 items-center w-full">
           <Avatar name={person.name} hueKey={person.userId} src={person.avatarUrl} online={online} size={32} />
           <span className="grid min-w-0">
             <span id={nameId} className="font-medium text-ink truncate">{isMe ? `${person.name} (bạn)` : person.name}</span>
-            {person.role && <span id={roleId} className="text-xs text-ink-muted truncate">{person.role}</span>}
+            {roleLine && <span id={roleId} className="text-xs text-ink-muted truncate">{roleLine}</span>}
           </span>
         </span>
       </PersonLink>
@@ -281,6 +319,16 @@ function MemberRow({ row, people, online, canRemove, onRemove }: {
             <MenuItem icon={<MessageSquare size={16} strokeWidth={1.75} />} onClick={message}>
               Nhắn tin trực tiếp
             </MenuItem>
+            {canAppoint && (
+              <MenuItem icon={<ShieldCheck size={16} strokeWidth={1.75} />} onClick={() => { setOpen(false); onAppoint() }}>
+                Đặt làm quản trị nhóm
+              </MenuItem>
+            )}
+            {canDemote && (
+              <MenuItem icon={<ShieldOff size={16} strokeWidth={1.75} />} onClick={() => { setOpen(false); onDemote() }}>
+                Gỡ quyền quản trị nhóm
+              </MenuItem>
+            )}
             {canRemove && (
               <>
                 <MenuSeparator />

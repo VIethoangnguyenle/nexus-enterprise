@@ -1,10 +1,11 @@
 import '@testing-library/jest-dom/vitest'
-import { cleanup, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { resetClient } from '../../test/render'
 import { apiFetch } from '../../api/client'
 import { NotificationScreen } from './NotificationScreen'
+import { swipe } from '../../test/gesture-events'
 import { answer, dialogOf, renderShell, resetServer, server, viewport } from './phone-shell-harness'
 
 vi.mock('../../api/client', async (orig) => ({ ...(await orig<typeof import('../../api/client')>()), apiFetch: vi.fn() }))
@@ -75,5 +76,47 @@ describe('NotificationScreen', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/approval'))
     expect(onClose).toHaveBeenCalled()
     expect(api).toHaveBeenCalledWith('/notifications/n1/read', expect.objectContaining({ method: 'POST' }))
+  })
+
+  describe('gestures (DESIGN.md §6 "Vuốt")', () => {
+    const readCalls = () => api.mock.calls.filter(([p, init]) => /^\/notifications\/[^/]+\/read$/.test(String(p)) && init?.method === 'POST')
+
+    it('a full swipe right on an unread row only reveals Đã đọc: there is no undo for it', async () => {
+      Object.defineProperty(window, 'innerWidth', { value: 400, configurable: true, writable: true })
+      await renderShell(<NotificationScreen open onClose={onClose} />)
+      const screenEl = await dialogOf('Thông báo')
+      const rows = await within(screenEl).findAllByRole('link')
+      const surface = rows[0]!.closest('[data-swipe-row]')!.lastElementChild!
+      swipe(surface, [{ x: 40, t: 0 }, { x: 52, t: 16 }, { x: 390, t: 600 }])
+      const read = within(surface.parentElement!).getByRole('button', { name: 'Đã đọc' })
+      expect(readCalls()).toEqual([])
+      expect(onClose).not.toHaveBeenCalled()
+      fireEvent.click(read)
+      await waitFor(() => expect(readCalls()).toHaveLength(1))
+      expect(readCalls()[0]![0]).toBe('/notifications/n1/read')
+    })
+
+    it('a row already read does not swipe', async () => {
+      await renderShell(<NotificationScreen open onClose={onClose} />)
+      const screenEl = await dialogOf('Thông báo')
+      const rows = await within(screenEl).findAllByRole('link')
+      expect(rows[0]!.closest('[data-swipe-row]')).not.toBeNull()
+      expect(rows[1]!.closest('[data-swipe-row]')).toBeNull()
+    })
+
+    it('pulling down from the top reloads the list', async () => {
+      await renderShell(<NotificationScreen open onClose={onClose} />)
+      const screenEl = await dialogOf('Thông báo')
+      await within(screenEl).findAllByRole('link')
+      const lists = () => api.mock.calls.filter(([p]) => String(p).startsWith('/notifications?')).length
+      const before = lists()
+      const scroller = screenEl.querySelector('.overflow-y-auto')!
+      const at = (y: number) => ({ touches: [{ clientX: 100, clientY: y }], changedTouches: [{ clientX: 100, clientY: y }] })
+      fireEvent.touchStart(scroller, at(100))
+      fireEvent.touchMove(scroller, at(130))
+      fireEvent.touchMove(scroller, at(320))
+      fireEvent.touchEnd(scroller, at(320))
+      await waitFor(() => expect(lists()).toBeGreaterThan(before))
+    })
   })
 })

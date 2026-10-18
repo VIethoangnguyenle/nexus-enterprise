@@ -38,7 +38,7 @@ import { SpaceFiles } from './SpaceFiles'
 import { SpaceCalendar } from './SpaceCalendar'
 import { SpaceTasks } from './SpaceTasks'
 import { SpaceSearchPanel } from './SpaceSearchPanel'
-import { SpaceInfoPanel } from './SpaceInfoPanel'
+import { ConversationSettings } from './ConversationSettings'
 import { SelfMentionStyle } from './SelfMentionStyle'
 import { EmptyState } from './EmptyState'
 import { LeaveGroupDialog } from './LeaveGroupDialog'
@@ -364,8 +364,9 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
               aria-label={kind === 'space' ? 'Tìm trong nhóm' : 'Tìm trong cuộc trò chuyện'}
               title="Tìm kiếm"
               data-module-search
-              // A conversation has no phone top bar (it steps aside here), so its
-              // own header carries search at every width.
+              // Phase 06: on phone, search moves to the settings quick actions;
+              // the conversation header keeps only Gọi and Thread (mockup §5).
+              className="max-sm:hidden"
               active={panel?.kind === 'search'}
               onClick={() => setPanel(panel?.kind === 'search' ? null : { kind: 'search' })}
             >
@@ -394,6 +395,9 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
               aria-label={kind === 'space' ? 'Thông tin nhóm' : 'Thông tin'}
               title="Thông tin"
               active={panel?.kind === 'info'}
+              // Phase 06: on phone, name tap opens settings; the ⓘ button is
+              // only for desktop where it opens the detail panel (mockup §5).
+              className="max-sm:hidden"
               onClick={() => setPanel(panel?.kind === 'info' ? null : { kind: 'info' })}
             >
               <Info size={18} strokeWidth={1.75} />
@@ -445,6 +449,7 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
               ) : (
                 <ConversationStream
                   channelId={channelId}
+                  workspaceId={workspaceId}
                   label={title ? `Tin nhắn trong ${title}` : 'Tin nhắn'}
                   messages={messages}
                   ready={!messagesQ.isLoading}
@@ -508,6 +513,7 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
                   onSave: lifecycle.saveEdit,
                   onCancel: lifecycle.cancelEdit,
                 } : undefined}
+                onReplyInThread={() => setPanel({ kind: 'threads' })}
                 onEditLast={() => {
                   const last = lastEditableOf(messages, me?.id)
                   if (last) lifecycle.startEdit(last)
@@ -582,7 +588,7 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
           />
         )}
         {panel?.kind === 'info' && conv && (
-          <SpaceInfoPanel
+          <ConversationSettings
             key="info"
             channelId={channelId}
             kind={kind}
@@ -592,10 +598,15 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
             partner={conv.partner}
             people={people}
             notification={phone ? { level, saving: savingLate, onChoose: notify.setLevel } : undefined}
+            starred={starred}
+            canLeave={canLeave}
             onOpenTopic={(id) => {
               setTab('chat')
               setPanel({ kind: 'thread', id })
             }}
+            onOpenMembers={() => setPanel({ kind: 'members' })}
+            onToggleStar={() => void star({ channelId, name: title, starred: !starred })}
+            onLeave={() => setLeaveOpen(true)}
             onClose={() => setPanel(null)}
           />
         )}

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithClient, resetClient } from '../../test/render'
 import { routerState } from '../../test/router-mock'
-import { CH, U, UUID_RE } from '../../test/chat-fixtures'
+import { CH, ME, U, UUID_RE } from '../../test/chat-fixtures'
 import { createChatStateServer } from '../../test/chat-state-server'
 import { apiFetch } from '../../api/client'
 import type { ActivityMessage, Message } from '../../api/messaging'
@@ -69,13 +69,13 @@ const show = async (tab?: string, layer: Record<string, unknown> = {}) => {
   viewport(true)
   routerState.search = { ...(tab ? { tab } : {}), ...layer }
   renderWithClient(<HomeView />)
-  await screen.findByRole('heading', { level: 1 })
+  await screen.findByRole('heading', { level: 1, name: 'Chat' })
 }
 
 describe('Chat below 1024px', () => {
-  it('opens on Trang chủ: previews and the thread line from the first paint, no desktop filter chips', async () => {
+  it('opens on Tất cả: previews and the thread line from the first paint, no desktop filter chips', async () => {
     await show()
-    expect(screen.getByRole('heading', { level: 1, name: 'Trang chủ' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: 'Chat' })).toBeInTheDocument()
     expect(await screen.findByText(/Chị xem giúp em đề nghị tạm ứng/)).toBeInTheDocument()
     expect(screen.getByText(/Em sửa xong rồi ạ/)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /^Mở thread: Nguyễn Thu Lan/ })).toBeInTheDocument()
@@ -89,21 +89,99 @@ describe('Chat below 1024px', () => {
     expect(screen.queryByRole('button', { name: 'Trò chuyện mới' })).toBeNull()
   })
 
-  it('shows the tab named in the address', async () => {
-    await show('direct')
-    expect(screen.getByRole('heading', { level: 1, name: 'Trực tiếp' })).toBeInTheDocument()
-    cleanup()
-    await show('sections')
-    expect(screen.getByRole('heading', { level: 1, name: 'Mục' })).toBeInTheDocument()
-    expect(await screen.findByRole('list', { name: 'Nhóm' })).toBeInTheDocument()
-    cleanup()
-    await show('more')
-    expect(screen.getByRole('heading', { level: 1, name: 'Thêm' })).toBeInTheDocument()
+  describe('the chips', () => {
+    const chips = () => within(screen.getByRole('group', { name: 'Lọc trò chuyện' })).getAllByRole('button')
+
+    it('are Tất cả, Mục, Chưa đọc, Được nhắc, Trực tiếp, Nhóm in that order, with Tất cả pressed', async () => {
+      await show()
+      expect(chips().map((b) => b.textContent?.replace(/\d+$/, ''))).toEqual(['Tất cả', 'Mục', 'Chưa đọc', 'Được nhắc', 'Trực tiếp', 'Nhóm'])
+      expect(chips().map((b) => b.getAttribute('aria-pressed'))).toEqual(['true', 'false', 'false', 'false', 'false', 'false'])
+    })
+
+    it('say how many conversations are unread and how many mentions wait, in the chip\'s name too', async () => {
+      serve({}, 3, {})
+      await show()
+      expect(await screen.findByRole('button', { name: 'Được nhắc, 3 chưa đọc' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /^Chưa đọc, \d+ chưa đọc$/ })).toBeInTheDocument()
+    })
+
+    it.each([
+      ['direct', 'Trực tiếp'], ['spaces', 'Nhóm'], ['unread', 'Chưa đọc'], ['sections', 'Mục'], ['mentions', 'Được nhắc'],
+    ])('open on %s from the address', async (tab, name) => {
+      await show(tab)
+      expect(screen.getByRole('button', { name: new RegExp(`^${name}`) })).toHaveAttribute('aria-pressed', 'true')
+      expect(screen.getByRole('button', { name: /^Tất cả/ })).toHaveAttribute('aria-pressed', 'false')
+    })
+
+    it('list the direct messages on Trực tiếp and the groups on Nhóm', async () => {
+      await show('direct')
+      const list = await screen.findByRole('list', { name: 'Cuộc trò chuyện' })
+      expect(within(list).getAllByRole('listitem')).toHaveLength(2)
+      cleanup()
+      await show('spaces')
+      expect(within(await screen.findByRole('list', { name: 'Cuộc trò chuyện' })).getAllByRole('listitem')).toHaveLength(3)
+    })
+
+    it('show the sections view on Mục, as before', async () => {
+      await show('sections')
+      expect(await screen.findByRole('list', { name: 'Nhóm' })).toBeInTheDocument()
+    })
+
+    it('show the mentions feed on Được nhắc, under the same title', async () => {
+      await show('mentions')
+      expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+      expect(await screen.findByText(/Chưa ai nhắc tên bạn/)).toBeInTheDocument()
+    })
+
+    it('read an old link to Thêm as Được nhắc', async () => {
+      await show('more')
+      expect(screen.getByRole('button', { name: /^Được nhắc/ })).toHaveAttribute('aria-pressed', 'true')
+    })
+
+    it('fall back to Tất cả for a tab they do not know', async () => {
+      await show('nonsense')
+      expect(screen.getByRole('button', { name: /^Tất cả/ })).toHaveAttribute('aria-pressed', 'true')
+    })
+
+    it('replace the address with the chosen chip, and remember it for this person on this device', async () => {
+      const user = userEvent.setup()
+      await show()
+      await user.click(screen.getByRole('button', { name: 'Trực tiếp' }))
+      expect(routerState.navigate).toHaveBeenCalledWith({ to: '/channels', search: { tab: 'direct' }, replace: true })
+      expect(localStorage.getItem(`ngac-chat-chip:${ME.id}`)).toBe('direct')
+    })
+
+    it('write no tab for Tất cả', async () => {
+      const user = userEvent.setup()
+      await show('direct')
+      await user.click(screen.getByRole('button', { name: /^Tất cả/ }))
+      expect(routerState.navigate).toHaveBeenCalledWith({ to: '/channels', search: { tab: undefined }, replace: true })
+      expect(localStorage.getItem(`ngac-chat-chip:${ME.id}`)).toBe('all')
+    })
+
+    it('open on the remembered chip when the address names none, and let the address win when it does', async () => {
+      localStorage.setItem(`ngac-chat-chip:${ME.id}`, 'sections')
+      await show()
+      expect(screen.getByRole('button', { name: /^Mục/ })).toHaveAttribute('aria-pressed', 'true')
+      cleanup()
+      await show('direct')
+      expect(screen.getByRole('button', { name: 'Trực tiếp' })).toHaveAttribute('aria-pressed', 'true')
+    })
+
+    it('ignore a remembered value they do not know', async () => {
+      localStorage.setItem(`ngac-chat-chip:${ME.id}`, 'bogus')
+      await show()
+      expect(screen.getByRole('button', { name: /^Tất cả/ })).toHaveAttribute('aria-pressed', 'true')
+    })
   })
 
-  it('falls back to Trang chủ for a tab it does not know', async () => {
-    await show('nonsense')
-    expect(screen.getByRole('heading', { level: 1, name: 'Trang chủ' })).toBeInTheDocument()
+  it('the ⋯ on the title opens Cài đặt Chat from its first row', async () => {
+    const user = userEvent.setup()
+    await show()
+    await user.click(await screen.findByRole('button', { name: 'Thêm tuỳ chọn Chat' }))
+    const menu = await screen.findByRole('menu', { name: 'Tuỳ chọn Chat' })
+    await user.click(within(menu).getAllByRole('menuitem')[0]!)
+    expect(routerState.navigate).toHaveBeenCalledWith(expect.objectContaining({ to: '/settings/$section', params: { section: 'chat' } }))
   })
 
   it('opens the conversation on a thread from the Thread screen', async () => {
@@ -127,15 +205,8 @@ describe('Chat below 1024px', () => {
     })
   })
 
-  it('opens the Thread screen on Đang theo dõi from Thêm', async () => {
-    const user = userEvent.setup()
-    await show('more')
-    await user.click(await screen.findByRole('button', { name: /Thread đang theo dõi/ }))
-    expect(routerState.navigate).toHaveBeenCalledWith({
-      to: '/channels', search: { tab: 'more', threads: 'followed' }, state: { chatOverlay: true },
-    })
-    cleanup()
-    await show('more', { threads: 'followed' })
+  it('opens the Thread screen on Đang theo dõi, and keeps the chip in the address', async () => {
+    await show('direct', { threads: 'followed' })
     const dialog = await screen.findByRole('dialog', { name: 'Thread' })
     expect(within(dialog).getByRole('radio', { name: 'Đang theo dõi' })).toBeChecked()
     await waitFor(() => expect(within(dialog).getAllByRole('button', { name: /^Thread của/ })).toHaveLength(3))

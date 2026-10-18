@@ -13,6 +13,8 @@ import {
   useMarkAllNotificationsRead, useMarkNotificationRead, useNotificationList, useUnreadNotificationCount,
 } from '../../hooks/useNotifications'
 import { Button, Heading, IconButton, Pressable } from '../primitives'
+import { PullToRefresh } from './PullToRefresh'
+import { SwipeRow, SwipeRowGroup } from './SwipeRow'
 
 interface NotificationPanelProps {
   open: boolean
@@ -136,48 +138,56 @@ export function PanelContent({ titleId, onClose, back = false }: { titleId: stri
         </div>
       </div>
 
-      <div className="overflow-y-auto min-h-0 px-2 pb-3">
-        {list.isLoading ? <Skeleton />
-          : list.isError ? (
-            <State icon={<AlertCircle size={24} strokeWidth={1.75} aria-hidden="true" />} bad title="Không tải được thông báo" hint="Kiểm tra kết nối rồi thử lại.">
-              <Button variant="soft" size="sm" onClick={() => void list.refetch()}>Thử lại</Button>
-            </State>
-          ) : list.items.length === 0 ? (
-            <State icon={<Bell size={24} strokeWidth={1.75} aria-hidden="true" />} title="Chưa có thông báo nào" hint="Khi ai đó duyệt đề nghị hoặc giao tài sản cho bạn, nó sẽ hiện ở đây.">
-              <Button
-                variant="soft"
-                size="sm"
-                onClick={() => { void navigate({ to: '/approval', search: { tab: 'mine' } }); onClose() }}
-              >
-                Xem đề nghị của bạn
-              </Button>
-            </State>
-          ) : (
-            <>
-              {groupByDay(list.items).map((g) => (
-                <section key={g.label}>
-                  <div className="flex items-center gap-3 px-2 pt-3 pb-1.5 text-xs font-semibold text-ink-muted after:content-[''] after:h-px after:flex-1 after:bg-line">
-                    {g.label}
-                  </div>
-                  <ul className="grid gap-0.5 m-0 p-0 list-none">
-                    {g.items.map((n) => <Row key={n.id} n={n} onClose={onClose} />)}
-                  </ul>
-                </section>
-              ))}
-              <div className="grid justify-items-center gap-1.5 pt-3 pb-1">
-                {list.hasMore && (
-                  <Button variant="ghost" size="sm" loading={list.loadingMore} onClick={() => void list.loadMore()}>Tải thêm</Button>
-                )}
-                <span className="text-xs text-ink-muted tnum">Đã hiện {list.items.length} trong {list.total}</span>
-              </div>
-            </>
-          )}
-      </div>
+      {/* On the phone screen: pull down to reload, swipe an unread row right for Đã đọc (DESIGN.md §6 "Vuốt"). */}
+      <PullToRefresh enabled={back} onRefresh={() => list.refetch()} className="overflow-y-auto min-h-0 px-2 pb-3">
+        <SwipeRowGroup>
+          {list.isLoading ? <Skeleton />
+            : list.isError ? (
+              <State icon={<AlertCircle size={24} strokeWidth={1.75} aria-hidden="true" />} bad title="Không tải được thông báo" hint="Kiểm tra kết nối rồi thử lại.">
+                <Button variant="soft" size="sm" onClick={() => void list.refetch()}>Thử lại</Button>
+              </State>
+            ) : list.items.length === 0 ? (
+              <State icon={<Bell size={24} strokeWidth={1.75} aria-hidden="true" />} title="Chưa có thông báo nào" hint="Khi ai đó duyệt đề nghị hoặc giao tài sản cho bạn, nó sẽ hiện ở đây.">
+                <Button
+                  variant="soft"
+                  size="sm"
+                  onClick={() => { void navigate({ to: '/approval', search: { tab: 'mine' } }); onClose() }}
+                >
+                  Xem đề nghị của bạn
+                </Button>
+              </State>
+            ) : (
+              <>
+                {groupByDay(list.items).map((g) => (
+                  <section key={g.label}>
+                    <div className="flex items-center gap-3 px-2 pt-3 pb-1.5 text-xs font-semibold text-ink-muted after:content-[''] after:h-px after:flex-1 after:bg-line">
+                      {g.label}
+                    </div>
+                    <ul className="grid gap-0.5 m-0 p-0 list-none">
+                      {g.items.map((n) => <Row key={n.id} n={n} onClose={onClose} swipe={back} />)}
+                    </ul>
+                  </section>
+                ))}
+                <div className="grid justify-items-center gap-1.5 pt-3 pb-1">
+                  {list.hasMore && (
+                    <Button variant="ghost" size="sm" loading={list.loadingMore} onClick={() => void list.loadMore()}>Tải thêm</Button>
+                  )}
+                  <span className="text-xs text-ink-muted tnum">Đã hiện {list.items.length} trong {list.total}</span>
+                </div>
+              </>
+            )}
+        </SwipeRowGroup>
+      </PullToRefresh>
     </>
   )
 }
 
-function Row({ n, onClose }: { n: NotificationItem; onClose: () => void }) {
+/**
+ * One notification. `swipe` (the phone screen): an unread row reveals Đã đọc on a swipe right. Only revealed, never
+ * run by a full swipe: the server cannot mark a notification unread again, so there would be no Hoàn tác. There is
+ * no Xoá either, for the same reason: the server keeps every notification.
+ */
+function Row({ n, onClose, swipe = false }: { n: NotificationItem; onClose: () => void; swipe?: boolean }) {
   const markRead = useMarkNotificationRead()
   const { text, domain } = describeNotification(n)
   const target = notificationTarget(n)
@@ -225,25 +235,49 @@ function Row({ n, onClose }: { n: NotificationItem; onClose: () => void }) {
     main = <Pressable onClick={open} className={`${linkClass} w-full`}>{face}{body}</Pressable>
   }
 
+  const rowClass = 'group grid grid-cols-[minmax(0,1fr)_2rem] items-start gap-1 rounded-surface transition-colors duration-quick hover:bg-hover'
+  const read = {
+    key: 'read', label: 'Đã đọc', tone: 'accent' as const,
+    icon: <CheckCheck size={22} strokeWidth={1.75} />, onAction: () => markRead.mutate(n.id),
+  }
+  if (swipe && !n.read) {
+    return (
+      <li className="rounded-surface overflow-hidden">
+        <SwipeRow id={n.id} start={[read]}>
+          <div className={rowClass}>
+            {main}
+            <UnreadMark n={n} text={text} onRead={() => markRead.mutate(n.id)} />
+          </div>
+        </SwipeRow>
+      </li>
+    )
+  }
   return (
-    <li className="group grid grid-cols-[minmax(0,1fr)_2rem] items-start gap-1 rounded-surface transition-colors duration-quick hover:bg-hover">
+    <li className={rowClass}>
       {main}
-      <span className="relative grid place-items-center w-8 h-8 mt-2.5">
-        {!n.read && (
-          <>
-            <span aria-hidden="true" className="w-2 h-2 rounded-full bg-accent transition-opacity duration-quick group-hover:opacity-0 group-focus-within:opacity-0" />
-            <IconButton
-              size="md"
-              aria-label={`Đánh dấu đã đọc: ${text}`}
-              onClick={() => markRead.mutate(n.id)}
-              className="absolute inset-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:hidden"
-            >
-              <Check size={16} strokeWidth={1.75} aria-hidden="true" />
-            </IconButton>
-          </>
-        )}
-      </span>
+      <UnreadMark n={n} text={text} onRead={() => markRead.mutate(n.id)} />
     </li>
+  )
+}
+
+/** The dot of an unread row, and over it on hover or focus the button that marks it read. */
+function UnreadMark({ n, text, onRead }: { n: NotificationItem; text: string; onRead: () => void }) {
+  return (
+    <span className="relative grid place-items-center w-8 h-8 mt-2.5">
+      {!n.read && (
+        <>
+          <span aria-hidden="true" className="w-2 h-2 rounded-full bg-accent transition-opacity duration-quick group-hover:opacity-0 group-focus-within:opacity-0" />
+          <IconButton
+            size="md"
+            aria-label={`Đánh dấu đã đọc: ${text}`}
+            onClick={onRead}
+            className="absolute inset-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:hidden"
+          >
+            <Check size={16} strokeWidth={1.75} aria-hidden="true" />
+          </IconButton>
+        </>
+      )}
+    </span>
   )
 }
 

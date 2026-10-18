@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { Bell, BellOff, BellRing, Check, ChevronDown, Info, LogOut, Star } from 'lucide-react'
+import { Bell, BellOff, BellRing, Check, ChevronDown, ChevronRight, Info, LogOut, Star } from 'lucide-react'
 import type { NotificationLevel } from '../../api/notification-levels'
 import type { Conversation } from '../../lib/conversations'
 import { levelOptions, optionFor } from '../../lib/notification-level-copy'
@@ -47,7 +47,14 @@ export function ConversationTitleMenu({ conversation: c, level, starred, phone =
   const body = (
     <>
       <Name title={c.title} level={level} starred={starred} />
-      {!phone && (
+      {phone ? (
+        <ChevronRight
+          size={14}
+          strokeWidth={1.75}
+          aria-hidden="true"
+          className="shrink-0 text-ink-muted"
+        />
+      ) : (
         <ChevronDown
           size={16}
           strokeWidth={1.75}

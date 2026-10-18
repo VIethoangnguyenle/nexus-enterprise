@@ -170,3 +170,26 @@ describe('Đã gắn sao as a screen', () => {
     await waitFor(() => expect(screen.queryByRole('link', { name: /Hợp đồng đối tác/ })).toBeNull())
   })
 })
+
+describe('the Chat chips do not replace the desktop routes', () => {
+  const stubViewport = (narrow: boolean) =>
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: narrow && query.includes('max-width'), media: query, addEventListener: () => {}, removeEventListener: () => {},
+    }))
+
+  it.each([true, false])('/channels/mentions still renders its own pane (phone: %s), and asks the router to go nowhere', async (narrow) => {
+    stubViewport(narrow)
+    renderWithClient(<MentionsRoute />)
+    expect(await screen.findByRole('heading', { name: 'Được nhắc tới' })).toBeInTheDocument()
+    expect(routerState.navigate).not.toHaveBeenCalled()
+  })
+
+  it.each([true, false])('/channels/starred still renders its own pane (phone: %s), and asks the router to go nowhere', async (narrow) => {
+    stubViewport(narrow)
+    routerState.pathname = '/channels/starred'
+    serve({}, 0, { starred: [] })
+    renderWithClient(<StarredRoute />)
+    expect(await screen.findByRole('heading', { name: 'Đã gắn sao' })).toBeInTheDocument()
+    expect(routerState.navigate).not.toHaveBeenCalled()
+  })
+})

@@ -5,15 +5,15 @@ import { Route } from './_workspace/channels.index'
 const validate = Route.options.validateSearch as (s: Record<string, unknown>) => { ws?: string; tab?: string }
 
 describe('/channels search', () => {
-  it('opens Trang chủ when the address has no tab', () => {
-    expect(chatTabOf(validate({}))).toBe('home')
+  it('opens the remembered chip, Tất cả by default, when the address has no tab', () => {
+    expect(chatTabOf(validate({}))).toBe('all')
   })
 
   it('keeps a tab it knows and the workspace beside it', () => {
     expect(validate({ tab: 'sections', ws: 'w1' })).toEqual({ ws: 'w1', tab: 'sections' })
   })
 
-  it('treats an unknown tab as Trang chủ', () => {
-    expect(chatTabOf(validate({ tab: 'bogus' }))).toBe('home')
+  it('treats an unknown tab as no tab', () => {
+    expect(chatTabOf(validate({ tab: 'bogus' }))).toBe('all')
   })
 })

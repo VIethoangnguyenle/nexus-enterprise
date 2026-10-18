@@ -1,8 +1,10 @@
-import { useRef, useSyncExternalStore, type ReactNode, type Ref } from 'react'
+import { useRef, useState, useSyncExternalStore, type ReactNode, type Ref } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'motion/react'
 import { ArrowLeft, X } from 'lucide-react'
 import { useModalFocus } from '../../hooks/useModalFocus'
+import { useEdgeBack } from '../../hooks/useEdgeBack'
+import { isStandalone } from '../../lib/push'
 import { useMotionPresets } from '../../lib/motion'
 import { Heading, IconButton } from '../primitives'
 
@@ -32,6 +34,20 @@ interface SidePanelProps {
   backOnSheet?: boolean
   /** The scrolling body, for panels that place the scroll themselves. */
   bodyRef?: Ref<HTMLDivElement>
+  /**
+   * As a sheet in the installed app, a swipe from the left edge leaves it like ← does (DESIGN.md §6 "Vuốt": the
+   * thread follows the finger, the conversation shows under it). In a browser tab the edge is Safari's and ← stays.
+   */
+  edgeBack?: boolean
+}
+
+/** The installed app, where iOS has no back gesture of its own. A browser without `matchMedia` is not one. */
+function installedApp(): boolean {
+  try {
+    return isStandalone()
+  } catch {
+    return false
+  }
 }
 
 const QUERY = { md: '(max-width: 767.98px)', lg: '(max-width: 1023.98px)' } as const
@@ -69,22 +85,19 @@ const SURFACE = {
  * complementary region beside the content.
  */
 export function SidePanel({
-  label, title, sub, actions, closeLabel, onClose, children, footer, sheetBelow = 'md', onBack, backOnSheet, bodyRef,
+  label, title, sub, actions, closeLabel, onClose, children, footer, sheetBelow = 'md', onBack, backOnSheet, bodyRef, edgeBack,
 }: SidePanelProps) {
   const m = useMotionPresets()
   const sheet = useSyncExternalStore(WATCH[sheetBelow].subscribe, WATCH[sheetBelow].snapshot, () => false)
   const surfaceRef = useRef<HTMLElement>(null)
   useModalFocus({ active: sheet, surfaceRef, onClose })
+  const [standalone] = useState(installedApp)
+  const edge = !!edgeBack && sheet && standalone
+  const back = useEdgeBack({ ref: surfaceRef, enabled: edge, reduced: m.reduced, onBack: onBack ?? onClose })
+  const moving = edge && back.phase !== 'idle'
 
-  const panel = (
-    <motion.aside
-      ref={surfaceRef}
-      role={sheet ? 'dialog' : 'complementary'}
-      aria-modal={sheet || undefined}
-      aria-label={label}
-      {...m.panel}
-      className={`flex flex-col min-h-0 min-w-0 bg-raised ${SURFACE[sheetBelow]}`}
-    >
+  const content = (
+    <>
       <div className={`flex items-center gap-2 pt-3.5 pr-3 pb-2.5 ${sheet && backOnSheet ? 'pl-2' : onBack ? 'pl-2' : 'pl-4'}`}>
         {sheet && backOnSheet ? (
           <IconButton aria-label={`Đóng ${closeLabel}`} title="Đóng" onClick={onBack ?? onClose}>
@@ -112,6 +125,28 @@ export function SidePanel({
       </div>
       <div ref={bodyRef} className="flex-1 min-h-0 overflow-y-auto px-1 pb-2">{children}</div>
       {footer}
+    </>
+  )
+
+  const panel = (
+    <motion.aside
+      ref={surfaceRef}
+      role={sheet ? 'dialog' : 'complementary'}
+      aria-modal={sheet || undefined}
+      aria-label={label}
+      {...m.panel}
+      // While the edge swipe moves the panel the aside itself is see-through, so the conversation shows under it.
+      className={`flex flex-col min-h-0 min-w-0 ${moving ? 'bg-transparent' : 'bg-raised'} ${SURFACE[sheetBelow]}`}
+    >
+      {edge ? (
+        <motion.div
+          data-testid="panel-edge-back"
+          style={{ x: back.x }}
+          className={`flex-1 flex flex-col min-h-0 bg-raised ${moving ? 'shadow-overlay will-change-transform' : ''}`}
+        >
+          {content}
+        </motion.div>
+      ) : content}
     </motion.aside>
   )
   return sheet ? createPortal(panel, document.body) : panel

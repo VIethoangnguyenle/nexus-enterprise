@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
 import { CircleAlert, ClipboardList, Package, Plus, Tag } from 'lucide-react'
+import { useRegisterCreateAction } from '../../hooks/useModuleCreateAction'
 import type { Asset, AssetType } from '../../api/assets'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useAssetActivity, useAssetRequests, useAssetSummary, useAssetTypes, useAssets } from '../../hooks/useAssets'
@@ -22,6 +23,9 @@ import { useMotionPresets } from '../../lib/motion'
 import { workspaceDisplayName } from '../../lib/workspace'
 import { useAuthStore } from '../../stores/auth.store'
 import { Avatar, Button, FilterChip, Heading, ScrollFade, TabBar, type TabItem } from '../primitives'
+import { ModuleHeader } from '../patterns/ModuleHeader'
+import { ScrollTabs } from '../patterns/ScrollTabs'
+import { PullToRefresh } from '../patterns/PullToRefresh'
 import { SearchSuggestions } from '../patterns/SearchSuggestions'
 import { CountPill } from '../approval/StatusPill'
 import { EmptyState } from '../spaces/EmptyState'
@@ -109,6 +113,13 @@ export function AssetsScreen() {
     deciding, rejecting, decisionError, decidePending, rejectPending, anyPending,
     closeDecision, closeReject, doApprove, startApprove, startReject, startAssign, doReject,
   } = useRequestDecisions()
+
+  // Register the create action for the ModuleBar + button.
+  const assetsCreateAction = useMemo(
+    () => requestable.length > 0 ? { label: 'Thêm tài sản', handler: () => setCreatingAsset(true) } : null,
+    [requestable.length],
+  )
+  useRegisterCreateAction('assets', assetsCreateAction)
 
   // ---- the search box: typed text is local; the URL follows after a pause ----
   const [typed, setTyped] = useState(search.q ?? '')
@@ -254,6 +265,14 @@ export function AssetsScreen() {
     <EmptyState icon={<CircleAlert size={24} strokeWidth={1.75} />} text={text} action={retryOf(q)} />
   )
 
+  // Pull to refresh on a phone (DESIGN.md §6 "Vuốt"): what the open tab shows, asked for again.
+  const refresh = () => Promise.all(
+    tab === 'overview' ? [summaryQ.refetch(), activityQ.refetch(), pendingQ.refetch()]
+      : tab === 'list' ? [listQ.refetch(), summaryQ.refetch()]
+        : tab === 'requests' ? [requestsQ.refetch(), pendingQ.refetch()]
+          : [typesQ.refetch()],
+  )
+
   const body = (() => {
     if (tab === 'overview') {
       return (
@@ -395,7 +414,20 @@ export function AssetsScreen() {
   return (
     <div className="relative flex flex-1 min-h-0 min-w-0">
       <section className="flex-1 flex flex-col min-w-0 min-h-0 bg-base" aria-label="Tài sản">
-        <header className="flex items-center gap-4 px-5 pt-4 pb-1 min-w-0">
+        {/* Mobile header (< 1024px) */}
+        {!(covered && tab === 'list') && (
+          <ModuleHeader moduleId="assets" title="Tài sản">
+            <ScrollTabs
+              label="Tài sản"
+              tabs={tabs.map((t) => ({ id: t.id, label: t.label }))}
+              activeTab={tab}
+              onTabChange={(id) => go((p) => tabSearch(p, id as AssetsTab))}
+            />
+          </ModuleHeader>
+        )}
+
+        {/* Desktop header (≥ 1024px) */}
+        <header className="flex items-center gap-4 px-5 pt-4 pb-1 min-w-0 max-lg:hidden">
           <div className="grid gap-0.5 min-w-0">
             <Heading as="h1" look="page" className="truncate">Tài sản</Heading>
             <span className="text-sm text-ink-muted truncate">{sub}</span>
@@ -417,9 +449,9 @@ export function AssetsScreen() {
           </div>
         </header>
 
-        {/* While the suggestions cover the list on a phone, a tab would change what cannot be seen. */}
+        {/* Desktop tabs (≥ 1024px) */}
         {!(covered && tab === 'list') && (
-          <ScrollFade className="px-5">
+          <ScrollFade className="px-5 max-lg:hidden">
             <TabBar
               className="w-max"
               label="Tài sản"
@@ -431,14 +463,16 @@ export function AssetsScreen() {
           </ScrollFade>
         )}
 
-        <div
+        <PullToRefresh
           role="tabpanel"
           id={`assets-panel-${tab}`}
           aria-labelledby={`assets-tab-${tab}`}
+          enabled={phone && !covered}
+          onRefresh={refresh}
           className="@container flex-1 min-h-0 overflow-y-auto pt-3"
         >
           {body}
-        </div>
+        </PullToRefresh>
       </section>
 
       <AnimatePresence>

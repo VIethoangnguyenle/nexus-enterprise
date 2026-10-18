@@ -17,19 +17,21 @@ import { BackBar, FeedCard, FeedEmpty, FeedError, FeedFooter, FeedSkeleton } fro
  * the reader, main messages and thread replies, newest first under day
  * dividers. Looking at the list marks nothing read; opening an item does.
  */
-export function MentionsView({ workspaceId, conversationOf, onOpen, onHome, onBack, hrefOf, phone = false }: {
+export function MentionsView({ workspaceId, conversationOf, onOpen, onHome, onBack, hrefOf, phone = false, embedded = false }: {
   workspaceId: string
   /** The conversation a channel id stands for; its name and icon head each card. */
   conversationOf: (channelId: string) => Conversation | undefined
   /** Open the message (and, for a reply, its thread). The caller routes. */
   onOpen: (item: FeedMessage) => void
-  /** "Về Trang chủ" (phone: "Về Tin nhắn") of the empty state. */
+  /** "Về Trang chủ" (phone: "Về Tin nhắn"; in a chip: "Xem tất cả") of the empty state. */
   onHome: () => void
   /** Phone full screen: the Quay lại bar. Omit on desktop. */
   onBack?: () => void
   /** A real link target for each card, so it can open in a new tab. */
   hrefOf?: (item: FeedMessage) => string
   phone?: boolean
+  /** Inside the Chat list's Được nhắc chip: no heading or Quay lại (the list has its title), and it scrolls with the list. */
+  embedded?: boolean
 }) {
   const me = useAuthStore((s) => s.user?.id)
   const feed = useMentionsFeed(workspaceId)
@@ -59,13 +61,15 @@ export function MentionsView({ workspaceId, conversationOf, onOpen, onHome, onBa
   const sub = 'tin nhắc tên bạn trong mọi cuộc trò chuyện bạn đọc được'
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-base">
-      {onBack && <BackBar title="Được nhắc tới" onBack={onBack} />}
-      <header className="grid gap-px px-5 pt-3.5 pb-2">
-        <Heading as="h1" look="panel">Được nhắc tới</Heading>
-        <span className="text-small text-ink-muted">{typeof unread === 'number' ? `${unread} chưa đọc · ${sub}` : sub}</span>
-      </header>
-      <div className="flex-1 min-h-0 overflow-y-auto px-2 lg:px-4 pb-6">
+    <div className={embedded ? 'grid bg-base' : 'flex-1 flex flex-col min-h-0 min-w-0 bg-base'}>
+      {!embedded && onBack && <BackBar title="Được nhắc tới" onBack={onBack} />}
+      {!embedded && (
+        <header className="grid gap-px px-5 pt-3.5 pb-2">
+          <Heading as="h1" look="panel">Được nhắc tới</Heading>
+          <span className="text-small text-ink-muted">{typeof unread === 'number' ? `${unread} chưa đọc · ${sub}` : sub}</span>
+        </header>
+      )}
+      <div className={embedded ? 'px-2 pb-6' : 'flex-1 min-h-0 overflow-y-auto px-2 lg:px-4 pb-6'}>
         {feed.isPending ? (
           <div aria-busy="true"><span className="sr-only">Đang tải</span><FeedSkeleton rows={4} /></div>
         ) : feed.isError && !feed.data ? (
@@ -74,7 +78,7 @@ export function MentionsView({ workspaceId, conversationOf, onOpen, onHome, onBa
           <FeedEmpty
             kind="mention"
             text="Chưa ai nhắc tên bạn. Khi có người gõ @tên bạn, tin sẽ hiện ở đây."
-            homeLabel={phone ? 'Về Tin nhắn' : 'Về Trang chủ'}
+            homeLabel={embedded ? 'Xem tất cả' : phone ? 'Về Tin nhắn' : 'Về Trang chủ'}
             onHome={onHome}
           />
         ) : (

@@ -1,14 +1,17 @@
-import { useRef, useState, type TouchEvent } from 'react'
-import { addDays, format, isSameDay, startOfWeek } from 'date-fns'
-import { CalendarCheck, ChevronDown, MoreHorizontal, PanelRight } from 'lucide-react'
+import { useState } from 'react'
+import { motion } from 'motion/react'
+import { addDays, addMonths, format, isSameDay, startOfWeek } from 'date-fns'
+import { CalendarCheck, ChevronDown, MoreHorizontal, PanelRight, Settings } from 'lucide-react'
 import { VIEW_LABEL, WEEK_OPTIONS, formatDayMonth, weekdayShort, type CalendarView } from '../../lib/calendar-format'
 import { Button, Heading, IconButton, Pressable } from '../primitives'
+import { useSwipeStep } from '../../hooks/useSwipeStep'
 import { NavSheet, SheetItem } from '../spaces/NavSheet'
+import { ModuleMenu } from '../patterns/ModuleMenu'
+import { useSettingsNav } from '../settings/settings-nav'
 import { MiniMonth } from './MiniMonth'
 
 /** The views a phone offers, in the order of its sheet (DESIGN.md §6, Điện thoại). */
 const PHONE_VIEWS: CalendarView[] = ['agenda', 'day', '3day', 'month']
-const SWIPE_PX = 48
 
 interface StripProps {
   date: Date
@@ -18,24 +21,18 @@ interface StripProps {
   onStep: (steps: -1 | 1) => void
 }
 
-/** Seven cells of the week with a dot under the days that have events; a swipe changes the week. */
+/** Seven cells of the week with a dot under the days that have events; a swipe changes the week (`useSwipeStep`). */
 export function WeekStrip({ date, now, hasEvents, onPick, onStep }: StripProps) {
   const first = startOfWeek(date, WEEK_OPTIONS)
-  const x0 = useRef<number | null>(null)
-  const onEnd = (e: TouchEvent) => {
-    const start = x0.current
-    x0.current = null
-    const dx = start === null ? 0 : (e.changedTouches[0]?.clientX ?? start) - start
-    if (Math.abs(dx) >= SWIPE_PX) onStep(dx < 0 ? 1 : -1)
-  }
+  const { bind, x } = useSwipeStep(onStep)
   return (
-    <div
+    <motion.div
       role="group"
       aria-label="Tuần đang xem"
-      className="grid grid-cols-7 gap-1 px-2 pb-2"
+      className="grid grid-cols-7 gap-1 px-2 pb-2 touch-pan-y"
       data-testid="week-strip"
-      onTouchStart={(e) => { x0.current = e.touches[0]?.clientX ?? null }}
-      onTouchEnd={onEnd}
+      style={{ x }}
+      {...bind}
     >
       {Array.from({ length: 7 }, (_, i) => addDays(first, i)).map((d) => {
         const selected = isSameDay(d, date)
@@ -58,7 +55,17 @@ export function WeekStrip({ date, now, hasEvents, onPick, onStep }: StripProps) 
           </Pressable>
         )
       })}
-    </div>
+    </motion.div>
+  )
+}
+
+/** The month folded open under "Tháng 10 ▾"; a swipe changes the month, as on the month grid. */
+function MonthFold({ date, now, onDate, onPicked }: { date: Date; now: Date; onDate: (d: Date) => void; onPicked: () => void }) {
+  const { bind, x } = useSwipeStep((step) => onDate(addMonths(date, step)))
+  return (
+    <motion.div className="px-4 pb-2 touch-pan-y" data-testid="month-fold" style={{ x }} {...bind}>
+      <MiniMonth date={date} now={now} onPick={(d) => { onDate(d); onPicked() }} />
+    </motion.div>
   )
 }
 
@@ -85,6 +92,7 @@ interface Props {
 export function PhoneCalendarHeader({ view, date, now, tablet, hasEvents, onView, onDate, onStep, onToday, onCalendars }: Props) {
   const [month, setMonth] = useState(false)
   const [sheet, setSheet] = useState(false)
+  const settings = useSettingsNav()
   const label = `Tháng ${format(date, 'M')}`
   return (
     <div>
@@ -108,6 +116,7 @@ export function PhoneCalendarHeader({ view, date, now, tablet, hasEvents, onView
               {VIEW_LABEL[view]}<ChevronDown size={16} strokeWidth={1.75} aria-hidden="true" />
             </Button>
             <IconButton className="size-11!" aria-label="Lịch đang hiện" onClick={onCalendars}><PanelRight size={20} strokeWidth={1.75} /></IconButton>
+            <ModuleMenu section="calendar" label="Lịch" />
           </>
         ) : (
           <>
@@ -118,14 +127,14 @@ export function PhoneCalendarHeader({ view, date, now, tablet, hasEvents, onView
           </>
         )}
       </div>
-      {month && (
-        <div className="px-4 pb-2" data-testid="month-fold">
-          <MiniMonth date={date} now={now} onPick={(d) => { onDate(d); setMonth(false) }} />
-        </div>
-      )}
+      {month && <MonthFold date={date} now={now} onDate={onDate} onPicked={() => setMonth(false)} />}
       {(view === 'agenda' || view === 'day') && <WeekStrip date={date} now={now} hasEvents={hasEvents} onPick={onDate} onStep={onStep} />}
       {sheet && (
         <NavSheet label="Kiểu xem" onClose={() => setSheet(false)}>
+          {/* The ⋯ of a module starts with its settings (DESIGN.md §5, Hàng tiêu đề của phân hệ). */}
+          <SheetItem icon={<Settings size={20} strokeWidth={1.75} />} onClick={() => { settings.open('calendar'); setSheet(false) }}>
+            Cài đặt Lịch
+          </SheetItem>
           <div role="radiogroup" aria-label="Kiểu xem" className="grid gap-1">
             {PHONE_VIEWS.map((v) => (
               <SheetItem key={v} checked={v === view} onClick={() => { onView(v); setSheet(false) }}>{VIEW_LABEL[v]}</SheetItem>

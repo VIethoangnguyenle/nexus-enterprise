@@ -1,17 +1,24 @@
 import { useEditor, EditorContent } from '@tiptap/react'
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { motion, useTransform } from 'motion/react'
 import { Paperclip, Plus, Smile, SendHorizontal, Check, Upload, Camera, Image as ImageIcon } from 'lucide-react'
 import { LazyEmojiPicker } from './lazy-parts'
 import { MentionDropdown } from './MentionDropdown'
 import { FormattingToolbar } from './FormattingToolbar'
 import { LinkDialog } from './LinkDialog'
 import { chatExtensions, mentionsOf } from './chat-extensions'
-import { Button, IconButton, Popover, Pressable } from '../primitives'
+import { Button, IconButton, Popover, Pressable, toast, useToastStore } from '../primitives'
 import { useChannelMembers } from '../../hooks/useMessaging'
+import { PERMISSION_LOST, useGroupRole, useRefreshGroupRole } from '../../hooks/useGroupManagement'
+import { MENTION_ALL } from '../../api/group-management'
+import { isForbidden } from '../../lib/errors'
+import { RestrictedPostingNotice } from '../spaces/group-management/RestrictedPostingNotice'
 import { useAuthStore } from '../../stores/auth.store'
 import { displayName, EMPTY_DIRECTORY, type PeopleDirectory } from '../../lib/people'
 import { usePhone } from '../../hooks/usePhone'
 import { useKeyboardOpen } from '../../hooks/useKeyboardOpen'
+import { useComposerGrip } from '../../hooks/useComposerGrip'
+import { useMotionPresets } from '../../lib/motion'
 import { AttachmentTray } from './AttachmentTray'
 import { type useAttachmentUploads } from '../../hooks/useAttachmentUploads'
 import { useDraftsStore } from '../../stores/drafts.store'
@@ -64,6 +71,11 @@ interface ChatEditorProps {
   draftKey?: string
   /** The conversation is a group with a calendar: the "+" menu offers "Sự kiện". Not in a thread's reply box. */
   canCreateEvent?: boolean
+  /**
+   * Where a member who may not post at the top level (the group keeps it for its owner and managers) is
+   * sent to reply instead, e.g. the conversation's thread list. Without it the notice only explains.
+   */
+  onReplyInThread?: () => void
 }
 
 /** Whether the formatting bar is open is remembered per person, on this device. */
@@ -102,6 +114,7 @@ export function ChatEditor({
   parentMessageId,
   draftKey,
   canCreateEvent,
+  onReplyInThread,
 }: ChatEditorProps) {
   const fileRef = useRef<HTMLInputElement>(null)
   const cameraRef = useRef<HTMLInputElement>(null)
@@ -121,7 +134,23 @@ export function ChatEditor({
   const [empty, setEmpty] = useState(true)
   const [barOpen, setBarOpen] = useState(() => readBar(userId))
   const [link, setLink] = useState<LinkState | null>(null)
+  // Phone: the grip over the box drags it up into a full-screen composer for long or formatted text (mockup §9).
+  const [expanded, setExpanded] = useState(false)
+  const full = phone && expanded
+  const { reduced } = useMotionPresets()
+  const grip = useComposerGrip({
+    expanded: full,
+    onExpand: () => setExpanded(true),
+    onCollapse: () => setExpanded(false),
+    reduced,
+  })
+  const grow = useTransform(grip.pull, (v) => Math.max(0, -v))
   const { data: membersData } = useChannelMembers(channelId)
+  // Who may mention everyone and post at the top level here; the server decides in the end.
+  const group = useGroupRole(channelId)
+  const refreshGroup = useRefreshGroupRole(channelId)
+  const groupRef = useRef(group)
+  groupRef.current = group
   const barId = `fmt-${channelId}-${tone}`
   const uploads = propUploads
   const uploadsRef = useRef(uploads)
@@ -402,14 +431,24 @@ export function ChatEditor({
     drafts.setHtml(sentScope, '')
     editor.commands.clearContent()
     setEmpty(true)
+    setExpanded(false)
 
+    const lastToast = Math.max(0, ...useToastStore.getState().toasts.map((t) => t.id))
     try {
       const res = doneAttachments.length > 0
         ? onSend(content, mentions, doneAttachments)
         : onSend(content, mentions)
       await Promise.resolve(res)
       currentUploads?.clear()
-    } catch {
+    } catch (err) {
+      // Refused by a group rule the composer offered (@Tất cả, a top-level post): the right went away
+      // since the screen last looked. Say so in place of the caller's generic sentence, and look again.
+      if (isForbidden(err) && (mentions.includes(MENTION_ALL) || groupRef.current.management)) {
+        const store = useToastStore.getState()
+        for (const t of store.toasts) if (t.id > lastToast && t.tone === 'error') store.dismiss(t.id)
+        toast.error(PERMISSION_LOST)
+        refreshGroup()
+      }
       // Send failed: the text and the attachments in the tray stay, so nothing is lost. The text
       // returns only to a composer that has not been given new text meanwhile.
       if (content && !useDraftsStore.getState().drafts[sentScope]?.html) {
@@ -421,7 +460,7 @@ export function ChatEditor({
         }
       }
     }
-  }, [editor, onSend])
+  }, [editor, onSend, refreshGroup])
   const sendRef = useRef(handleSend)
   sendRef.current = handleSend
 
@@ -482,13 +521,53 @@ export function ChatEditor({
     if (imageRef.current) imageRef.current.value = ''
   }
 
+  // A plain member of a group that keeps top-level posts for its managers: the main box explains instead.
+  // Threads, and editing one's own message, stay open.
+  if (!parentMessageId && !editing && !group.canPostTopLevel) {
+    return <RestrictedPostingNotice onReplyInThread={onReplyInThread} />
+  }
+
+  const insertMention = (id: string, label: string) => {
+    if (!editor) return
+    const { from } = editor.state.selection
+    const textBefore = editor.state.doc.textBetween(Math.max(0, from - 20), from, '\n', '\0')
+    const match = textBefore.match(/@(\w*)$/)
+    if (match) {
+      const deleteFrom = from - match[0].length
+      editor.chain()
+        .deleteRange({ from: deleteFrom, to: from })
+        .insertContent([
+          { type: 'mention', attrs: { id, label } },
+          { type: 'text', text: ' ' },
+        ])
+        .focus()
+        .run()
+    }
+    setMentionQuery(null)
+  }
+
   return (
-    <div
+    <motion.div
       data-composer-root
       data-docked={docked || undefined}
-      className={docked ? 'relative' : `relative ${tone === 'raised' ? 'mx-4 mb-4' : 'mx-3 mb-3'}
+      data-expanded={full || undefined}
+      style={full ? { y: grip.pull } : undefined}
+      className={full
+        ? 'fixed inset-x-0 top-0 h-app z-modal flex flex-col pt-safe px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-base'
+        : docked ? 'relative' : `relative ${tone === 'raised' ? 'mx-4 mb-4' : 'mx-3 mb-3'}
         max-md:mb-[max(0.75rem,env(safe-area-inset-bottom))]`}
     >
+      {phone && (
+        <Pressable
+          {...grip.bind}
+          aria-label={full ? 'Thu gọn ô soạn' : 'Mở rộng ô soạn'}
+          aria-expanded={full}
+          title={full ? 'Thu gọn ô soạn' : 'Soạn toàn màn hình'}
+          className="grid place-items-center w-full h-4 pb-1 touch-none"
+        >
+          <span aria-hidden="true" className="w-9 h-1 rounded-full bg-line" />
+        </Pressable>
+      )}
       {error && (
         <div role="alert" className="mb-2 px-3 py-2 rounded-md bg-danger-wash text-danger text-small">
           {error}
@@ -509,7 +588,9 @@ export function ChatEditor({
       <div
         ref={boxRef}
         data-composer-box
-        className={docked
+        className={full
+          ? 'flex-1 min-h-0 flex flex-col gap-2 py-2.5 pr-2.5 pl-3.5 rounded-lg bg-raised'
+          : docked
           ? 'grid gap-2 py-1.5 px-2.5 rounded-none border-t border-line bg-base'
           : `grid gap-2 py-2.5 pr-2.5 pl-3.5 rounded-lg focus-within:field-focus
           ${tone === 'raised' ? 'bg-raised' : 'bg-base'}`}
@@ -523,13 +604,17 @@ export function ChatEditor({
             onGoTo={goToQuoted}
           />
         )}
-        {barOpen && <FormattingToolbar editor={editor} id={barId} onLink={(anchor) => openLink(anchor)} />}
+        {(barOpen || full) && <FormattingToolbar editor={editor} id={barId} onLink={(anchor) => openLink(anchor)} />}
         {uploads && uploads.items.length > 0 && (
           <AttachmentTray items={uploads.items} onRemove={uploads.remove} onRetry={uploads.retry} />
         )}
-        <div className="min-w-0 max-h-50 overflow-y-auto py-1" onClick={() => editor?.commands.focus()}>
+        <motion.div
+          style={full ? undefined : { minHeight: grow }}
+          className={`min-w-0 overflow-y-auto py-1 ${full ? 'flex-1 min-h-0' : 'max-h-50'}`}
+          onClick={() => editor?.commands.focus()}
+        >
           <EditorContent editor={editor} />
-        </div>
+        </motion.div>
         <div className="flex items-center gap-0.5">
           {!editing && !phone && (
             <>
@@ -773,28 +858,13 @@ export function ChatEditor({
             members={membersData?.members || []}
             people={people}
             query={mentionQuery}
-            onSelect={(member) => {
-              if (!editor) return
-              const { from } = editor.state.selection
-              const textBefore = editor.state.doc.textBetween(Math.max(0, from - 20), from, '\n', '\0')
-              const match = textBefore.match(/@(\w*)$/)
-              if (match) {
-                const deleteFrom = from - match[0].length
-                editor.chain()
-                  .deleteRange({ from: deleteFrom, to: from })
-                  .insertContent([
-                    { type: 'mention', attrs: { id: member.user_id, label: displayName(people ?? EMPTY_DIRECTORY, member.user_id, member.username) } },
-                    { type: 'text', text: ' ' },
-                  ])
-                  .focus()
-                  .run()
-              }
-              setMentionQuery(null)
-            }}
+            onSelect={(member) =>
+              insertMention(member.user_id, displayName(people ?? EMPTY_DIRECTORY, member.user_id, member.username))}
+            onSelectAll={group.canMentionAll ? () => insertMention(MENTION_ALL, MENTION_ALL.slice(1)) : undefined}
             onClose={() => setMentionQuery(null)}
           />
         </div>
       )}
-    </div>
+    </motion.div>
   )
 }

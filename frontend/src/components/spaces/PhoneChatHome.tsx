@@ -1,21 +1,27 @@
 import { useState } from 'react'
-import { useNavigate, useSearch } from '@tanstack/react-router'
+import { useNavigate } from '@tanstack/react-router'
 import { AnimatePresence } from 'motion/react'
 import { CircleAlert } from 'lucide-react'
 import type { Arrival } from '../../hooks/useArrivals'
 import type { ChatNavigation } from '../../hooks/useChatNavigation'
+import { useChatChip } from '../../hooks/useChatChip'
 import { useChatOverlay } from '../../hooks/useChatOverlay'
 import { usePeople } from '../../hooks/usePeople'
-import { usePullToRefresh } from '../../hooks/usePullToRefresh'
+import { useShortcutScreen } from '../../hooks/useShortcutScreen'
+import { useMentionsUnreadCount } from '../../hooks/useShortcuts'
 import { useUnreadThreads } from '../../hooks/useUnreadThreads'
 import { keys } from '../../hooks/keys'
-import { chatTabOf } from '../../lib/nav-destinations'
+import { filterConversations } from '../../lib/conversations'
 import { queryClient } from '../../lib/query-client'
 import { collapseKey, useNavCollapseStore } from '../../stores/nav-collapse.store'
-import { Button, Spinner } from '../primitives'
+import { Button } from '../primitives'
+import { ModuleMenu } from '../patterns/ModuleMenu'
+import { PullToRefresh } from '../patterns/PullToRefresh'
 import { EmptyState } from './EmptyState'
 import { PhoneHomeFeed } from './PhoneHomeFeed'
-import { PhoneMoreList } from './PhoneMoreList'
+import { ChatChips } from './ChatChips'
+import { MentionsView } from './MentionsView'
+import { PhoneListTitle, ThreadButton } from './PhoneListControls'
 import { PhoneSectionsList } from './PhoneSectionsList'
 import { PhoneThreadsScreen } from './PhoneThreadsScreen'
 import { ChatSearchScreen } from './ChatSearchScreen'
@@ -35,17 +41,18 @@ function reloadLists(workspaceId: string): Promise<unknown> {
 }
 
 /**
- * Chat below 1024px (DESIGN.md "Chat trên điện thoại"): the tab named by
- * `?tab=` — Trang chủ, Trực tiếp, Mục or Thêm — in one scrolling column that
- * reloads when pulled down from the top, and the full-screen Thread list and search
- * over any of them (both live in the address, so the system back closes them). The shell around it (search pill, bottom bar, +) is not its job.
+ * Chat below 1024px (DESIGN.md "Chat trên điện thoại"): the title with Thread, the chips (Tất cả · Mục ·
+ * Chưa đọc · Được nhắc · Trực tiếp · Nhóm) and the list the chosen chip names, in one scrolling column that
+ * reloads when pulled down from the top, and the full-screen Thread list and search over any of them (both
+ * live in the address, so the system back gesture closes them). The chip is the address's `?tab=` or the one
+ * this device remembers. The shell around it (search pill, bottom bar, +) is not its job.
  */
 export function PhoneChatHome({ nav, workspaceId, fresh }: {
   nav: ChatNavigation
   workspaceId: string
   fresh: Map<string, Arrival>
 }) {
-  const tab = chatTabOf(useSearch({ strict: false }) as { tab?: unknown })
+  const { chip: tab, select } = useChatChip()
   const navigate = useNavigate()
   const people = usePeople(workspaceId)
   const setCollapsed = useNavCollapseStore((s) => s.setCollapsed)
@@ -53,21 +60,20 @@ export function PhoneChatHome({ nav, workspaceId, fresh }: {
   const overlays = useSectionOverlays(nav.sectionsApi, true, (id) => setCollapsed(collapseKey(workspaceId, id), false), (c) => setLeaveTarget(c))
   const { overlay, openThreads, close } = useChatOverlay()
   const threadsWithNews = useUnreadThreads().data?.length ?? 0
-  const { bind, pull, refreshing } = usePullToRefresh(() => reloadLists(workspaceId))
+  const mentionsUnread = useMentionsUnreadCount(workspaceId).data ?? 0
 
   return (
     <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-base">
-      <div {...bind} className="relative flex-1 min-h-0 overflow-y-auto overscroll-y-contain">
-        {(pull > 0 || refreshing) && (
-          <div
-            role="status"
-            aria-label="Đang tải lại"
-            style={{ height: refreshing ? 40 : pull }}
-            className="grid place-items-center overflow-hidden"
-          >
-            <Spinner size="md" />
-          </div>
-        )}
+      <PullToRefresh onRefresh={() => reloadLists(workspaceId)} className="relative flex-1 min-h-0 overflow-y-auto overscroll-y-contain">
+        <PhoneListTitle title="Chat">
+          <ThreadButton news={threadsWithNews} onClick={() => openThreads('unread')} />
+          <ModuleMenu section="chat" label="Chat" />
+        </PhoneListTitle>
+        <ChatChips
+          current={tab}
+          onSelect={select}
+          counts={{ unread: filterConversations(nav.conversations, 'unread').length, mentions: mentionsUnread }}
+        />
 
         {nav.isError ? (
           <EmptyState
@@ -89,24 +95,12 @@ export function PhoneChatHome({ nav, workspaceId, fresh }: {
           </div>
         ) : tab === 'sections' ? (
           <PhoneSectionsList nav={nav} workspaceId={workspaceId} overlays={overlays} />
-        ) : tab === 'more' ? (
-          <PhoneMoreList
-            workspaceId={workspaceId}
-            threadsWithNews={threadsWithNews}
-            onOpenFollowedThreads={() => openThreads('following')}
-          />
+        ) : tab === 'mentions' ? (
+          <ChipMentions onAll={() => select('all')} />
         ) : (
-          <PhoneHomeFeed
-            key={tab}
-            scope={tab === 'direct' ? 'direct' : 'home'}
-            conversations={tab === 'direct' ? nav.directs : nav.conversations}
-            fresh={fresh}
-            overlays={overlays}
-            threadsWithNews={threadsWithNews}
-            onOpenThreads={() => openThreads('unread')}
-          />
+          <PhoneHomeFeed key={tab} scope={tab} conversations={nav.conversations} fresh={fresh} overlays={overlays} />
         )}
-      </div>
+      </PullToRefresh>
 
       {/* Closing runs the opening backwards (☰ back, ring and layer fading), so the layer is drawn until it has. */}
       <AnimatePresence>
@@ -140,5 +134,21 @@ export function PhoneChatHome({ nav, workspaceId, fresh }: {
         />
       )}
     </div>
+  )
+}
+
+/** Được nhắc: the mentions feed of `/channels/mentions`, inside the list under the chips. */
+function ChipMentions({ onAll }: { onAll: () => void }) {
+  const s = useShortcutScreen()
+  return (
+    <MentionsView
+      embedded
+      phone
+      workspaceId={s.workspaceId}
+      conversationOf={s.conversationOf}
+      onOpen={s.open}
+      onHome={onAll}
+      hrefOf={s.hrefOf}
+    />
   )
 }

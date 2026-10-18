@@ -1,10 +1,17 @@
-import { useState, useRef, type CSSProperties, type ReactNode } from 'react'
-import { Pin, Star } from 'lucide-react'
+import { useState, useRef, type CSSProperties, type PointerEvent, type ReactNode } from 'react'
+import { motion, useTransform } from 'motion/react'
+import { MessageSquareReply, Pin, Reply, Star } from 'lucide-react'
 import type { Message, MessageAttachment } from '../../api/messaging'
 import { useLongPress } from '../../hooks/useLongPress'
+import { useDoubleTap } from '../../hooks/useDoubleTap'
+import { useMessageSwipe, MSG_SWIPE_SCALE } from '../../hooks/useMessageSwipe'
+import { useBottomBarLayout } from '../../hooks/usePhone'
+import { EASE, useMotionPresets } from '../../lib/motion'
+import { previewText } from '../../lib/chat-cache'
+import { isImageAttachment } from '../../lib/file-kind'
 import { displayName, type PeopleDirectory } from '../../lib/people'
 import { formatDateTime, formatTime } from '../../lib/format'
-import { Avatar } from '../primitives'
+import { Avatar, Pressable } from '../primitives'
 import { PersonLink } from '../primitives/PersonLink'
 import { MessageContent } from '../chat/MessageContent'
 import { ReactionBar } from '../chat/ReactionBar'
@@ -14,6 +21,7 @@ import { AttachmentGrid } from '../chat/AttachmentGrid'
 import { MessageCard } from '../chat/MessageCard'
 import { cardKindOf } from '../../lib/message-model'
 import { FileViewer, type ViewerFile } from '../files/FileViewer'
+import { ReactionSlider, type SlideRect } from './ReactionSlider'
 
 export interface MessageActions {
   me: string | undefined
@@ -22,6 +30,13 @@ export interface MessageActions {
   onPin?: (m: Message) => void
   /** Open the message's thread; absent inside the thread panel itself. */
   onReply?: (id: string) => void
+  /** Quote the message in the composer it is answered in: a swipe right on a phone, and its screen-reader action. */
+  onQuote?: (m: Message) => void
+  /**
+   * The reaction a double-tap toggles on a phone (the person's Chat setting, 👍 by default); empty or absent: off.
+   * Only where reactions are offered (`onReact` and `onToggleReaction`).
+   */
+  quickReaction?: string
   /** Your own text message: the pencil of the hover bar opens it for editing. */
   onEdit?: (m: Message) => void
   /** The "Thêm" button was pressed; the menu hangs from `anchor`. */
@@ -53,6 +68,11 @@ interface MessageBlockProps extends MessageActions {
   editor?: ReactNode
   /** Under the bubble, on the message's side: the thread summary row. */
   children?: ReactNode
+  /**
+   * The conversation's pictures in stream order: opening one of this message's pictures lets the viewer swipe
+   * through all of them (mockup §9). Without it the viewer walks this message's files.
+   */
+  gallery?: ViewerFile[]
 }
 
 /**
@@ -65,7 +85,7 @@ interface MessageBlockProps extends MessageActions {
  */
 export function MessageBlock({
   message: m, people, idBase, mine = false, grouped = false, pressed = false, halo, tag, tagStyle, className = '', editor, children,
-  me, onReact, onToggleReaction, onPin, onReply, onEdit, onMore, onOpenSheet, onOpenQuote,
+  gallery, me, onReact, onToggleReaction, onPin, onReply, onQuote, quickReaction, onEdit, onMore, onOpenSheet, onOpenQuote,
 }: MessageBlockProps) {
   const name = displayName(people, m.sender_id, m.sender_name)
   const avatarUrl = people.byUserId.get(m.sender_id)?.avatarUrl
@@ -95,7 +115,76 @@ export function MessageBlock({
   const hasBubble = hasText || (!deleted && !!m.quoted)
   const pending = !!m._optimistic
   const [timeShown, setTimeShown] = useState(false)
-  const press = useLongPress(() => onOpenSheet?.(m), !!onOpenSheet && !pending && !deleted && !editor)
+  const live = !pending && !deleted && !editor
+
+  // ---- Phone gestures (DESIGN.md §6 "Vuốt", mockup §9). None of them edits or deletes: that stays in the sheet.
+  const phone = useBottomBarLayout()
+  const { reduced } = useMotionPresets()
+  const reactable = !deleted && !!onReact && !!onToggleReaction
+  const reacted = (emoji: string) => !!m.reactions?.some((r) => r.emoji === emoji && r.user_ids?.includes(me ?? ''))
+  const react = (emoji: string) => onToggleReaction?.(m.id, emoji, reacted(emoji))
+  // A call card has no thread (DESIGN.md §6, mockup §1 note 3), so it has no swipe to one either.
+  const threadAction = onReply && !isCallCard ? () => onReply(m.id) : undefined
+  const quoteAction = onQuote ? () => onQuote(m) : undefined
+
+  const swipeEnabled = phone && live && !!(quoteAction || threadAction)
+  const swipe = useMessageSwipe({ onQuote: quoteAction, onThread: threadAction, enabled: swipeEnabled, reduced })
+  const quoteScale = useTransform(swipe.rightProgress, [0, 0.999, 1], [0.6, 1, MSG_SWIPE_SCALE])
+  const threadScale = useTransform(swipe.leftProgress, [0, 0.999, 1], [0.6, 1, MSG_SWIPE_SCALE])
+  const quoteOpacity = useTransform(swipe.rightProgress, [0, 0.3, 1], [0, 0.5, 1])
+  const threadOpacity = useTransform(swipe.leftProgress, [0, 0.3, 1], [0, 0.5, 1])
+  const quoteColor = useTransform(swipe.rightProgress, (v) => (v >= 1 ? 'var(--color-accent)' : 'var(--color-ink-muted)'))
+
+  // Long press: on a phone with reactions, the finger that pressed can slide onto the reaction row; lifting it
+  // first opens the sheet as before. Elsewhere the long press opens the sheet at once.
+  const rootRef = useRef<HTMLDivElement>(null)
+  const bubbleRef = useRef<HTMLDivElement>(null)
+  const finger = useRef<{ pointerId: number; x: number; y: number } | null>(null)
+  const [slide, setSlide] = useState<{ start: { pointerId: number; x: number; y: number }; anchor: SlideRect; text: string } | null>(null)
+  const slideable = phone && reactable && !!onOpenSheet
+  const press = useLongPress(() => {
+    const at = finger.current
+    const el = bubbleRef.current ?? rootRef.current
+    if (!slideable || !at || !el) {
+      onOpenSheet?.(m)
+      return
+    }
+    swipe.cancel()
+    const r = el.getBoundingClientRect()
+    setSlide({
+      start: { ...at },
+      anchor: { top: r.top, bottom: r.bottom, left: r.left, width: r.width },
+      text: bubbleRef.current && hasText ? previewText(m.content) : '',
+    })
+  }, !!onOpenSheet && live)
+
+  // Double-tap toggles the quick reaction; adding it pops the emoji over the bubble (360ms spring).
+  const quick = reactable ? quickReaction ?? '' : ''
+  const [burst, setBurst] = useState(0)
+  const doubleTap = useDoubleTap(() => {
+    const adding = !reacted(quick)
+    react(quick)
+    if (adding && !reduced) setBurst((n) => n + 1)
+  }, phone && live && !!quick)
+
+  const pointerHandlers = {
+    onPointerDown: (e: PointerEvent<HTMLDivElement>) => {
+      finger.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY }
+      press.onPointerDown(e)
+      doubleTap.onPointerDown?.(e)
+    },
+    onPointerMove: (e: PointerEvent<HTMLDivElement>) => {
+      if (finger.current?.pointerId === e.pointerId) finger.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY }
+      press.onPointerMove(e)
+    },
+    onPointerUp: (e: PointerEvent<HTMLDivElement>) => {
+      press.onPointerUp()
+      doubleTap.onPointerUp?.(e)
+    },
+    onPointerCancel: press.onPointerCancel,
+    onPointerLeave: press.onPointerLeave,
+    onContextMenu: press.onContextMenu,
+  }
 
   const time = (
     <time
@@ -118,9 +207,10 @@ export function MessageBlock({
   )
   const showBar = !pending && !deleted && !editor && (onMore || onEdit || (onReact && onPin))
 
-  return (
+  const messageContent = (
     <div
-      {...press}
+      ref={rootRef}
+      {...pointerHandlers}
       onClick={(e) => {
         // A tap on a grouped line shows its time where hover cannot; taps on controls are theirs.
         if (grouped && !(e.target as HTMLElement).closest('a, button, [role="button"]')) setTimeShown((v) => !v)
@@ -189,6 +279,7 @@ export function MessageBlock({
           <>
             {hasBubble && (
               <div
+                ref={bubbleRef}
                 id={`${idBase}-text`}
                 className={`mt-0.5 w-fit max-w-[88%] md:max-w-[min(70ch,85%)] px-3 py-1.75 rounded-xl wrap-anywhere
                   [&_code]:bg-base [&_pre]:bg-base
@@ -221,7 +312,12 @@ export function MessageBlock({
                 tone={mine ? 'raised' : 'base'}
                 onOpen={(idx, files, opener) => {
                   openerRef.current = opener ?? null
-                  setViewer({ files: files.map(viewerFileOf(name, m)), index: idx })
+                  const opened = files[idx]
+                  const inGallery = opened && gallery && isImageAttachment(opened)
+                    ? gallery.findIndex((f) => f.id === opened.drive_file_id)
+                    : -1
+                  if (inGallery >= 0) setViewer({ files: gallery!, index: inGallery })
+                  else setViewer({ files: files.map(viewerFileOf(name, m)), index: idx })
                 }}
               />
             )}
@@ -269,6 +365,87 @@ export function MessageBlock({
           returnFocusRef={openerRef}
         />
       )}
+
+      {burst > 0 && (
+        <span aria-hidden="true" className="absolute inset-0 grid place-items-center pointer-events-none z-10">
+          <motion.span
+            key={burst}
+            className="text-[2.6rem] leading-none drop-shadow-lg"
+            initial={{ scale: 0.4, opacity: 0 }}
+            animate={{ scale: [0.4, 1.2, 1], opacity: [0, 1, 0] }}
+            transition={{ duration: 0.36, ease: EASE.spring }}
+            onAnimationComplete={() => setBurst(0)}
+          >
+            {quick}
+          </motion.span>
+        </span>
+      )}
+
+      {/* Each gesture as an action a screen reader can reach (DESIGN.md §6 "Vuốt": "Đọc màn hình"). */}
+      {phone && live && (quoteAction || threadAction || onReact) && (
+        <div className="sr-only" role="group" aria-label="Thao tác nhanh với tin">
+          {quoteAction && <Pressable onClick={quoteAction}>Trích dẫn</Pressable>}
+          {threadAction && <Pressable onClick={threadAction}>Trả lời trong thread</Pressable>}
+          {onReact && <Pressable onClick={() => onReact(m.id)}>Thả cảm xúc</Pressable>}
+        </div>
+      )}
+
+      {slide && (
+        <ReactionSlider
+          start={slide.start}
+          anchor={slide.anchor}
+          preview={slide.text ? (
+            <div className={`flex ${mine ? 'justify-end' : ''}`}>
+              <div className={`w-fit max-w-full px-3 py-1.75 rounded-xl wrap-anywhere text-16 shadow-overlay line-clamp-4
+                ${mine ? 'bg-accent-wash' : 'bg-sunk'}`}>
+                {slide.text}
+              </div>
+            </div>
+          ) : undefined}
+          onSelect={(emoji) => {
+            setSlide(null)
+            react(emoji)
+          }}
+          onLift={() => {
+            setSlide(null)
+            onOpenSheet?.(m)
+          }}
+          onCancel={() => setSlide(null)}
+        />
+      )}
+    </div>
+  )
+
+  // Desktop and wide tablets keep the message as it was; a phone wraps it in the swipe with its two cues.
+  if (!swipeEnabled) return messageContent
+
+  return (
+    <div className="relative overflow-x-clip" data-message-swipe>
+      {quoteAction && (
+        <motion.span
+          aria-hidden="true"
+          data-swipe-cue="quote"
+          style={{ scale: quoteScale, opacity: quoteOpacity, color: quoteColor }}
+          className="absolute inset-y-0 left-3 flex items-center pointer-events-none"
+        >
+          <Reply size={22} strokeWidth={1.75} />
+        </motion.span>
+      )}
+      {threadAction && (
+        <motion.span
+          aria-hidden="true"
+          data-swipe-cue="thread"
+          style={{ scale: threadScale, opacity: threadOpacity }}
+          className="absolute inset-y-0 right-3.5 flex items-center pointer-events-none"
+        >
+          <span className="grid place-items-center w-9 h-9 rounded-full bg-accent text-on-accent">
+            <MessageSquareReply size={18} strokeWidth={1.75} />
+          </span>
+        </motion.span>
+      )}
+      <motion.div style={{ x: swipe.x }} className="relative touch-pan-y" {...swipe.bind}>
+        {messageContent}
+      </motion.div>
     </div>
   )
 }
@@ -277,7 +454,7 @@ export function MessageBlock({
  * A message's file as the viewer reads it. The header names who sent it and when;
  * a message file carries no folder, so "Mở trong Tài liệu" is not offered.
  */
-const viewerFileOf = (sender: string, m: Message) => (a: MessageAttachment): ViewerFile => ({
+export const viewerFileOf = (sender: string, m: Message) => (a: MessageAttachment): ViewerFile => ({
   id: a.drive_file_id,
   name: a.file_name,
   mime: a.mime_type || undefined,

@@ -14,11 +14,12 @@ const unreadTokens: Array<string | null> = []
 const navigate = vi.fn()
 vi.mock('../api/auth', () => ({ authApi: { switchTenant: (id: string) => switchTenant(id) } }))
 
+let path = '/channels'
 let channels: Array<{ channel_id: string; unread_count: number; last_read_message_id: string; notification_level?: 'all' | 'main' | 'off'; mention_count?: number }> = []
 
 vi.mock('@tanstack/react-router', async () => {
   const actual = await vi.importActual<typeof import('@tanstack/react-router')>('@tanstack/react-router')
-  return { ...actual, useNavigate: () => navigate, Outlet: () => null, Navigate: () => null, useMatches: () => [{ pathname: '/channels' }] }
+  return { ...actual, useNavigate: () => navigate, Outlet: () => null, Navigate: () => null, useMatches: () => [{ pathname: path }] }
 })
 vi.mock('../hooks/useActiveWorkspace', () => ({
   useActiveWorkspace: () => ({ workspaceId: 'w1', workspaceName: 'Khối Vận hành', workspaces: [{ id: 'w1' }], isLoading: false, isError: false }),
@@ -34,7 +35,7 @@ vi.mock('../components/patterns/AppSidebar', () => ({
   AppSidebar: ({ unreadCounts }: { unreadCounts: { messaging?: number } }) => <div data-testid="sidebar" data-unread={unreadCounts.messaging} />,
 }))
 vi.mock('../components/patterns/ListPanel', () => ({ ListPanel: () => null }))
-vi.mock('../components/patterns/MobileNav', () => ({ MobileNav: () => null }))
+vi.mock('../components/patterns/ModuleBar', () => ({ ModuleBar: () => null }))
 vi.mock('../components/patterns/PhoneSearchBar', () => ({ PhoneSearchBar: () => null }))
 vi.mock('../components/app/OfflineBar', () => ({ OfflineBar: () => null }))
 vi.mock('../components/app/UpdateBar', () => ({ UpdateBar: () => null }))
@@ -42,6 +43,7 @@ vi.mock('../components/app/UpdateBar', () => ({ UpdateBar: () => null }))
 vi.mock('../components/calls/CallProvider', () => ({ CallProvider: ({ children }: { children: React.ReactNode }) => <>{children}</> }))
 
 afterEach(() => {
+  path = '/channels'
   unreadTokens.length = 0
   vi.clearAllMocks()
   cleanup()
@@ -69,7 +71,7 @@ describe('workspace layout: sidebar Tin nhắn badge', () => {
   })
 })
 
-describe('workspace layout: room under the list for the phone Chat bar', () => {
+describe('workspace layout: room under the list for the phone bottom bar', () => {
   const stubViewport = (narrow: boolean) =>
     vi.stubGlobal('matchMedia', (query: string) => ({
       matches: narrow && query.includes('max-width'), media: query, addEventListener: () => {}, removeEventListener: () => {},
@@ -85,6 +87,20 @@ describe('workspace layout: room under the list for the phone Chat bar', () => {
     stubViewport(true)
     channels = []
     expect(main().className).toContain('pb-[calc(6.75rem+env(safe-area-inset-bottom,0px))]')
+  })
+
+  it.each(['/drive', '/approval', '/contacts', '/calendar'])('keeps it under the list screen %s too', (to) => {
+    stubViewport(true)
+    channels = []
+    path = to
+    expect(main().className).toContain('pb-[calc(6.75rem+env(safe-area-inset-bottom,0px))]')
+  })
+
+  it.each(['/channels/c-1', '/settings', '/documents/d-1'])('keeps nothing where the bar is not drawn (%s)', (to) => {
+    stubViewport(true)
+    channels = []
+    path = to
+    expect(main().className).not.toContain('pb-[calc(6.75rem')
   })
 
   it('keeps nothing at desktop widths', () => {

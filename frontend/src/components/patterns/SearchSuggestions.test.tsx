@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { Button, useToastStore } from '../primitives'
+import { Button, SearchField, useToastStore } from '../primitives'
 import { SearchBox } from './SearchBox'
 import { SearchSuggestions } from './SearchSuggestions'
 import { switchPreferencesTo, updatePreferences } from '../../lib/preferences'
@@ -557,5 +557,31 @@ describe('groups that come and go around one', () => {
     expect(screen.getByRole('group', { name: 'Tin nhắn' })).toBe(before)
     rerender(<Harness groups={[files(['A.xlsx'], vi.fn(), 'Tin nhắn')]} />)
     expect(screen.getByRole('group', { name: 'Tin nhắn' })).toBe(before)
+  })
+})
+
+describe('a group that widens the search', () => {
+  function MoreHarness({ onMore }: { onMore: () => void }) {
+    const anchorRef = useRef<HTMLInputElement>(null)
+    const groups = [files(['Đối soát tháng 9'], vi.fn(), 'Tài liệu'), files(['Họp quý'], vi.fn(), 'Sự kiện')]
+    const panel = useSuggestionPanel({ value: 'x', groups, variant: 'screen', anchorRef, initiallyOpen: true, typing: true })
+    return (
+      <>
+        <SearchField ref={anchorRef} label="Tìm" />
+        <SearchSuggestions
+          panel={panel}
+          more={(g) => (g.label === 'Tài liệu' ? { label: 'Xem tất cả · 6', onSelect: onMore } : undefined)}
+        />
+      </>
+    )
+  }
+
+  it('offers its link beside the label, named with the group, only where one is given', async () => {
+    const onMore = vi.fn()
+    const user = userEvent.setup()
+    render(<MoreHarness onMore={onMore} />)
+    await user.click(screen.getByRole('button', { name: 'Xem tất cả · 6 Tài liệu' }))
+    expect(onMore).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('button', { name: /Xem tất cả.*Sự kiện/ })).toBeNull()
   })
 })

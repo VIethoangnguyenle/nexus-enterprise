@@ -1,7 +1,10 @@
 import { useId, useRef, type KeyboardEvent } from 'react'
+import { useAccountLanguage } from '../../hooks/useAccountLanguage'
+import { useBottomBarLayout } from '../../hooks/usePhone'
 import { usePreferences } from '../../hooks/usePreferences'
 import type { MotionPref, ThemePref } from '../../lib/preferences'
 import { Pressable } from '../primitives'
+import { LANGUAGE_CHOICES } from './AppearanceScreen'
 
 const THEMES: { id: ThemePref; label: string }[] = [
   { id: 'system', label: 'Theo hệ thống' },
@@ -92,12 +95,15 @@ function Segmented<T extends string>({ label, value, options, onChange }: {
 
 /**
  * Cài đặt → Giao diện (mockup §5): theme as three cards that apply at once,
- * reduced motion, and the sidebar. The choices live on this device under the
- * signed-in person. Realtime colour is not a setting: it is information, so
+ * reduced motion, the account's language, and (where there is one) the
+ * sidebar. Theme and motion live on this device under the signed-in person. Realtime colour is not a setting: it is information, so
  * there is nothing to turn off (DESIGN.md §7).
  */
 export function AppearanceTab() {
   const { prefs, update } = usePreferences()
+  const language = useAccountLanguage()
+  // The sidebar exists only where the bottom bar does not.
+  const phoneLayout = useBottomBarLayout()
   const themeId = useId()
   const cards = useRef<Record<string, HTMLButtonElement | null>>({})
 
@@ -155,7 +161,19 @@ export function AppearanceTab() {
         />
       </section>
 
-      <section className="flex items-center gap-4">
+      <section className="grid gap-2.5">
+        <div className="grid">
+          <span className="font-semibold text-ink">Ngôn ngữ</span>
+          <span className="text-sm text-ink-muted">Dùng chung mọi workspace và mọi thiết bị của bạn.</span>
+        </div>
+        <Segmented
+          label="Ngôn ngữ"
+          value={language.value}
+          options={LANGUAGE_CHOICES.map((c) => ({ id: c.value, label: c.label }))}
+          onChange={(v) => { if (language.ready && v !== language.value) language.set(v) }}
+        />
+      </section>
+      {!phoneLayout && <section className="flex items-center gap-4">
         <div className="grid flex-1 min-w-0">
           <span id={`${themeId}-rail`} className="font-semibold text-ink">Thu gọn sidebar</span>
           <span className="text-sm text-ink-muted">Menu chính thành dải icon 72px, mỗi mục một nhãn nhỏ bên dưới. Phím tắt Ctrl+\ (⌘\ trên macOS).</span>
@@ -177,7 +195,7 @@ export function AppearanceTab() {
               transition-transform duration-press ${prefs.sidebarCollapsed ? 'translate-x-4' : ''}`}
           />
         </Pressable>
-      </section>
+      </section>}
     </div>
   )
 }

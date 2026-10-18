@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useRegisterCreateAction } from '../../hooks/useModuleCreateAction'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { addDays, differenceInCalendarDays, format, isSameDay, setHours, startOfDay } from 'date-fns'
+import { motion } from 'motion/react'
 import { Plus } from 'lucide-react'
 import type { EditScope, Occurrence, RsvpResponse } from '../../api/calendar'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
@@ -12,6 +14,7 @@ import {
 import { useNow } from '../../hooks/useNow'
 import { useBottomBarLayout, usePhone } from '../../hooks/usePhone'
 import { useRealtimeWash } from '../../hooks/useRealtimeWash'
+import { useSwipeStep } from '../../hooks/useSwipeStep'
 import { instanceKey } from '../../lib/calendar-cache'
 import {
   AGENDA_DAYS, CALENDAR_VIEWS, parseDateKey, rangeOf, shiftDate, toDateKey, visibleDays, type CalendarView,
@@ -19,7 +22,7 @@ import {
 import { validateCalendarSearch, type CalendarSearch, type NewEventSearch } from '../../lib/calendar-search'
 import { workspaceDisplayName } from '../../lib/workspace'
 import { useAuthStore } from '../../stores/auth.store'
-import { Button, IconButton, Pressable } from '../primitives'
+import { Button, Pressable } from '../primitives'
 import type { CalendarSummary } from '../../api/calendar'
 import { AddCalendarPicker } from './AddCalendarPicker'
 import { AgendaList } from './AgendaList'
@@ -222,6 +225,10 @@ export function CalendarScreen() {
     toEditor({ date: toDateKey(start), start: format(start, 'HH:mm'), end: format(end, 'HH:mm') })
   }, [date, toEditor])
 
+  // Register the create action for the ModuleBar + button.
+  const createAction = useMemo(() => ({ label: 'Sự kiện mới', handler: createFromButton }), [createFromButton])
+  useRegisterCreateAction('calendar', createAction)
+
   const editOccurrence = useCallback(
     (o: Occurrence) => {
       setOpened(null)
@@ -354,6 +361,7 @@ export function CalendarScreen() {
           colorOf={colorOf}
           onOpen={open}
           onLoadMore={() => setAgendaDays((n) => n + AGENDA_DAYS)}
+          onRefresh={compact ? () => Promise.all([eventsQuery.refetch(), calendarsQuery.refetch()]) : undefined}
         />
       )
   } else {
@@ -375,6 +383,9 @@ export function CalendarScreen() {
       />
     )
   }
+
+  // The month grid below 1024px: a swipe across it is the month before or after (DESIGN.md §6 "Vuốt").
+  const monthSwipe = useSwipeStep((steps) => go({ date: shiftDate('month', date, steps) }), compact && shownView === 'month' && !searching)
 
   const showEmptyHint = !searching && !loading && !noneVisible && !calendarFailed && !eventsQuery.isError && occurrences.length === 0
     && shownView !== 'agenda'
@@ -461,20 +472,14 @@ export function CalendarScreen() {
             <Button variant="soft" size="sm" className="rounded-full" onClick={createFromButton}>Tạo sự kiện</Button>
           </div>
         )}
-        {body}
+        {compact && shownView === 'month' && !searching ? (
+          <motion.div {...monthSwipe.bind} style={{ x: monthSwipe.x }} className="flex-1 min-h-0 flex flex-col touch-pan-y">
+            {body}
+          </motion.div>
+        ) : body}
       </section>
 
-      {compact && (
-        <IconButton
-          variant="filled"
-          size="lg"
-          aria-label="Tạo sự kiện"
-          onClick={createFromButton}
-          className="fixed z-sticky bottom-6 right-4 size-14! rounded-xl!"
-        >
-          <Plus size={26} strokeWidth={1.75} />
-        </IconButton>
-      )}
+      {/* The phone's + is now handled by the ModuleBar's CreateActionFab via useRegisterCreateAction. */}
 
       {compact ? (
         <EventSheet {...detailProps} occurrence={openOccurrence} side={tablet ? 'right' : 'bottom'} />

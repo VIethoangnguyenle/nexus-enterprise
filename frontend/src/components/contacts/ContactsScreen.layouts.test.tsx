@@ -148,16 +148,15 @@ describe('Danh bạ on a tablet (768 to 1023)', () => {
 describe('Danh bạ on a phone (below 768): the stack', () => {
   beforeEach(() => stubViewport(375))
 
-  it('first screen: the title and a tile per category with the shortcut to the caller\'s department, no people, nothing asked for', async () => {
+  it('first screen: the title and a grid of categories with Phòng của tôi after Phòng ban, no people, nothing asked for', async () => {
     await renderContacts()
     expect(await screen.findByRole('heading', { level: 1, name: 'Danh bạ' })).toBeInTheDocument()
-    await within(tiles()).findByRole('button', { name: /^Kế toán/ })
+    await within(tiles()).findByRole('button', { name: /^Phòng của tôi/ })
     const names = within(tiles()).getAllByRole('button').map(textOf)
     expect(names[0]).toMatch(/^Phòng ban/)
-    expect(names[1]).toMatch(/^Vai trò.*3 vai trò/)
-    expect(names[2]).toMatch(/^Nhóm của tôi/)
-    expect(names[3]).toMatch(/^Kế toán/)
-    expect(tiles()).toHaveTextContent('Phòng của tôi')
+    expect(names[1]).toMatch(/^Phòng của tôi.*Kế toán/)
+    expect(names[2]).toMatch(/^Vai trò.*3 vai trò/)
+    expect(names[3]).toMatch(/^Nhóm của tôi/)
     expect(screen.queryByRole('button', { name: /^Trần Minh Đức/ })).toBeNull()
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(document.body.textContent).not.toMatch(/Tất cả thành viên|Bên ngoài|Danh bạ chia sẻ/)
@@ -247,15 +246,15 @@ describe('Danh bạ on a phone (below 768): the stack', () => {
     expect(await layer('Khối Vận hành')).toBeInTheDocument()
   })
 
-  it('a person opens a full-screen profile with three actions and a back on the cover, and back returns to the list', async () => {
+  it('a person opens a full-screen profile with four actions and a back on the cover, and back returns to the list', async () => {
     const user = userEvent.setup()
     const router = await renderContacts(`/contacts?cat=org&dept=${D.vhds}`)
     const list = await layer('Đối soát')
     await user.click(await within(list).findByRole('button', { name: /^Nguyễn Thu Lan/ }))
 
     const profile = await layer('Hồ sơ Nguyễn Thu Lan')
-    for (const name of ['Nhắn tin', 'Gọi']) expect(within(profile).getByRole('button', { name })).toBeInTheDocument()
-    expect(within(profile).getByRole('link', { name: 'Gửi email' })).toBeInTheDocument()
+    const actions = within(profile).getByRole('group', { name: 'Thao tác' })
+    expect(within(actions).getAllByRole('button').map((b) => b.textContent)).toEqual(['Nhắn tin', 'Gọi', 'Lịch', 'Email'])
     expect(router.state.location.search).toMatchObject({ person: U.lan.id })
     expectNoIds()
 
@@ -268,7 +267,7 @@ describe('Danh bạ on a phone (below 768): the stack', () => {
   it('the system back closes the profile', async () => {
     const user = userEvent.setup()
     const router = await renderContacts()
-    await user.click(await within(tiles()).findByRole('button', { name: /^Kế toán/ }))
+    await user.click(await within(tiles()).findByRole('button', { name: /^Phòng của tôi/ }))
     await user.click(await within(await layer('Kế toán')).findByRole('button', { name: /^Lê Thị Hoa/ }))
     await layer(/Hồ sơ/)
     act(() => router.history.back())
@@ -309,7 +308,7 @@ describe('Danh bạ on a phone (below 768): the stack', () => {
     it('a profile closed by the system back is gone at once, not faded out over the list', async () => {
       const user = userEvent.setup()
       const router = await renderContacts()
-      await user.click(await within(tiles()).findByRole('button', { name: /^Kế toán/ }))
+      await user.click(await within(tiles()).findByRole('button', { name: /^Phòng của tôi/ }))
       await user.click(await within(await layer('Kế toán')).findByRole('button', { name: /^Lê Thị Hoa/ }))
       await layer(/Hồ sơ/)
       await waitFor(() => expect(seen(screen.getByRole('dialog', { name: /Hồ sơ/ })).layer).toBe('1'))
@@ -324,7 +323,7 @@ describe('Danh bạ on a phone (below 768): the stack', () => {
     it('a profile closed by its own back button still fades out', async () => {
       const user = userEvent.setup()
       await renderContacts()
-      await user.click(await within(tiles()).findByRole('button', { name: /^Kế toán/ }))
+      await user.click(await within(tiles()).findByRole('button', { name: /^Phòng của tôi/ }))
       await user.click(await within(await layer('Kế toán')).findByRole('button', { name: /^Lê Thị Hoa/ }))
       const profile = await layer(/Hồ sơ/)
       await waitFor(() => expect(seen(profile).layer).toBe('1'))
@@ -356,7 +355,7 @@ describe('Danh bạ on a phone (below 768): the stack', () => {
   it('the top bar\'s search opens the search screen, which finds people across the workspace', async () => {
     const user = userEvent.setup()
     await renderContacts()
-    await within(tiles()).findByRole('button', { name: /^Kế toán/ })
+    await within(tiles()).findByRole('button', { name: /^Phòng của tôi/ })
     act(() => (document.querySelector('[data-module-search]') as HTMLElement).click())
 
     const search = await layer('Tìm trong danh bạ')
@@ -371,9 +370,9 @@ describe('Danh bạ on a phone (below 768): the stack', () => {
 
   it('a limited caller\'s search box says it searches the scope they may see', async () => {
     server.contacts = directory(PEOPLE.filter((p) => p.department_id === D.kt), { visibility: 'limited' })
-    await renderContacts('/contacts?cat=org')
-    const list = await layer('Phòng ban')
-    expect(await within(list).findByRole('searchbox', { name: 'Tìm người trong phạm vi bạn được xem' })).toBeInTheDocument()
+    await renderContacts('/contacts?cat=search')
+    const search = await layer('Tìm trong danh bạ')
+    expect(await within(search).findByRole('searchbox', { name: 'Tìm người trong phạm vi bạn được xem' })).toBeInTheDocument()
   })
 
   it('opens a group from Nhóm của tôi and can go to its conversation', async () => {
@@ -387,35 +386,37 @@ describe('Danh bạ on a phone (below 768): the stack', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe(`/channels/${CH.doisoat}`))
   })
 
-  it('keeps the search suggestions on the search screen: they cover the list until Quay lại, and the box stays a plain search box', async () => {
+  it('keeps the search suggestions on the search screen, which a level\'s search icon opens; the level itself has no search box', async () => {
     const user = userEvent.setup()
     addRecent('contacts', ME.id, 'kế toán')
     server.workspaceType = 'personal'
     await renderContacts('/contacts?cat=members')
     const list = await layer('Thành viên')
-    await user.click(await within(list).findByRole('searchbox', { name: /^Tìm người/ }))
-    expect(await within(list).findByRole('button', { name: 'Tìm lại kế toán' })).toBeInTheDocument()
-    await user.click(within(list).getByRole('button', { name: 'Quay lại danh sách' }))
-    expect(within(list).queryByRole('button', { name: 'Tìm lại kế toán' })).toBeNull()
-    expect(within(list).getByRole('button', { name: /^Trần Minh Đức/ })).toBeInTheDocument()
+    await within(list).findByRole('button', { name: /^Trần Minh Đức/ })
+    expect(within(list).queryByRole('searchbox')).toBeNull()
+    await user.click(within(list).getByRole('button', { name: 'Tìm người' }))
+    const search = await layer('Tìm trong danh bạ')
+    expect(await within(search).findByRole('button', { name: 'Tìm lại kế toán' })).toBeInTheDocument()
+    await user.click(within(search).getByRole('button', { name: 'Tìm lại kế toán' }))
+    expect(within(search).getByRole('searchbox', { name: /^Tìm người/ })).toHaveValue('kế toán')
   })
 })
 
 describe('Danh bạ on a phone: search, focus and the way back', () => {
   beforeEach(() => stubViewport(375))
 
-  it('typing in the search box of a level keeps the box, its focus, what was typed and the level\'s name on the bar', async () => {
+  it('typing on the search screen keeps the box, its focus, what was typed and the screen\'s name on the bar', async () => {
     const user = userEvent.setup()
-    await renderContacts(`/contacts?cat=org&dept=${D.vhds}`)
-    const level = await layer('Đối soát')
-    const box = within(level).getByRole('searchbox', { name: /^Tìm người/ })
+    await renderContacts('/contacts?cat=search')
+    const search = await layer('Tìm trong danh bạ')
+    const box = within(search).getByRole('searchbox', { name: /^Tìm người/ })
     await user.click(box)
     await user.keyboard('la')
-    const after = within(await layer('Đối soát')).getByRole('searchbox', { name: /^Tìm người/ })
+    const after = within(await layer('Tìm trong danh bạ')).getByRole('searchbox', { name: /^Tìm người/ })
     expect(after).toBe(box)
     expect(box).toHaveFocus()
     expect(box).toHaveValue('la')
-    expect(within(await layer('Đối soát')).getByRole('heading', { level: 2, name: 'Đối soát' })).toBeInTheDocument()
+    expect(within(await layer('Tìm trong danh bạ')).getByRole('heading', { level: 2, name: 'Tìm trong danh bạ' })).toBeInTheDocument()
   })
 
   it('the search screen lists nobody until something is typed, and says what to type', async () => {
