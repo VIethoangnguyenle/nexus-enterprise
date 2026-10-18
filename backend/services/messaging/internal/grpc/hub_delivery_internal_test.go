@@ -201,3 +201,29 @@ func unmarshalEnvelopeForTest(t *testing.T, data []byte) uint64 {
 	require.NoError(t, proto.Unmarshal(data, &env))
 	return env.GetDomainEvent().GetSeq()
 }
+
+// A frame is numbered in Redis before it is delivered, so a sync can read a
+// counter that includes a frame whose live delivery has not reached the session
+// yet. That frame is already part of the replay and must not arrive again once
+// the hold is over; the next one must.
+func TestOfferWorkspace_FrameCoveredByAReplayIsNotDeliveredAgainAfterTheHold(t *testing.T) {
+	h := newInternalHub(t)
+	c := sessionOf(h, "t1", "n1", 8)
+	live := func(seq uint64) []byte {
+		return marshalEnvelope(domainEnvelope(realtime.Event{
+			Domain: realtime.DomainDrive, Kind: realtime.KindUpdated, TenantID: "t1", WorkspaceID: "w1", IDs: []string{"f"},
+		}, seq))
+	}
+
+	c.holdWorkspace("w1")
+	c.endHold(22) // the replay covered 1..22
+
+	c.offerWorkspace("w1", live(22)) // numbered before the read, delivered after the hold
+	assert.Empty(t, c.send, "frame 22 was replayed; delivering it again repeats it")
+
+	c.offerWorkspace("w1", live(23))
+	require.Len(t, c.send, 1)
+	var env pb.ServerEnvelope
+	require.NoError(t, proto.Unmarshal(<-c.send, &env))
+	assert.EqualValues(t, 23, env.GetDomainEvent().Seq)
+}

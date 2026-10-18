@@ -53,6 +53,10 @@ type Client struct {
 	holdMu sync.Mutex
 	holdWS string
 	held   [][]byte
+	// replayedTo is, per workspace, the highest number a finished replay
+	// covered. A frame is numbered before it is delivered, so one the replay
+	// already sent can still arrive live afterwards; it is dropped here.
+	replayedTo map[string]uint64
 }
 
 // WSClaims are JWT claims for WebSocket authentication.
