@@ -10,7 +10,33 @@ import (
 
 // --- PAP: Schema initialization ---
 
+// schemaObjects are the tables and indexes InitSchema creates. When every one exists
+// the DDL is skipped: even as a no-op, CREATE INDEX IF NOT EXISTS takes a ShareLock on
+// its table before it looks for the index, and all of it runs in one implicit
+// transaction. Two statements of that transaction therefore lock ngac_assignments
+// and ngac_nodes in the order opposite to a DELETE FROM ngac_nodes cascading into
+// ngac_assignments, so a policy process starting beside a node delete (a restart, a
+// second replica) deadlocked with it and blocked every graph write meanwhile.
+var schemaObjects = []string{
+	"ngac_nodes", "ngac_assignments", "ngac_associations", "ngac_operations", "ngac_prohibitions",
+	"idx_assignments_child", "idx_assignments_parent", "idx_associations_ua", "idx_associations_oa",
+	"idx_nodes_type", "idx_nodes_name", "idx_prohibitions_subject",
+}
+
+func (s *Store) schemaPresent(ctx context.Context) (bool, error) {
+	var missing int
+	err := s.db.QueryRow(ctx,
+		`SELECT count(*) FROM unnest($1::text[]) AS o(name) WHERE to_regclass(o.name) IS NULL`,
+		schemaObjects).Scan(&missing)
+	return err == nil && missing == 0, err
+}
+
 func (s *Store) InitSchema(ctx context.Context) error {
+	if present, err := s.schemaPresent(ctx); err != nil {
+		return err
+	} else if present {
+		return s.backfillOperations(ctx)
+	}
 	schema := `
 	CREATE TABLE IF NOT EXISTS ngac_nodes (
 		id         TEXT PRIMARY KEY,
@@ -53,14 +79,21 @@ func (s *Store) InitSchema(ctx context.Context) error {
 	CREATE INDEX IF NOT EXISTS idx_nodes_type ON ngac_nodes(node_type);
 	CREATE INDEX IF NOT EXISTS idx_nodes_name ON ngac_nodes(name);
 	CREATE INDEX IF NOT EXISTS idx_prohibitions_subject ON ngac_prohibitions(subject_id);
+	`
+	if _, err := s.db.Exec(ctx, schema); err != nil {
+		return err
+	}
+	return s.backfillOperations(ctx)
+}
 
-	-- Auto-populate operations from existing associations (migration-safe)
+// backfillOperations records every operation already used by an association
+// (migration-safe). Row locks only, so it never contends with graph writes.
+func (s *Store) backfillOperations(ctx context.Context) error {
+	_, err := s.db.Exec(ctx, `
 	INSERT INTO ngac_operations (name)
 	SELECT DISTINCT unnest(operations) AS op
 	FROM ngac_associations
-	ON CONFLICT (name) DO NOTHING;
-	`
-	_, err := s.db.Exec(ctx, schema)
+	ON CONFLICT (name) DO NOTHING`)
 	return err
 }
 
