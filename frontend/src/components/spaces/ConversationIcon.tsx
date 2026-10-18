@@ -8,7 +8,7 @@ import { Avatar, SpaceIcon } from '../primitives'
  */
 export function ConversationIcon({ conversation: c, size, online, halo }: {
   conversation: Pick<Conversation, 'kind' | 'title' | 'hueKey' | 'partner' | 'avatarUrl'>
-  size: 24 | 32 | 36 | 40 | 44
+  size: 20 | 24 | 32 | 36 | 40 | 44
   online?: boolean
   halo?: boolean
 }) {

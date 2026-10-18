@@ -119,6 +119,14 @@ describe('the full-screen layers of the Chat list in the address', () => {
     for (const v of [0, '0', 'yes', false, 2, null, {}]) expect(validateChannelsSearch({ search: v }).search).toBeUndefined()
   })
 
+  it('keeps the words and filters of the search screen only while the screen is open, and only well-formed ones', () => {
+    const address = { q: ' đối soát ', from: 'u-1', in: 'c-1', since: '2026-10-01', until: '2026-13-40', file: '1', link: 0, me: 1 }
+    expect(validateChannelsSearch({ search: 1, ...address })).toEqual({
+      search: 1, q: 'đối soát', from: 'u-1', in: 'c-1', since: '2026-10-01', file: 1, me: 1,
+    })
+    expect(validateChannelsSearch(address)).toEqual({})
+  })
+
   it('keeps a Thread list that exists and drops one that does not', () => {
     expect(validateChannelsSearch({ threads: 'new' }).threads).toBe('new')
     expect(validateChannelsSearch({ threads: 'followed' }).threads).toBe('followed')
