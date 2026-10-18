@@ -27,8 +27,10 @@ func TestRealPolicy_CalendarMembershipIsTheMembersUA(t *testing.T) {
 	g := testutil.SeedWorkspaceGraph(t, write)
 	other := testutil.SeedWorkspaceGraph(t, write)
 
-	guests := testutil.NewNode(t, write, ngac.CalendarEventGuestsUAName("rp-ev"), ngac.TypeUA, g.PC)
-	group := testutil.NewNode(t, write, ngac.ChannelMembersUAName("rp-ch"), ngac.TypeUA, g.PC)
+	evID := ngac.CalendarEventID("rp-ev-" + g.WorkspaceID)
+	chID := ngac.ChannelID("rp-ch-" + g.WorkspaceID)
+	guests := testutil.NewNode(t, write, ngac.CalendarEventGuestsUAName(evID), ngac.TypeUA, g.PC)
+	group := testutil.NewNode(t, write, ngac.ChannelMembersUAName(chID), ngac.TypeUA, g.PC)
 
 	st := newMemStore(&store.Workspace{ID: g.WorkspaceID, Name: "Acme", Type: "organization", PCNodeID: g.PC})
 	person := func(name string, parents ...string) string {

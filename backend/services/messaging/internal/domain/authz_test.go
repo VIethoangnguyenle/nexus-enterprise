@@ -147,7 +147,10 @@ func (p *scriptedPolicyRead) GetChildren(_ context.Context, req *policypb.GetChi
 }
 
 func (p *scriptedPolicyRead) FindNodeByName(_ context.Context, req *policypb.FindNodeByNameRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
-	if req.Name == ngac.NodePCGlobal && req.NodeType == ngac.TypePC && !p.noGlobal {
+	if req.Name == ngac.NodePCGlobal && req.NodeType == ngac.TypePC {
+		if p.noGlobal {
+			return nil, errors.New("not found")
+		}
 		return &policypb.NGACNode{Id: "pc-global", Name: req.Name, NodeType: req.NodeType}, nil
 	}
 	switch {

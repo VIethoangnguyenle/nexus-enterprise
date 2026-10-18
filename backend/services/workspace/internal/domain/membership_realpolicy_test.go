@@ -65,8 +65,8 @@ func newWSWorld(t *testing.T) *wsWorld {
 	id := ngac.WorkspaceID(w.g.WorkspaceID)
 
 	tenantUA := testutil.NewNode(t, write, ngac.TenantMemberUAName(id), ngac.TypeUA, w.g.Members)
-	chanUA := testutil.NewNode(t, write, ngac.ChannelMembersUAName("rp-ch"), ngac.TypeUA, w.g.PC)
-	guestsUA := testutil.NewNode(t, write, ngac.CalendarEventGuestsUAName("rp-ev"), ngac.TypeUA, w.g.PC)
+	chanUA := testutil.NewNode(t, write, ngac.ChannelMembersUAName(ngac.ChannelID("rp-ch-"+w.g.WorkspaceID)), ngac.TypeUA, w.g.PC)
+	guestsUA := testutil.NewNode(t, write, ngac.CalendarEventGuestsUAName(ngac.CalendarEventID("rp-ev-"+w.g.WorkspaceID)), ngac.TypeUA, w.g.PC)
 
 	w.owner = w.person(w.g.Owners)
 	w.member = w.person(w.g.Members)
