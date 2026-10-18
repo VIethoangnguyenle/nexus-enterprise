@@ -141,7 +141,7 @@ func (w *callWorld) member(t *testing.T) string {
 func (w *callWorld) asDM(t *testing.T) {
 	t.Helper()
 	ctx := context.Background()
-	_, err := w.f.pool.Exec(ctx, `UPDATE channels SET channel_type = 'dm', workspace_id = NULL WHERE id = $1`, w.chID)
+	_, err := w.f.pool.Exec(ctx, `UPDATE channels SET channel_type = 'dm' WHERE id = $1`, w.chID)
 	require.NoError(t, err)
 	var callerNode string
 	require.NoError(t, w.f.pool.QueryRow(ctx, `SELECT ngac_node FROM users WHERE id = $1`, w.f.userID).Scan(&callerNode))
@@ -166,7 +166,7 @@ func (w *callWorld) asDM(t *testing.T) {
 
 func (w *callWorld) start(t *testing.T, kind string) string {
 	t.Helper()
-	join, _, err := w.f.svc.StartCall(context.Background(), domain.StartCallInput{
+	join, _, err := w.f.svc.StartCall(w.f.callerCtx(), domain.StartCallInput{
 		ChannelID: w.chID, UserID: w.f.userID, UserNodeID: userNode, Kind: kind,
 	})
 	require.NoError(t, err)
@@ -177,7 +177,7 @@ func (w *callWorld) start(t *testing.T, kind string) string {
 // they were handed, when they could get one.
 func (w *callWorld) joined(t *testing.T, callID, userID string) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := w.f.callerCtx()
 	_, _ = w.f.svc.CallToken(ctx, callID, userID, w.nodes[userID])
 	require.NoError(t, w.f.svc.HandleCallEvent(ctx, domain.CallEvent{
 		Kind: domain.CallEventJoined, Room: callID, Identity: userID,
@@ -205,7 +205,7 @@ func TestStartCall_GroupIsActiveWithCardRoomAndTicket(t *testing.T) {
 func TestStartCall_DirectMessageRingsThePeer(t *testing.T) {
 	w := newCallWorld(t)
 	w.asDM(t)
-	join, _, err := w.f.svc.StartCall(context.Background(), domain.StartCallInput{
+	join, _, err := w.f.svc.StartCall(w.f.callerCtx(), domain.StartCallInput{
 		ChannelID: w.chID, UserID: w.f.userID, UserNodeID: userNode, Kind: "audio",
 	})
 	require.NoError(t, err)
@@ -348,7 +348,7 @@ func TestOpenCall_ForReadersOnly(t *testing.T) {
 func TestDirectCall_AnsweredWhenThePeerJoins(t *testing.T) {
 	w := newCallWorld(t)
 	w.asDM(t)
-	ctx := context.Background()
+	ctx := w.f.callerCtx()
 	id := w.start(t, "video")
 	w.joined(t, id, w.f.userID)
 	c, err := w.f.svc.GetCall(ctx, id, userNode)
@@ -369,7 +369,7 @@ func TestDirectCall_EndsWhenOneHangsUp(t *testing.T) {
 	w := newCallWorld(t)
 	w.asDM(t)
 	domain.SetCallHangUpGraceForTest(w.f.svc, 50*time.Millisecond)
-	ctx := context.Background()
+	ctx := w.f.callerCtx()
 	id := w.start(t, "video")
 	w.joined(t, id, w.f.userID)
 	w.joined(t, id, w.peer)
@@ -395,7 +395,7 @@ func TestDirectCall_AReconnectDoesNotEndIt(t *testing.T) {
 	w := newCallWorld(t)
 	w.asDM(t)
 	domain.SetCallHangUpGraceForTest(w.f.svc, 100*time.Millisecond)
-	ctx := context.Background()
+	ctx := w.f.callerCtx()
 	id := w.start(t, "video")
 	w.joined(t, id, w.f.userID)
 	w.joined(t, id, w.peer)
@@ -408,7 +408,7 @@ func TestDirectCall_AReconnectDoesNotEndIt(t *testing.T) {
 func TestDeclineAndCancel(t *testing.T) {
 	w := newCallWorld(t)
 	w.asDM(t)
-	ctx := context.Background()
+	ctx := w.f.callerCtx()
 	svc := w.f.svc
 
 	id := w.start(t, "video")
@@ -438,7 +438,7 @@ func TestDeclineAndCancel(t *testing.T) {
 func TestExpireRinging_MissedOnceAndCardSaysSo(t *testing.T) {
 	w := newCallWorld(t)
 	w.asDM(t)
-	ctx := context.Background()
+	ctx := w.f.callerCtx()
 	id := w.start(t, "video")
 
 	missed, err := w.f.svc.ExpireRingingCalls(ctx, time.Now().Add(time.Minute))
@@ -605,7 +605,7 @@ func TestParticipantStays_AreKeptPerConnection(t *testing.T) {
 func TestEvictLostCallParticipants_WorkspaceSweepReachesDirectCalls(t *testing.T) {
 	w := newCallWorld(t)
 	w.asDM(t)
-	ctx := context.Background()
+	ctx := w.f.callerCtx()
 	id := w.start(t, "video")
 	asPeer := grpcauth.WithCaller(ctx, grpcauth.Caller{UserID: w.peer, NGACNodeID: w.peerNode, TenantID: w.f.wsID})
 	_, err := w.f.svc.CallToken(asPeer, id, w.peer, w.peerNode)
@@ -636,7 +636,7 @@ func TestDeclineCall_OnlyTheOtherPersonOfTheDM(t *testing.T) {
 	w.asDM(t)
 	id := w.start(t, "video")
 	third := w.member(t)
-	_, err := w.f.svc.DeclineCall(context.Background(), id, third, w.nodes[third])
+	_, err := w.f.svc.DeclineCall(w.f.callerCtx(), id, third, w.nodes[third])
 	require.ErrorIs(t, err, domain.ErrAccessDenied)
 }
 

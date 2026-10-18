@@ -55,12 +55,12 @@ func TestChatState_RefusedMessageMovesNothing(t *testing.T) {
 	assert.Equal(t, []int64{0, 0}, versionsOf(t, v, k.f.wsID, "x"))
 }
 
-func TestChatState_DirectMessageMovesTheOtherPersonsVersionInAnyWorkspace(t *testing.T) {
+func TestChatState_DirectMessageMovesTheOtherPersonsVersionInItsWorkspace(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
 	other, otherNode := testutil.CreateUser(t, f.pool)
 	dm, oaID := f.insertChannel(t, "dm-etag")
-	_, err := f.pool.Exec(ctx, `UPDATE channels SET channel_type = 'dm', workspace_id = NULL WHERE id = $1`, dm)
+	_, err := f.pool.Exec(ctx, `UPDATE channels SET channel_type = 'dm' WHERE id = $1`, dm)
 	require.NoError(t, err)
 	_, err = f.pool.Exec(ctx, `INSERT INTO channel_members (channel_id, ngac_node_id) VALUES ($1, $2)`, dm, otherNode)
 	require.NoError(t, err)
@@ -78,8 +78,10 @@ func TestChatState_DirectMessageMovesTheOtherPersonsVersionInAnyWorkspace(t *tes
 	})
 	require.NoError(t, err)
 
-	// The other person looks from a workspace of their own.
-	got := versionsOf(t, v, "their-own-workspace", other)
-	assert.Positive(t, got[1], "their own version moves: DMs are not scoped to a workspace")
+	// The other person looks from the DM's workspace: the workspace's counter
+	// moves for them, and so does their own.
+	got := versionsOf(t, v, f.wsID, other)
+	assert.Positive(t, got[0], "the workspace's version moves")
+	assert.Positive(t, got[1], "their own version moves")
 	assert.Zero(t, versionsOf(t, v, "their-own-workspace", "a-bystander")[1], "nobody else's does")
 }

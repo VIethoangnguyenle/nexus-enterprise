@@ -75,7 +75,7 @@ last-reply time) pages to older threads; `has_more` says whether another page ex
 
 ### Requirement: Unread counts cover the channels the caller may read
 `GET /api/channels/unread` SHALL list exactly the channels the sidebar shows the caller: the channels of the
-workspace they are signed in to and the direct messages, each kept only when the caller holds `read` on its
+workspace they are signed in to and that workspace's direct messages, each kept only when the caller holds `read` on its
 content OA (one batch check). Being a recorded member is not required: a workspace channel the caller can read but
 never joined still has its counts. Each entry carries the caller's unread message count, last read message and
 `thread_unread_count`: the unread replies of the threads in that channel the caller follows. A channel the caller

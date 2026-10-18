@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/auth.store'
 import { useDriveStore } from '../stores/drive.store'
 import { jwtFor } from '../test/auth-fixtures'
 import { resolverFor } from '../lib/people-resolver'
+import { keys } from './keys'
 
 const switchTenant = vi.fn()
 vi.mock('../api/auth', () => ({ authApi: { switchTenant: (id: string) => switchTenant(id) } }))
@@ -88,5 +89,30 @@ describe('rescopeSession', () => {
 
     expect(useAuthStore.getState().accessToken).toBe(jwtFor('ws-1'))
     expect(queryClient.getQueryData(['workspaces'])).toBeDefined()
+  })
+
+  // A DM belongs to one workspace: after a switch no list built from the old
+  // workspace's DMs (the DM list, unread counts, previews, followed threads,
+  // mentions, the chat state) may still be served.
+  it('drops every cached list that carries the old workspace\'s direct messages', async () => {
+    useAuthStore.setState({ accessToken: jwtFor('ws-1') })
+    switchTenant.mockResolvedValue({ access_token: jwtFor('ws-2') })
+    const carriers = [
+      keys.messaging.dms(),
+      keys.messaging.chatState('ws-1'),
+      keys.messaging.unreadCounts(),
+      keys.messaging.conversationActivity(),
+      keys.messaging.followedThreads(),
+      keys.messaging.searchAll('needle'),
+      keys.messaging.messages('dm-of-ws-1'),
+      keys.messaging.channel('dm-of-ws-1'),
+    ]
+    carriers.forEach((k) => queryClient.setQueryData(k, { channels: [{ id: 'dm-of-ws-1', channel_type: 'dm' }] }))
+    // control: they are there before the switch
+    carriers.forEach((k) => expect(queryClient.getQueryData(k)).toBeDefined())
+
+    await rescopeSession('ws-2')
+
+    carriers.forEach((k) => expect(queryClient.getQueryData(k)).toBeUndefined())
   })
 })

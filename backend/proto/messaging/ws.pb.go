@@ -2390,6 +2390,7 @@ type CallEvent struct {
 	ParticipantIds   []string               `protobuf:"bytes,10,rep,name=participant_ids,json=participantIds,proto3" json:"participant_ids,omitempty"`
 	StartedAt        *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
 	EndedAt          *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=ended_at,json=endedAt,proto3" json:"ended_at,omitempty"`
+	WorkspaceId      string                 `protobuf:"bytes,13,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"` // the workspace of the call's conversation: a DM exists in one workspace only
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -2506,6 +2507,13 @@ func (x *CallEvent) GetEndedAt() *timestamppb.Timestamp {
 		return x.EndedAt
 	}
 	return nil
+}
+
+func (x *CallEvent) GetWorkspaceId() string {
+	if x != nil {
+		return x.WorkspaceId
+	}
+	return ""
 }
 
 var File_proto_messaging_ws_proto protoreflect.FileDescriptor
@@ -2714,7 +2722,7 @@ const file_proto_messaging_ws_proto_rawDesc = "" +
 	"\x11parent_message_id\x18\x03 \x01(\tR\x0fparentMessageId\x12)\n" +
 	"\x10keep_placeholder\x18\x04 \x01(\bR\x0fkeepPlaceholder\x12\x1f\n" +
 	"\vreply_count\x18\x05 \x01(\x05R\n" +
-	"replyCount\"\xb5\x03\n" +
+	"replyCount\"\xd8\x03\n" +
 	"\tCallEvent\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x17\n" +
 	"\acall_id\x18\x02 \x01(\tR\x06callId\x12\x1d\n" +
@@ -2731,7 +2739,8 @@ const file_proto_messaging_ws_proto_rawDesc = "" +
 	" \x03(\tR\x0eparticipantIds\x129\n" +
 	"\n" +
 	"started_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x125\n" +
-	"\bended_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\aendedAtB\x1fZ\x1dngac-platform/proto/messagingb\x06proto3"
+	"\bended_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\aendedAt\x12!\n" +
+	"\fworkspace_id\x18\r \x01(\tR\vworkspaceIdB\x1fZ\x1dngac-platform/proto/messagingb\x06proto3"
 
 var (
 	file_proto_messaging_ws_proto_rawDescOnce sync.Once

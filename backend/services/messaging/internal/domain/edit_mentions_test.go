@@ -16,7 +16,7 @@ import (
 // editWith edits the world's seed message and waits for the push it starts.
 func (w *pushWorld) editWith(t *testing.T, mentions []string) {
 	t.Helper()
-	_, err := w.f.svc.EditMessage(context.Background(), w.msgID, w.f.userID, userNode, "sửa lại", "markdown", mentions)
+	_, err := w.f.svc.EditMessage(w.f.callerCtx(), w.msgID, w.f.userID, userNode, "sửa lại", "markdown", mentions)
 	require.NoError(t, err)
 	domain.WaitPushForTest(w.f.svc)
 }
@@ -96,12 +96,12 @@ func TestEditMentions_AddedWithoutReadOrWithPushOffGetNothing(t *testing.T) {
 
 func TestEditMentions_OffStillLetsAGroupMentionThroughButNotADirectOne(t *testing.T) {
 	group := newPushWorld(t, false)
-	require.NoError(t, group.f.svc.SetNotificationLevel(context.Background(), group.chID, group.other, group.otherNode, domain.NotifyOff))
+	require.NoError(t, group.f.svc.SetNotificationLevel(group.f.callerCtx(), group.chID, group.other, group.otherNode, domain.NotifyOff))
 	group.editWith(t, []string{group.other})
 	assert.Equal(t, 1, group.pushedTo()[group.other], "a mention gets through under off in a group")
 
 	dm := newPushWorld(t, true)
-	require.NoError(t, dm.f.svc.SetNotificationLevel(context.Background(), dm.chID, dm.other, dm.otherNode, domain.NotifyOff))
+	require.NoError(t, dm.f.svc.SetNotificationLevel(dm.f.callerCtx(), dm.chID, dm.other, dm.otherNode, domain.NotifyOff))
 	dm.editWith(t, []string{dm.other})
 	assert.Empty(t, dm.pushedTo(), "a direct message under off is silent")
 }

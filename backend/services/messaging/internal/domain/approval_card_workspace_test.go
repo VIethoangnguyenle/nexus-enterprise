@@ -74,29 +74,29 @@ func TestSendMessage_ApprovalCardAllowedInOrganization(t *testing.T) {
 	assert.Equal(t, before+1, k.messageCount(t))
 }
 
-// A direct message has no workspace of its own; the workspace the sender is
-// signed in to decides.
-func TestSendMessage_ApprovalCardInDMFollowsTheSignedInWorkspace(t *testing.T) {
+// A direct message is judged by the workspace it belongs to, like a group.
+func TestSendMessage_ApprovalCardInDMFollowsItsWorkspace(t *testing.T) {
 	k := newTalk(t, "approval-card-dm")
-	_, err := k.f.pool.Exec(context.Background(), `UPDATE channels SET workspace_id = NULL WHERE id = $1`, k.chID)
-	require.NoError(t, err)
 	k.f.withDMPeer(t, k.chID)
 	k.setWorkspaceType(t, "personal")
 	inWorkspace := grpcauth.WithCaller(context.Background(), grpcauth.Caller{UserID: k.f.userID, NGACNodeID: userNode, TenantID: k.f.wsID})
 
 	require.ErrorIs(t, k.sendApprovalCard(inWorkspace), domain.ErrAccessDenied)
-	require.ErrorIs(t, k.sendApprovalCard(context.Background()), domain.ErrAccessDenied, "no workspace to judge by is a refusal, not an allow")
 
 	k.setWorkspaceType(t, "organization")
 	require.NoError(t, k.sendApprovalCard(inWorkspace))
 }
 
-func TestSendMessage_ApprovalCardFailsClosedOnAnUnknownWorkspace(t *testing.T) {
-	k := newTalk(t, "approval-card-unknown")
+// A direct message with no workspace to judge by sends nothing at all.
+func TestSendMessage_ADMWithNoWorkspaceSendsNothing(t *testing.T) {
+	k := newTalk(t, "approval-card-dm-none")
 	_, err := k.f.pool.Exec(context.Background(), `UPDATE channels SET workspace_id = NULL WHERE id = $1`, k.chID)
 	require.NoError(t, err)
 	k.f.withDMPeer(t, k.chID)
-	ctx := grpcauth.WithCaller(context.Background(), grpcauth.Caller{UserID: k.f.userID, NGACNodeID: userNode, TenantID: "no-such-workspace"})
+	inWorkspace := grpcauth.WithCaller(context.Background(), grpcauth.Caller{UserID: k.f.userID, NGACNodeID: userNode, TenantID: k.f.wsID})
+	before := k.messageCount(t)
 
-	require.ErrorIs(t, k.sendApprovalCard(ctx), domain.ErrAccessDenied)
+	require.ErrorIs(t, k.sendApprovalCard(inWorkspace), domain.ErrNotFound)
+	require.ErrorIs(t, k.sendApprovalCard(context.Background()), domain.ErrNotFound)
+	assert.Equal(t, before, k.messageCount(t))
 }

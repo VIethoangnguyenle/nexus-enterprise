@@ -25,7 +25,7 @@ query that already holds data or when the chat state cannot be had.
 ### Requirement: One entry per readable conversation with a message
 `GET /api/channels/activity` SHALL return `{"channels": [...]}`, one entry for every conversation the caller reads
 that has at least one live main-stream message, in the workspace of the caller's session (tenant from the token) and
-including their direct messages. A conversation with no live message has no entry. Each entry carries `channel_id`,
+including their direct messages of that workspace (a DM belongs to one workspace). A conversation with no live message has no entry. Each entry carries `channel_id`,
 `latest` and, only when present, `latest_reply`. The result SHALL be read with one statement for the main stream and
 one for the replies, however many conversations there are, each costing one ordered index probe per conversation
 (`idx_messages_latest_main`, `idx_messages_latest_reply`).

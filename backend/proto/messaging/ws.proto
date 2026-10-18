@@ -303,4 +303,5 @@ message CallEvent {
   repeated string participant_ids = 10;
   google.protobuf.Timestamp started_at = 11;
   google.protobuf.Timestamp ended_at   = 12;
+  string workspace_id         = 13; // the workspace of the call's conversation: a DM exists in one workspace only
 }

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 
-	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/services/messaging/internal/store"
 )
 
@@ -22,9 +21,8 @@ const (
 // unless the workspace it is sent in is an organization: a personal workspace
 // has no approvals, and the owning service refuses every one of them there.
 //
-// The workspace is the channel's; a direct message has none, so the workspace
-// the sender is signed in to stands in, as it does for the channel's events.
-// It fails closed: no workspace to judge by, a workspace that cannot be found,
+// The workspace is the channel's, a direct message's included. It fails closed:
+// no workspace to judge by, a workspace that cannot be found,
 // or a type that is not exactly "organization" is a refusal, and a failure to
 // read the type is an error, never an allow. Other kinds of message are not
 // looked at.
@@ -33,9 +31,6 @@ func (s *Service) requireApprovalsAvailable(ctx context.Context, ch *store.Chann
 		return nil
 	}
 	workspaceID := ch.WorkspaceID
-	if workspaceID == "" {
-		workspaceID = grpcauth.CallerFrom(ctx).TenantID
-	}
 	if workspaceID == "" {
 		return fmt.Errorf("%w: approvals are not available here", ErrAccessDenied)
 	}

@@ -75,7 +75,7 @@ stays by the message's `created_at`. `before` is the `created_at` of the last me
 ### Requirement: Mentions badge
 `GET /api/messages/mentions/unread-count` SHALL answer `{"count": n}`: the number of unread messages of the mentions
 feed, counted in one query over exactly the feed's scope (the conversations the caller can read in the workspace they
-are signed in to, and their direct messages), with exactly the feed's `unread` rule — thread replies included, muted
+are signed in to, and their direct messages of that workspace), with exactly the feed's `unread` rule — thread replies included, muted
 conversations included. A conversation the caller can no longer read contributes nothing.
 
 #### Scenario: A removed member's old mentions

@@ -141,7 +141,7 @@ func (s *Service) RemoveMember(ctx context.Context, channelID, requesterNodeID, 
 	if channelID == "" || targetNodeID == "" {
 		return ErrInvalidInput
 	}
-	ch, err := s.loadChannel(ctx, channelID)
+	ch, err := s.loadChannelFor(ctx, channelID)
 	if err != nil {
 		return err
 	}
@@ -234,7 +234,7 @@ func (s *Service) MemberRoster(ctx context.Context, channelID, userNodeID string
 	if err != nil {
 		return nil, err
 	}
-	ch, err := s.loadChannel(ctx, channelID)
+	ch, err := s.loadChannelFor(ctx, channelID)
 	if err != nil {
 		return nil, err
 	}

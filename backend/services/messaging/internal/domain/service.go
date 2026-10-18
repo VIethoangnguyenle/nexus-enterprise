@@ -11,7 +11,6 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/httputil"
 	"ngac-platform/pkg/realtime"
 	authpb "ngac-platform/proto/auth"
@@ -76,14 +75,10 @@ func (s *Service) emit(e realtime.Event) {
 }
 
 // channelEvent builds a channel-domain event for ch on behalf of the request in
-// ctx. A DM has no workspace; its session tenant stands in so the event still
-// has a boundary.
+// ctx. Every conversation, a DM included, belongs to one workspace, and the event
+// is that workspace's.
 func channelEvent(ctx context.Context, kind string, ch *store.Channel) realtime.Event {
-	ws := ch.WorkspaceID
-	if ws == "" {
-		ws = grpcauth.CallerFrom(ctx).TenantID
-	}
-	return realtime.For(ctx, realtime.DomainChannel, kind, ws, ch.ID)
+	return realtime.For(ctx, realtime.DomainChannel, kind, ch.WorkspaceID, ch.ID)
 }
 
 // SubscriptionRevoker ends live (WebSocket) subscriptions a user holds on a

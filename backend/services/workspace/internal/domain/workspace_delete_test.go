@@ -152,6 +152,7 @@ type tdStore struct {
 	creator               map[string]string
 	members               map[string][]string // workspace -> user ids listed
 	purged                []string
+	dms                   map[string][]string // workspace -> graph nodes of its direct messages
 	failOn                bool
 }
 
@@ -184,6 +185,7 @@ func (s *tdStore) OtherMembers(_ context.Context, id, userID string) (int, error
 	}
 	return n, nil
 }
+func (s *tdStore) DMNodes(_ context.Context, id string) ([]string, error) { return s.dms[id], nil }
 func (s *tdStore) PurgeWorkspace(_ context.Context, id string) error {
 	if s.failOn {
 		return errors.New("db down")
@@ -410,4 +412,49 @@ func TestDeleteWorkspace_AStoreFailureLeavesTheGraphAlone(t *testing.T) {
 	f.st.failOn = true
 	require.Error(t, f.svc.DeleteWorkspace(context.Background(), meNode, meUser, "w1"))
 	assert.Empty(t, f.g.deleted, "the graph is removed only after the rows")
+}
+
+// A DM belongs to its workspace but its nodes hang under PC_Global, outside the
+// workspace's class: deleting the workspace deletes them too, through the policy
+// service, and touches no other workspace's DM.
+func TestDeleteWorkspace_RemovesItsDirectMessagesGraphNodes(t *testing.T) {
+	setup := func(t *testing.T) *tdFixture {
+		f := newTDFixture(t)
+		f.g.add("global", ngac.NodePCGlobal, ngac.TypePC)
+		f.workspaceGraph("w1")
+		f.workspaceGraph("w2")
+		f.join(meNode, "own-w1")
+		f.g.add("dm1-oa", "Ch_dm1", ngac.TypeOA, "global")
+		f.g.add("dm1-ua", "ChMembers_dm1", ngac.TypeUA, "global")
+		f.g.add("dm2-oa", "Ch_dm2", ngac.TypeOA, "global")
+		f.g.add("dm2-ua", "ChMembers_dm2", ngac.TypeUA, "global")
+		f.join(otherNode, "dm1-ua") // the DM's other person: kept, only the place under the UA goes
+		f.st.dms = map[string][]string{"w1": {"dm1-oa", "dm1-ua"}, "w2": {"dm2-oa", "dm2-ua"}}
+		return f
+	}
+
+	t.Run("deleted with the workspace, people kept, another workspace's DM untouched", func(t *testing.T) {
+		f := setup(t)
+		require.NoError(t, f.svc.DeleteWorkspace(context.Background(), meNode, meUser, "w1"))
+		assert.Contains(t, f.g.deleted, "dm1-oa")
+		assert.Contains(t, f.g.deleted, "dm1-ua")
+		assert.NotContains(t, f.g.deleted, "dm2-oa")
+		assert.NotContains(t, f.g.deleted, "dm2-ua")
+		assert.Contains(t, f.g.live(), otherNode, "people are never deleted")
+		assert.Contains(t, f.g.live(), "dm2-oa")
+	})
+	t.Run("refused: a DM is not touched when the workspace is not deleted", func(t *testing.T) {
+		f := setup(t)
+		err := f.svc.DeleteWorkspace(context.Background(), otherNode, otherUser, "w1")
+		require.ErrorIs(t, err, domain.ErrAccessDenied)
+		assert.Empty(t, f.g.deleted)
+		assert.Contains(t, f.g.live(), "dm1-oa")
+	})
+	t.Run("a node that cannot be deleted is reported after the rest were tried", func(t *testing.T) {
+		f := setup(t)
+		f.g.failOn = "dm1-oa"
+		err := f.svc.DeleteWorkspace(context.Background(), meNode, meUser, "w1")
+		require.Error(t, err)
+		assert.Contains(t, f.g.deleted, "dm1-ua", "the other DM node was still removed")
+	})
 }

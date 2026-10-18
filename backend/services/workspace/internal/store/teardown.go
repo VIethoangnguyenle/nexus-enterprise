@@ -38,6 +38,30 @@ func (s *Store) OtherMembers(ctx context.Context, id, userID string) (int, error
 	return n, nil
 }
 
+// DMNodes returns the graph nodes (Content OA and Members UA) of the workspace's
+// direct messages. A DM belongs to its workspace but its nodes hang under
+// PC_Global, outside the workspace's policy class, so tearing the class down
+// does not reach them: the caller deletes them itself, after PurgeWorkspace has
+// removed the rows that point at them.
+func (s *Store) DMNodes(ctx context.Context, id string) ([]string, error) {
+	rows, err := s.db.Query(ctx,
+		`SELECT n FROM channels c, LATERAL (VALUES (c.ngac_oa_id), (c.ngac_ua_id)) v(n)
+		 WHERE c.workspace_id = $1 AND c.channel_type = 'dm' AND n IS NOT NULL ORDER BY c.created_at, c.id, n`, id)
+	if err != nil {
+		return nil, fmt.Errorf("dm nodes of %s: %w", id, err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			return nil, fmt.Errorf("dm nodes of %s: %w", id, err)
+		}
+		out = append(out, n)
+	}
+	return out, rows.Err()
+}
+
 // PurgeWorkspace removes the workspace row and everything that hangs off it:
 // the tenant's approval schema and its registry row, the drive (files, root
 // folder, quota), text documents, documents, assets, channels (with their

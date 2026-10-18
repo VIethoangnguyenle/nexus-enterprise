@@ -7,8 +7,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 
 	"ngac-platform/ngac"
+	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/policyclient"
 	"ngac-platform/services/messaging/internal/store"
 )
@@ -43,13 +45,41 @@ func (s *Service) loadChannel(ctx context.Context, channelID string) (*store.Cha
 	return ch, nil
 }
 
+// loadChannelFor is loadChannel for a request made by a person: a direct message
+// belongs to one workspace and is answered as not found to anyone signed in to
+// another (or to none), the way a conversation the caller is not in is. A DM with
+// no workspace is in none. Work the service starts on its own (a push, a call
+// hang-up timer) has no signed-in workspace and uses loadChannel.
+func (s *Service) loadChannelFor(ctx context.Context, channelID string) (*store.Channel, error) {
+	ch, err := s.loadChannel(ctx, channelID)
+	if err != nil {
+		return nil, err
+	}
+	if !inCallersWorkspace(ctx, ch) {
+		return nil, fmt.Errorf("%w: channel not found", ErrNotFound)
+	}
+	return ch, nil
+}
+
+// inCallersWorkspace reports whether the caller may address the channel from the
+// workspace they are signed in to. Only a direct message is held to it: a group
+// is tied to its workspace by the graph (its Members UA sits under the
+// workspace's policy class), a DM sits under PC_Global and so is tied here.
+func inCallersWorkspace(ctx context.Context, ch *store.Channel) bool {
+	if ch.ChannelType != ChannelTypeDM {
+		return true
+	}
+	tenant := grpcauth.CallerFrom(ctx).TenantID
+	return tenant != "" && ch.WorkspaceID == tenant
+}
+
 // authorizeChannel loads a channel and verifies the user holds op on its
 // content OA, returning the channel so callers do not fetch it twice.
 func (s *Service) authorizeChannel(ctx context.Context, channelID, userNodeID, operation string) (*store.Channel, error) {
 	if channelID == "" {
 		return nil, ErrInvalidInput
 	}
-	ch, err := s.loadChannel(ctx, channelID)
+	ch, err := s.loadChannelFor(ctx, channelID)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +98,7 @@ func (s *Service) authorizeBackOut(ctx context.Context, channelID, userNodeID, o
 	if channelID == "" {
 		return nil, ErrInvalidInput
 	}
-	ch, err := s.loadChannel(ctx, channelID)
+	ch, err := s.loadChannelFor(ctx, channelID)
 	if err != nil {
 		return nil, err
 	}
@@ -80,10 +110,11 @@ func (s *Service) authorizeBackOut(ctx context.Context, channelID, userNodeID, o
 
 // authorizeChannelOp is the one place a write, invite or manage on a loaded
 // channel is decided. Beyond holding the operation in the graph, a direct message
-// needs its two people to share a workspace: a DM hangs under PC_Global, so its
-// grants outlive any workspace and would otherwise keep a removed colleague able
-// to write to, call and invite people into a conversation with the workspace's
-// members. Reads stay graph-only, so the history of such a DM remains readable.
+// needs its two people to be in the DM's workspace: a DM hangs under PC_Global, so
+// its grants outlive any workspace and would otherwise keep a removed colleague
+// able to write to, call and invite people into a conversation with the
+// workspace's members. Reads stay graph-only, so the history of such a DM remains
+// readable.
 //
 // Every check of an operation on a channel's OA goes through here (or through
 // authorizeChannel / authorizeMessage, which call it); a direct checkAccess on a
@@ -98,15 +129,18 @@ func (s *Service) authorizeChannelOp(ctx context.Context, ch *store.Channel, use
 	return nil
 }
 
-// dmRelationshipOps are the operations on a DM that need the two people to share
-// a workspace.
+// dmRelationshipOps are the operations on a DM that need the two people to be in
+// its workspace.
 var dmRelationshipOps = map[string]bool{ngac.OpWrite: true, ngac.OpInvite: true, ngac.OpManage: true}
 
-// requireDMRelationship refuses unless the user shares a workspace with the DM's
-// other member. It fails closed: a DM with no other member recorded, or a policy
-// service that cannot answer, is a refusal.
+// requireDMRelationship refuses unless the user and the DM's other member are
+// both in the DM's own workspace. It fails closed: a DM with no workspace or no
+// other member recorded, or a policy service that cannot answer, is a refusal.
 func (s *Service) requireDMRelationship(ctx context.Context, ch *store.Channel, userNodeID string) error {
-	denied := fmt.Errorf("%w: a direct message needs a workspace in common", ErrAccessDenied)
+	denied := fmt.Errorf("%w: a direct message needs both people in its workspace", ErrAccessDenied)
+	if ch.WorkspaceID == "" {
+		return denied
+	}
 	peers, err := s.store.DMPeerNodes(ctx, ch.ID, userNodeID)
 	if err != nil {
 		slog.Error("direct message peers unknown; refusing", "channel", ch.ID, "error", err)
@@ -118,7 +152,7 @@ func (s *Service) requireDMRelationship(ctx context.Context, ch *store.Channel, 
 			slog.Error("direct message relationship unknown; refusing", "channel", ch.ID, "error", err)
 			return denied
 		}
-		if len(shared) > 0 {
+		if slices.Contains(shared, ngac.WorkspaceID(ch.WorkspaceID)) {
 			return nil
 		}
 	}

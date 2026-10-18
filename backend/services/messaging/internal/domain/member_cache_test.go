@@ -197,9 +197,9 @@ func TestRemoveMember_DeletesTheCacheRowOnSuccess(t *testing.T) {
 	require.NoError(t, svc.RemoveMember(context.Background(), ch.ID, "requester", "member"))
 
 	assert.Equal(t, []string{"member>" + ch.NGACUaID}, g.withdrawn)
-	dms, err := st.ListDMsOf(context.Background(), "member")
+	peers, err := st.DMPeerNodes(context.Background(), ch.ID, "requester")
 	require.NoError(t, err)
-	assert.Empty(t, dms)
+	assert.NotContains(t, peers, "member", "the member's cache row is gone")
 }
 
 // A person who is not in the group is not removed from it, and nothing is written.

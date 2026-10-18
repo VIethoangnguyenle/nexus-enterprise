@@ -141,3 +141,41 @@ func TestWorkspaceCreatorAndOtherMembers(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, n)
 }
+
+// A workspace's direct messages are listed by their graph nodes (they hang under
+// PC_Global, outside the workspace's class) and are purged with the workspace.
+func TestDMNodes_AreTheWorkspacesDMsOnlyAndPurgeRemovesTheirRows(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	st := store.New(pool)
+	owner, _ := testutil.CreateUser(t, pool)
+	wsA, _ := testutil.CreateWorkspace(t, pool, owner)
+	wsB, _ := testutil.CreateWorkspace(t, pool, owner)
+	node := func(id string) string {
+		_, err := pool.Exec(ctx, `INSERT INTO ngac_nodes (id, name, node_type) VALUES ($1, $1, 'OA')`, id)
+		require.NoError(t, err)
+		t.Cleanup(func() { pool.Exec(context.Background(), `DELETE FROM ngac_nodes WHERE id = $1`, id) })
+		return id
+	}
+	add := func(id, ws, kind string) {
+		_, err := pool.Exec(ctx, `INSERT INTO channels (id, name, channel_type, workspace_id, ngac_oa_id, ngac_ua_id) VALUES ($1, 'x', $2, $3, $4, $5)`,
+			id, kind, ws, node(id+"-oa"), node(id+"-ua"))
+		require.NoError(t, err)
+		t.Cleanup(func() { pool.Exec(context.Background(), `DELETE FROM channels WHERE id = $1`, id) })
+	}
+	add("tdm-a", wsA, "dm")
+	add("tdm-group", wsA, "private")
+	add("tdm-b", wsB, "dm")
+
+	got, err := st.DMNodes(ctx, wsA)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"tdm-a-oa", "tdm-a-ua"}, got, "its DM, not its group nor another workspace's DM")
+
+	none, err := st.DMNodes(ctx, "no-such-workspace")
+	require.NoError(t, err)
+	assert.Empty(t, none)
+
+	require.NoError(t, st.PurgeWorkspace(ctx, wsA))
+	assert.Zero(t, rowsOf(t, ctx, "SELECT count(*) FROM channels WHERE id IN ('tdm-a', 'tdm-group') AND $1::text IS NOT NULL", "x"))
+	assert.Equal(t, 1, rowsOf(t, ctx, "SELECT count(*) FROM channels WHERE id = 'tdm-b' AND $1::text IS NOT NULL", "x"))
+}

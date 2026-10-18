@@ -56,7 +56,7 @@ func callEvent(c domain.CallChange) *pb.CallEvent {
 	}
 	return &pb.CallEvent{
 		Type: c.Type, CallId: call.Id, ChannelId: call.ChannelId, Kind: call.Kind, Status: call.Status,
-		CallerId: call.StartedBy, CallerName: call.StartedByName, CallerAvatarUrl: call.StartedByAvatarUrl,
+		WorkspaceId: c.WorkspaceID, CallerId: call.StartedBy, CallerName: call.StartedByName, CallerAvatarUrl: call.StartedByAvatarUrl,
 		ParticipantCount: int32(len(call.Participants)), ParticipantIds: ids,
 		StartedAt: call.StartedAt, EndedAt: call.EndedAt,
 	}

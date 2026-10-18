@@ -206,8 +206,7 @@ a workspace named "<someone>'s Workspace" with exactly one active member and no 
 The workspace type SHALL be enforced by the services that own the features, not only hidden by the screens. In a
 `personal` workspace the asset service and the approval service refuse every operation (PermissionDenied, REST 403;
 see `asset-authorization` and `approval-screens`), and the messaging service refuses a message that links an
-approval request (`linked_entity_type` `approval`; a direct message is judged by the workspace the sender is signed in
-to). Each reads `workspaces.type` itself, before it asks the policy, and fails closed: an unknown workspace or a
+approval request (`linked_entity_type` `approval`; a direct message is judged by the workspace it belongs to). Each reads `workspaces.type` itself, before it asks the policy, and fails closed: an unknown workspace or a
 type that is not `organization` is a refusal, and a failure to read it is an internal error. Nothing is deleted:
 what a personal workspace already holds is kept, hidden, and is usable again if it becomes an organization. The type is
 not a node of the policy graph and no decision of the policy service depends on it. The document service has no

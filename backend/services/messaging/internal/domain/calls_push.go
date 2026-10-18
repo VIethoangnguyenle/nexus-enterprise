@@ -4,6 +4,7 @@ package domain
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"slices"
 	"time"
 
@@ -30,6 +31,14 @@ func (s *Service) pushCallChange(ctx context.Context, c CallChange) {
 		return
 	}
 	call := c.Call
+	// The links name the conversation's workspace: the callee may be signed in to
+	// another one, and a DM is found in its own only.
+	workspaceID := ""
+	if ch, err := s.loadChannel(ctx, call.ChannelId); err == nil {
+		workspaceID = ch.WorkspaceID
+	} else {
+		slog.Warn("call push links carry no workspace", "call", call.Id, "error", err)
+	}
 	s.laterInOrder(ctx, "call-"+call.Id, func(ctx context.Context) {
 		for _, userID := range c.Users {
 			if userID == "" || userID == call.StartedBy || !s.wantsCallPush(ctx, userID, call.ChannelId) {
@@ -41,11 +50,11 @@ func (s *Service) pushCallChange(ctx context.Context, c CallChange) {
 				if call.Kind == "video" {
 					m.Body = "đang gọi video cho bạn"
 				}
-				m.URL = "/calls/" + call.Id + "?answer=" + call.Kind
+				m.URL = appLink("/calls/"+call.Id, workspaceID, "answer="+call.Kind)
 				m.Buttons = []push.Button{{ID: "answer", Text: "Trả lời", URL: m.URL}}
 			} else {
 				m.Body = CallCardText(call.Kind, callMissed, nil, nil)
-				m.URL = "/channels/" + call.ChannelId
+				m.URL = appLink("/channels/"+call.ChannelId, workspaceID)
 			}
 			s.send(ctx, m)
 		}
@@ -124,8 +133,8 @@ func (s *Service) InviteToCall(ctx context.Context, callID, userID, userNodeID s
 func callInvitePush(ch *store.Channel, callID, inviter, userID string) push.Message {
 	return push.Message{
 		ExternalIDs: []string{userID}, CollapseID: "call-" + callID,
-		Title: ch.Name, Body: fmt.Sprintf("%s mời bạn vào cuộc gọi", inviter), URL: "/calls/" + callID,
-		Buttons: []push.Button{{ID: "join", Text: "Tham gia", URL: "/calls/" + callID}},
+		Title: ch.Name, Body: fmt.Sprintf("%s mời bạn vào cuộc gọi", inviter), URL: appLink("/calls/"+callID, ch.WorkspaceID),
+		Buttons: []push.Button{{ID: "join", Text: "Tham gia", URL: appLink("/calls/"+callID, ch.WorkspaceID)}},
 	}
 }
 

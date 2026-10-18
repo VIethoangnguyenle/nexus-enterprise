@@ -82,6 +82,15 @@ describe('IncomingCallToast', () => {
     expect(onClear).toHaveBeenCalledWith('c1')
   })
 
+  it('answering a ring for a conversation of another workspace names that workspace in the address', async () => {
+    const user = userEvent.setup()
+    render(<IncomingCallToast incoming={{ ...ringing, workspaceId: 'ws-a' }} onClear={onClear} />)
+    await user.click(screen.getByRole('button', { name: /^Video$/i }))
+    const arg = navigate.mock.calls[0]![0] as { to: string; params: { callId: string }; search: (p: { ws?: string }) => unknown }
+    expect(arg.to).toBe('/calls/$callId')
+    expect(arg.search({ ws: 'ws-b' })).toEqual({ ws: 'ws-a', answer: 'video' })
+  })
+
   it('Video navigates to the call route with answer=video', async () => {
     const user = userEvent.setup()
     render(<IncomingCallToast incoming={ringing} onClear={onClear} />)

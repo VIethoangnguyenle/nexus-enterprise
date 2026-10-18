@@ -268,7 +268,7 @@ export const messagingApi = {
     )
   },
 
-  // Direct messages (not workspace-scoped on the backend)
+  // Direct messages (each belongs to one workspace: the session's)
   listDMs: () => apiFetch<{ channels: Channel[] | null }>(`/dms`),
   /** Finds the existing DM with this person or creates it. */
   createDM: (target: { userId: string; ngacNodeId: string }) =>

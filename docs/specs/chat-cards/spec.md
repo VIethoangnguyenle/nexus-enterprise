@@ -68,7 +68,7 @@ A message MAY link a document or an approval request (`linked_entity_type` `docu
 are fetched from the owning service under the viewer's own authorization, so a viewer without access to the object sees
 no details. Approval cards are not offered in a personal workspace, and the server refuses one there: sending a
 message with `linked_entity_type` `approval` in a personal workspace fails with 403 and stores nothing (a direct message is
-judged by the workspace the sender is signed in to; an unknown workspace is refused). See `tenant-identity`.
+judged by the workspace it belongs to; an unknown workspace is refused). See `tenant-identity`.
 
 Such a message needs no text: it links the object and nothing else. Only write on the channel is checked, and the message
 does not disclose the linked object. A person's message with a `linked_entity_type` the platform does not know, or a

@@ -98,7 +98,7 @@ func (s *MessagingServer) GetChannel(ctx context.Context, req *pb.GetChannelRequ
 
 // ListDMs delegates to domain.Service.ListDMs.
 func (s *MessagingServer) ListDMs(ctx context.Context, req *pb.ListDMsRequest) (*pb.ChannelList, error) {
-	channels, err := s.svc.ListDMs(ctx, grpcauth.CallerFrom(ctx).NGACNodeID)
+	channels, err := s.svc.ListDMs(ctx, grpcauth.CallerFrom(ctx).TenantID, grpcauth.CallerFrom(ctx).NGACNodeID)
 	if err != nil {
 		return nil, domainError("list DMs", err)
 	}

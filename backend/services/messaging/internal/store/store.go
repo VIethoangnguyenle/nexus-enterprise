@@ -106,14 +106,17 @@ func (s *Store) ListChannelsByWorkspace(ctx context.Context, workspaceID string)
 	return collectChannels(rows)
 }
 
-// ListDMsOf returns the DM channels the node is recorded in. The member cache
-// only narrows the candidates a caller puts to the policy service: the access
-// decision itself stays with NGAC.
-func (s *Store) ListDMsOf(ctx context.Context, userNodeID string) ([]*Channel, error) {
+// ListDMsOf returns the DM channels of the workspace that the node is recorded
+// in. A DM belongs to exactly one workspace: one with no workspace (written
+// before they did, and not placed by migration) is in no list, and an empty
+// workspaceID names no workspace. The member cache only narrows the candidates
+// a caller puts to the policy service: the access decision itself stays with
+// NGAC.
+func (s *Store) ListDMsOf(ctx context.Context, workspaceID, userNodeID string) ([]*Channel, error) {
 	rows, err := s.db.Query(ctx,
 		`SELECT `+channelCols+` FROM channels c
-		 WHERE c.channel_type = 'dm'
-		   AND c.id IN (SELECT channel_id FROM channel_members WHERE ngac_node_id = $1)`, userNodeID)
+		 WHERE c.channel_type = 'dm' AND c.workspace_id = NULLIF($1, '')
+		   AND c.id IN (SELECT channel_id FROM channel_members WHERE ngac_node_id = $2)`, workspaceID, userNodeID)
 	if err != nil {
 		return nil, fmt.Errorf("list DMs of member: %w", err)
 	}
@@ -121,19 +124,22 @@ func (s *Store) ListDMsOf(ctx context.Context, userNodeID string) ([]*Channel, e
 	return collectChannels(rows)
 }
 
-// FindDMByMembers finds an existing DM between two users using a DB-level join.
-// This replaces the O(N) full-table-scan + N gRPC calls approach.
-func (s *Store) FindDMByMembers(ctx context.Context, userNodeID, targetNodeID string) (*Channel, error) {
+// FindDMByMembers finds the DM two users have in a workspace, using a DB-level
+// join. The same two people have one DM per workspace they share, so the
+// workspace is part of the question; an empty workspaceID names no workspace
+// and finds nothing.
+func (s *Store) FindDMByMembers(ctx context.Context, workspaceID, userNodeID, targetNodeID string) (*Channel, error) {
 	row := s.db.QueryRow(ctx,
 		`SELECT `+channelCols+`
 		 FROM channels c
-		 WHERE c.channel_type = 'dm'
+		 WHERE c.channel_type = 'dm' AND c.workspace_id = NULLIF($1, '')
 		   AND c.id IN (
-		       SELECT channel_id FROM channel_members WHERE ngac_node_id = $1
-		       INTERSECT
 		       SELECT channel_id FROM channel_members WHERE ngac_node_id = $2
+		       INTERSECT
+		       SELECT channel_id FROM channel_members WHERE ngac_node_id = $3
 		   )
-		 LIMIT 1`, userNodeID, targetNodeID)
+		 ORDER BY c.created_at, c.id
+		 LIMIT 1`, workspaceID, userNodeID, targetNodeID)
 	ch, err := scanChannel(row)
 	if err == pgx.ErrNoRows {
 		return nil, nil

@@ -6,6 +6,8 @@ import { onSessionEnd } from '../lib/session-end'
 export interface IncomingCallInfo {
   callId: string
   channelId: string
+  /** The workspace of the call's conversation, when the event names it. */
+  workspaceId?: string
   kind: CallKind
   callerName: string
   callerAvatarUrl: string
