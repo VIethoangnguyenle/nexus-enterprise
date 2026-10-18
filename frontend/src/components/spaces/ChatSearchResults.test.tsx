@@ -293,6 +293,28 @@ describe('Người gửi', () => {
   })
 })
 
+describe('a list with the keyboard', () => {
+  it('walks from the search box through the rows with ↓ and ↑, and Enter chooses', async () => {
+    const user = await render()
+    await user.click(chip('Người gửi'))
+    const dialog = await screen.findByRole('dialog', { name: 'Người gửi' })
+    const search = within(dialog).getByRole('searchbox', { name: 'Tìm người' })
+    await waitFor(() => expect(search).toHaveFocus())
+    const rows = within(dialog).getAllByRole('radio')
+    await user.keyboard('{ArrowDown}')
+    expect(rows[0]).toHaveFocus()
+    await user.keyboard('{ArrowDown}{ArrowDown}')
+    expect(rows[2]).toHaveFocus()
+    await user.keyboard('{ArrowUp}')
+    expect(rows[1]).toHaveFocus()
+    await user.keyboard('{ArrowUp}{ArrowUp}')
+    expect(search).toHaveFocus()
+    await user.keyboard('{ArrowDown}{ArrowDown}{Enter}')
+    await waitFor(() => expect(lastCall().get('from')).toBe(U.yen.id))
+    expect(chip('Người gửi: Phạm Hải Yến')).toBeInTheDocument()
+  })
+})
+
 describe('Trong', () => {
   it('lists the conversations the person may read by name, and a choice narrows to it', async () => {
     const user = await render()
@@ -390,6 +412,8 @@ describe('on a phone', () => {
     await user.click(chip('Người gửi'))
     const sheet = await screen.findByRole('dialog', { name: 'Người gửi' })
     expect(sheet).toHaveAttribute('aria-modal', 'true')
+    // 24px corners and a 32px handle, as a list with a search box has them.
+    expect(sheet).toHaveClass('rounded-t-3xl')
     expect(within(sheet).getByRole('heading', { name: 'Người gửi' })).toBeInTheDocument()
     await user.click(within(sheet).getByRole('radio', { name: /Phạm Hải Yến/ }))
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Người gửi' })).toBeNull())

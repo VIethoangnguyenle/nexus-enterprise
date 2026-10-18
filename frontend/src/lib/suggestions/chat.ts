@@ -40,3 +40,7 @@ export function conversationsMatching(
     .filter((c) => matchesAll(c.title, query) && !(c.partner && skipPartners.has(c.partner.userId)))
     .slice(0, limit)
 }
+
+/** The second line of a conversation in a list of choices: "Nhóm · 14 thành viên" or "Trò chuyện trực tiếp". */
+export const conversationSub = (c: Pick<Conversation, 'kind' | 'memberCount'>): string =>
+  c.kind === 'space' ? `Nhóm · ${c.memberCount} thành viên` : 'Trò chuyện trực tiếp'

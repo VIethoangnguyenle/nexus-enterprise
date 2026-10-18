@@ -15,7 +15,13 @@ const CLOSE_VELOCITY = 500
  * the desktop has popovers. Focus rules are `useModalFocus`'s; Esc, the scrim
  * and dragging the handle down close it.
  */
-export function NavSheet({ label, onClose, children }: { label: string; onClose: () => void; children: ReactNode }) {
+export function NavSheet({ label, onClose, roomy = false, children }: {
+  label: string
+  onClose: () => void
+  /** A sheet that holds a list with a search box (the filter lists of Chat's results): 24px corners and a 32px handle. */
+  roomy?: boolean
+  children: ReactNode
+}) {
   const m = useMotionPresets()
   const surfaceRef = useRef<HTMLDivElement>(null)
   const dragControls = useDragControls()
@@ -41,11 +47,11 @@ export function NavSheet({ label, onClose, children }: { label: string; onClose:
         dragConstraints={{ top: 0, bottom: 0 }}
         dragElastic={{ top: 0, bottom: 0.5 }}
         onDragEnd={onDragEnd}
-        className="absolute inset-x-0 bottom-0 z-modal flex flex-col max-h-sheet overflow-hidden rounded-t-overlay
-          bg-overlay shadow-overlay px-2 pb-sheet"
+        className={`absolute inset-x-0 bottom-0 z-modal flex flex-col max-h-sheet overflow-hidden
+          bg-overlay shadow-overlay px-2 pb-sheet ${roomy ? 'rounded-t-3xl' : 'rounded-t-overlay'}`}
       >
         <div onPointerDown={(e) => dragControls.start(e)} className="grid place-items-center h-5 pt-2 shrink-0 touch-none">
-          <span aria-hidden="true" className="w-9 h-1 rounded-full bg-line" />
+          <span aria-hidden="true" className={`h-1 rounded-full bg-line ${roomy ? 'w-8' : 'w-9'}`} />
         </div>
         <div className="min-h-0 overflow-y-auto grid gap-1">{children}</div>
       </motion.div>

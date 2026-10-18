@@ -6,9 +6,10 @@ import {
   type ChatSearchFilters, type DatePreset,
 } from '../../lib/chat-search'
 import type { Conversation } from '../../lib/conversations'
-import { useMotionPresets } from '../../lib/motion'
+import { DURATION, EASE, useMotionPresets } from '../../lib/motion'
 import type { PeopleDirectory } from '../../lib/people'
 import { matchesAll } from '../../lib/search-text'
+import { conversationSub } from '../../lib/suggestions/chat'
 import { Avatar, Button, FieldInput, IconButton, Popover, Pressable, ScrollFade, SearchField } from '../primitives'
 import { ConversationIcon } from './ConversationIcon'
 import { NavSheet } from './NavSheet'
@@ -29,7 +30,6 @@ interface Props {
 }
 
 const PICKER_NAMES: Record<PickerKind, string> = { from: 'Người gửi', in: 'Trong', date: 'Ngày' }
-const GROUP_SUB = (c: Conversation) => (c.kind === 'space' ? `Nhóm · ${c.memberCount} thành viên` : 'Trò chuyện trực tiếp')
 
 /**
  * The filter chips of Chat's results (DESIGN.md "Gợi ý trong ô tìm", Hàng chip): Người gửi · Trong · Ngày open a
@@ -155,7 +155,7 @@ export function ChatSearchFilterBar({ filters, onChange, conversations, people, 
 
       {phone
         ? open && (
-          <NavSheet label={PICKER_NAMES[open]} onClose={() => close(open)}>{body(open)}</NavSheet>
+          <NavSheet roomy label={PICKER_NAMES[open]} onClose={() => close(open)}>{body(open)}</NavSheet>
         )
         : (['from', 'in', 'date'] as const).map((kind) => (
           <Popover
@@ -181,7 +181,8 @@ function ChipShell({ on, m, className, children }: {
   return (
     <motion.div
       layout={m.layoutProp}
-      transition={m.layout}
+      // The chips behind one that changes width shift over 220ms.
+      transition={{ duration: DURATION.base, ease: EASE.outExpo }}
       className={`relative inline-flex items-center shrink-0 rounded-full bg-sunk ${on ? '' : 'hover:bg-hover'} ${className}`}
     >
       <span
@@ -293,8 +294,7 @@ const Names = ({ title, sub }: { title: string; sub?: string }) => (
   </span>
 )
 
-/** The inside of one list, the same for the popover and the sheet. */
-function PickerBody({ kind, phone, filters, conversations, people, meId, today, onPick }: {
+interface PickerProps {
   kind: PickerKind
   phone: boolean
   filters: ChatSearchFilters
@@ -303,7 +303,22 @@ function PickerBody({ kind, phone, filters, conversations, people, meId, today, 
   meId: string
   today: Date
   onPick: (next: ChatSearchFilters) => void
-}) {
+}
+
+/** The inside of one list, the same for the popover and the sheet. ↑ and ↓ walk from its search box through the rows. */
+function PickerBody(props: PickerProps) {
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+    const stops = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('input[type=search], [role=radio]'))
+    const at = stops.indexOf(document.activeElement as HTMLElement)
+    if (at < 0) return
+    e.preventDefault()
+    stops[Math.max(0, Math.min(stops.length - 1, at + (e.key === 'ArrowDown' ? 1 : -1)))]?.focus()
+  }
+  return <div onKeyDown={onKeyDown}><PickerContent {...props} /></div>
+}
+
+function PickerContent({ kind, phone, filters, conversations, people, meId, today, onPick }: PickerProps) {
   const [query, setQuery] = useState('')
   const words = query.trim()
   const avatar = phone ? 36 : 32
@@ -358,7 +373,7 @@ function PickerBody({ kind, phone, filters, conversations, people, meId, today, 
           {found.map((c) => (
             <Pick key={c.id} checked={filters.channelId === c.id} phone={phone} onPick={() => onPick({ ...filters, channelId: c.id })}>
               <ConversationIcon conversation={c} size={avatar} />
-              <Names title={c.title} sub={GROUP_SUB(c)} />
+              <Names title={c.title} sub={conversationSub(c)} />
             </Pick>
           ))}
           {found.length === 0 && <p className="m-0 px-3 py-4 text-small text-ink-muted">Không có cuộc trò chuyện nào tên “{words}”.</p>}

@@ -15,7 +15,7 @@ import { DURATION, EASE, staggerDelay, useMotionPresets, type MotionPresets } fr
 import { displayName, type PeopleDirectory } from '../../lib/people'
 import { snippet } from '../../lib/search-text'
 import { messageSegments } from '../../lib/shortcut-feed'
-import { conversationsMatching, peopleMatching } from '../../lib/suggestions/chat'
+import { conversationSub, conversationsMatching, peopleMatching } from '../../lib/suggestions/chat'
 import { useAuthStore } from '../../stores/auth.store'
 import { Avatar, Button, IconButton, Pressable } from '../primitives'
 import { Marked } from '../patterns/Marked'
@@ -254,9 +254,7 @@ function PeopleAndGroups({ words, conversations, people, me, onOpened }: {
               <ConversationIcon conversation={c} size={32} />
               <span className="min-w-0 grid">
                 <span className="truncate font-medium"><Marked text={c.title} query={words} /></span>
-                <span className="truncate text-xs text-ink-muted">
-                  {c.kind === 'space' ? `Nhóm · ${c.memberCount} thành viên` : 'Trò chuyện trực tiếp'}
-                </span>
+                <span className="truncate text-xs text-ink-muted">{conversationSub(c)}</span>
               </span>
             </Link>
           </li>

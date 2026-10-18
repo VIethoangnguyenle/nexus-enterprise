@@ -9,7 +9,7 @@ import { formatListTime, formatMessageTime } from '../lib/format'
 import { messageText } from '../lib/message-model'
 import { displayName, type PeopleDirectory, type Person } from '../lib/people'
 import { snippet } from '../lib/search-text'
-import { conversationsMatching, peopleMatching, recentConversations } from '../lib/suggestions/chat'
+import { conversationSub, conversationsMatching, peopleMatching, recentConversations } from '../lib/suggestions/chat'
 import type { Conversation } from '../lib/conversations'
 import { useAuthStore } from '../stores/auth.store'
 import { useMessageSearch } from './useMessageSearch'
@@ -78,7 +78,7 @@ export function useChatSuggestions({ query, conversations, people, phone, enable
     onSelect: open(() => person.open(p)),
   })
   const conversationRow = (c: Conversation) => {
-    const sub = c.kind === 'space' ? `Nhóm · ${c.memberCount} thành viên` : 'Trò chuyện trực tiếp'
+    const sub = conversationSub(c)
     return {
       key: c.id,
       title: c.title,
@@ -153,6 +153,6 @@ export function useChatSuggestions({ query, conversations, people, phone, enable
     }
   }
 
-  return { groups, note, recent, openingPerson: person.pending }
+  return { groups, note, recent }
 }
 
