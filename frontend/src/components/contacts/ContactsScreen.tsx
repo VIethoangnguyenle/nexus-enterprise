@@ -3,6 +3,7 @@ import { useCanGoBack, useNavigate, useRouter, useRouterState, useSearch } from 
 import { AnimatePresence, motion } from 'motion/react'
 import { ArrowLeft, MessageSquare, X } from 'lucide-react'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
+import { useDeviceBack } from '../../hooks/useDeviceBack'
 import { useConnectionLost } from '../../hooks/useConnectionLost'
 import { levelContacts, useContactsBrowse } from '../../hooks/useContactsBrowse'
 import type { Contact } from '../../hooks/useContacts'
@@ -62,25 +63,13 @@ export function ContactsScreen() {
   const canGoBack = useCanGoBack()
   // This entry was pushed by Danh bạ from another place of Danh bạ: the entry before it is a level of the stack.
   const stacked = useRouterState({ select: (st) => !!(st.location.state as unknown as Record<string, unknown>).contactsStack })
-  // Which entry of the history this is: a lower one than the last drawn means the person went back.
-  const historyIndex = useRouterState({ select: (st) => (st.location.state as unknown as { __TSR_index?: number }).__TSR_index ?? 0 })
-  const drawnIndex = useRef(historyIndex)
-  /** Danh bạ asked for the back itself (its own button, or Esc): then the animation of the step is Danh bạ's to draw. */
-  const ownBack = useRef(false)
   /**
    * The last move of the history was a back by the device (the system gesture or button), and nothing of Danh bạ's own
    * has moved since. The device has drawn that step already; animating it again, a level fading in from nothing and
-   * the layer left fading out over the page, is the flash. It is kept past the render of the move itself because the
-   * address (`useSearch`) catches up one render after the history entry does, and that later render is the one that
-   * swaps the level.
+   * the layer left fading out over the page, is the flash. `ownBack` marks Danh bạ's own back (its button, or Esc), whose
+   * animation is Danh bạ's to draw.
    */
-  const deviceWentBack = useRef(false)
-  const byDevice = (historyIndex < drawnIndex.current && !ownBack.current) || deviceWentBack.current
-  useEffect(() => {
-    if (historyIndex !== drawnIndex.current) deviceWentBack.current = historyIndex < drawnIndex.current && !ownBack.current
-    drawnIndex.current = historyIndex
-    ownBack.current = false
-  }, [historyIndex])
+  const { byDevice, ownBack, ownStep } = useDeviceBack()
   const m = useMotionPresets()
   const search = useSearch({ strict: false }) as ContactsSearch
   const connectionLost = useConnectionLost()
@@ -145,7 +134,7 @@ export function ContactsScreen() {
 
   // --- going places: every level is an address ---
   const go = useCallback((next: (prev: ContactsSearch) => ContactsSearch, replace = false) => {
-    deviceWentBack.current = false
+    ownStep()
     return navigate({
       to: '/contacts',
       search: (prev: ContactsSearch) => next(prev),
@@ -153,7 +142,7 @@ export function ContactsScreen() {
       // A push is marked, so the way back knows the entry before it is a level of Danh bạ; a replace keeps the mark it had.
       state: ((prev: Record<string, unknown>) => (replace ? prev : { ...prev, contactsStack: true })) as never,
     })
-  }, [navigate])
+  }, [navigate, ownStep])
   const resetFilters = () => {
     setQuery('')
     written.current = ''
@@ -175,7 +164,7 @@ export function ContactsScreen() {
    */
   const stepBack = (parent: (prev: ContactsSearch) => ContactsSearch) => {
     if (canGoBack && stacked) {
-      ownBack.current = true
+      ownBack()
       router.history.back()
     } else void go(parent, true)
   }
@@ -216,7 +205,7 @@ export function ContactsScreen() {
   const closePerson = useCallback(() => {
     if (phone) {
       if (canGoBack && stacked) {
-        ownBack.current = true
+        ownBack()
         router.history.back()
       } else void go((prev) => closePersonSearch(prev), true)
       return
