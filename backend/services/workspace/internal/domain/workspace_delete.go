@@ -20,6 +20,9 @@ type teardownStore interface {
 	WorkspaceCreator(ctx context.Context, id string) (userID string, found bool, err error)
 	OtherMembers(ctx context.Context, id, userID string) (int, error)
 	PurgeWorkspace(ctx context.Context, id string) error
+	// DMNodes lists the graph nodes of the workspace's direct messages, which sit
+	// under PC_Global and so are not below the workspace's policy class.
+	DMNodes(ctx context.Context, id string) ([]string, error)
 }
 
 // DeleteWorkspace undoes a workspace that was just created and should not stay.
@@ -85,12 +88,22 @@ func (s *Service) DeleteWorkspace(ctx context.Context, callerNodeID, callerUserI
 		}
 	}
 
+	// The workspace's direct messages go with it. Their nodes are not below its
+	// class, so they are listed now, while the rows that name them still exist.
+	dmNodes, err := ts.DMNodes(ctx, wsID)
+	if err != nil {
+		return err
+	}
+
 	// Rows first: the workspace row points at the policy class, and the graph
 	// cannot lose its class while a row still names it.
 	if err := ts.PurgeWorkspace(ctx, wsID); err != nil {
 		return err
 	}
 	s.removeBucket(ctx, wsID)
+	if err := s.deleteDMNodes(ctx, dmNodes); err != nil {
+		return err
+	}
 
 	// The directory's prohibition names nodes by id but has no foreign key to them,
 	// so deleting the nodes leaves it behind. It goes before the graph does: a failure
@@ -103,6 +116,25 @@ func (s *Service) DeleteWorkspace(ctx context.Context, callerNodeID, callerUserI
 		return nil
 	}
 	return s.deleteGraph(ctx, pcID, below)
+}
+
+// deleteDMNodes removes the graph nodes of the deleted workspace's direct
+// messages through the policy service, so each deletion takes the EPP
+// invalidation path and the in-memory graph forgets them. A node already gone is
+// fine. Every node is tried; the first failure is returned afterwards. The rows
+// that named these nodes are already purged, so a repeat of the teardown cannot
+// find a node that failed here: the failure is logged with the node's id.
+func (s *Service) deleteDMNodes(ctx context.Context, nodes []string) error {
+	var first error
+	for _, id := range nodes {
+		if _, err := s.policyWrite.DeleteNode(ctx, &policypb.DeleteNodeRequest{NodeId: id}); err != nil && status.Code(err) != codes.NotFound {
+			slog.Error("workspace teardown left a direct message node", "node", id, "error", err)
+			if first == nil {
+				first = fmt.Errorf("remove direct message node %s: %w", id, err)
+			}
+		}
+	}
+	return first
 }
 
 // policyClassOf finds the workspace's policy class: from its row when there is
