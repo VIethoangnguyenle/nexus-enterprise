@@ -24,6 +24,7 @@ vi.mock('../hooks/useActiveWorkspace', () => ({
   useActiveWorkspace: () => ({ workspaceId: 'w1', workspaceName: 'Khối Vận hành', workspaces: [{ id: 'w1' }], isLoading: false, isError: false }),
 }))
 vi.mock('../hooks/usePreferences', () => ({ usePreferencesSync: () => {} }))
+vi.mock('../hooks/useDeviceBack', () => ({ useDeviceBack: () => ({ byDevice: false }) }))
 vi.mock('../hooks/useWorkspaceRealtime', () => ({ useWorkspaceRealtime: () => {} }))
 vi.mock('../hooks/useMessaging', () => ({ useUnreadCounts: () => { unreadTokens.push(useAuthStore.getState().accessToken); return { data: { channels } } } }))
 vi.mock('../stores/websocket.store', () => ({

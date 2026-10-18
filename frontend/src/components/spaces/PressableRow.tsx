@@ -44,10 +44,12 @@ export function useMenuPress<T extends HTMLElement>(onMenu: (el: HTMLElement) =>
 }
 
 /** A list row that opens its sheet on a long press (`useMenuPress`). */
-export function PressableRow({ onMenu, slide = true, children }: {
+export function PressableRow({ onMenu, slide = true, enter = true, children }: {
   onMenu: (el: HTMLElement) => void
   /** Rows re-order with a slide; a muted one just jumps. */
   slide?: boolean
+  /** False: the row is drawn at full size when it mounts instead of growing in. For rows that were already in a list as it mounted. */
+  enter?: boolean
   children: ReactNode
 }) {
   const m = useMotionPresets()
@@ -59,6 +61,7 @@ export function PressableRow({ onMenu, slide = true, children }: {
       layout={slide ? m.layoutProp : false}
       transition={m.layout}
       {...m.row}
+      initial={enter ? m.row.initial : false}
       {...props}
       className="select-none [-webkit-touch-callout:none]"
     >

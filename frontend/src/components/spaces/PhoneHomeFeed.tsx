@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { Check, MessagesSquare } from 'lucide-react'
 import type { Arrival } from '../../hooks/useArrivals'
 import { usePersistedFlag } from '../../hooks/usePersistedFlag'
@@ -38,6 +39,11 @@ export function PhoneHomeFeed({ scope, conversations, fresh, overlays, threadsWi
   const [unreadOnly, setUnreadOnly] = usePersistedFlag(`ngac-feed-unread-only:${me}:${scope}`)
   const copy = COPY[scope]
 
+  // The rows in the list as it mounts are drawn at full size: the device back remounts this list, and rows
+  // growing in from nothing are a blank list for its first frames. A row that arrives later still enters.
+  const listed = useRef(false)
+  useEffect(() => { listed.current = true }, [])
+
   const shown = unreadOnly ? filterConversations(conversations, 'unread') : conversations
 
   return (
@@ -62,6 +68,7 @@ export function PhoneHomeFeed({ scope, conversations, fresh, overlays, threadsWi
               key={c.id}
               // A muted conversation does not slide to the top when it speaks: silence is what muting means.
               slide={c.level !== 'off'}
+              enter={listed.current}
               onMenu={(el) => overlays.openRowMenu(rowTargetOf(c), el)}
             >
               <FeedRow

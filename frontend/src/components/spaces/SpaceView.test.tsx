@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithClient, resetClient } from '../../test/render'
 import { routerState } from '../../test/router-mock'
+import { isDeviceBack } from '../../lib/device-back'
 import { CH, MSG, UUID_RE } from '../../test/chat-fixtures'
 import { useToastStore } from '../primitives'
 import { prefetchChatParts } from '../chat/lazy-parts'
@@ -292,5 +293,30 @@ describe('SpaceView focus target', () => {
     await screen.findByText(/lệch 3 giao dịch/)
     rerender(<SpaceView channelId={CH.doisoat} initialThreadId={MSG.t1} />)
     expect(await screen.findByRole('complementary', { name: 'Thread' })).toBeInTheDocument()
+  })
+})
+
+describe('SpaceView reached by a back', () => {
+  beforeEach(() => { routerState.history = { back: routerState.history.back } })
+  afterEach(() => { routerState.historyState = {} })
+
+  const panelOnShow = async () => {
+    renderWithClient(<SpaceView channelId={CH.doisoat} />)
+    await screen.findByRole('heading', { name: 'Đối soát giao dịch' })
+    return screen.getByRole('tabpanel')
+  }
+
+  it('fades its content in when the app opens it', async () => {
+    routerState.historyState = { __TSR_index: 3 }
+    isDeviceBack(routerState.history, 3)
+    expect(await panelOnShow()).toHaveClass('animate-fade-in')
+  })
+
+  it('does not fade it in again when the device back returns to it, the device having drawn that step', async () => {
+    routerState.historyState = { __TSR_index: 3 }
+    isDeviceBack(routerState.history, 3)
+    routerState.historyState = { __TSR_index: 2 }
+    isDeviceBack(routerState.history, 2)
+    expect(await panelOnShow()).not.toHaveClass('animate-fade-in')
   })
 })

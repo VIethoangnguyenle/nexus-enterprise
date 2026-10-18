@@ -32,6 +32,8 @@ const serve = (...args: Parameters<typeof createChatStateServer>) => {
 function Host({ scope = 'home', news = 0 }: { scope?: FeedScope; news?: number }) {
   const nav = useChatNavigation(WS_ID)
   const overlays = useSectionOverlays(nav.sectionsApi, true)
+  // As in Chat itself: the feed is mounted once the lists are in (a skeleton stands in until then).
+  if (nav.isLoading) return null
   return (
     <>
       <PhoneHomeFeed
@@ -64,6 +66,16 @@ const rows = () => within(screen.getByRole('list', { name: 'Cuộc trò chuyện
 const names = () => rows().map((li) => within(li).getAllByRole('link')[0]!.getAttribute('aria-label'))
 
 describe('Trang chủ on a phone', () => {
+  it('draws every row at full size the moment it mounts, so coming back to it by the device back is not a flash', async () => {
+    renderWithClient(<Host />)
+    await waitFor(() => expect(rows().length).toBeGreaterThan(0))
+    // A row that grows in from nothing (opacity 0, height 0) is a blank list for the first frames after the back.
+    for (const li of rows()) {
+      expect(li.style.opacity).not.toBe('0')
+      expect(li.style.height).not.toBe('0px')
+    }
+  })
+
   it('shows the previews the moment it opens, with no live event at all', async () => {
     serve({}, 0, {
       activity: [

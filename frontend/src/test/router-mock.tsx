@@ -15,7 +15,10 @@ export const routerState = {
   /** The history state of the current entry. */
   historyState: {} as Record<string, unknown>,
   back: vi.fn(),
+  /** The one history of the router; code that keeps state per history (lib/device-back) needs it to be the same object each render. */
+  history: {} as { back?: () => void },
 }
+routerState.history.back = () => routerState.back()
 
 export function routerMockFactory() {
   return {
@@ -34,7 +37,7 @@ export function routerMockFactory() {
     },
     useNavigate: () => routerState.navigate,
     useCanGoBack: () => routerState.canGoBack,
-    useRouter: () => ({ history: { back: routerState.back } }),
+    useRouter: () => ({ history: routerState.history }),
     useParams: () => routerState.params,
     useSearch: () => routerState.search,
     useRouterState: ({ select }: { select: (s: { location: { pathname: string; state: Record<string, unknown> } }) => unknown }) =>

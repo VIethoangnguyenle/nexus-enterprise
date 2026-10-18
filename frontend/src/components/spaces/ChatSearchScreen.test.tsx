@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithClient, resetClient } from '../../test/render'
 import { routerState } from '../../test/router-mock'
+import { isDeviceBack } from '../../lib/device-back'
 import { CH, ME, U, UUID_RE, WS_ID, fixtureApi } from '../../test/chat-fixtures'
 import { ApiError, apiFetch } from '../../api/client'
 import type { Message } from '../../api/messaging'
@@ -79,6 +80,8 @@ beforeEach(() => {
   activity = []
   localStorage.clear()
   onClose.mockClear()
+  routerState.history = { back: routerState.history.back }
+  routerState.historyState = {}
   routerState.navigate.mockClear()
   vi.mocked(apiFetch).mockImplementation(route as never)
 })
@@ -89,6 +92,29 @@ afterEach(() => {
 })
 
 describe('the Tìm trong chat screen', () => {
+  /** The dialog's opacity in the very render that mounts it: the lists are fetched by a first mount, so the second has them cached. */
+  const opacityAtMount = async () => {
+    const first = renderWithClient(<Host />)
+    await screen.findByRole('dialog', { name: 'Tìm trong chat' })
+    first.unmount()
+    renderWithClient(<Host />)
+    return screen.getByRole('dialog', { name: 'Tìm trong chat' }).style.opacity
+  }
+
+  it('fades in when the app opens it', async () => {
+    routerState.historyState = { __TSR_index: 3 }
+    isDeviceBack(routerState.history, 3)
+    expect(await opacityAtMount()).toBe('0')
+  })
+
+  it('is on screen at once when the device back returns to it, the device having drawn that step already', async () => {
+    routerState.historyState = { __TSR_index: 3 }
+    isDeviceBack(routerState.history, 3)
+    routerState.historyState = { __TSR_index: 2 }
+    isDeviceBack(routerState.history, 2)
+    expect(await opacityAtMount()).not.toBe('0')
+  })
+
   it('is a full-screen dialog with the box focused and the five chips', async () => {
     const dialog = await open()
     await waitFor(() => expect(box()).toHaveFocus())

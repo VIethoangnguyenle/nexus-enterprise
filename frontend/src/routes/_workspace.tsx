@@ -9,6 +9,7 @@ import { usePreferencesSync } from '../hooks/usePreferences'
 import { useWorkspaceRealtime } from '../hooks/useWorkspaceRealtime'
 import { useUnreadCounts } from '../hooks/useMessaging'
 import { useChatState } from '../hooks/useChatState'
+import { useDeviceBack } from '../hooks/useDeviceBack'
 import { validateWorkspaceSearch, workspaceDisplayName } from '../lib/workspace'
 import { isChatListPath } from '../lib/nav-destinations'
 import { unreadByLevel } from '../lib/conversations'
@@ -112,6 +113,9 @@ function WorkspaceShell() {
   const disconnect = useWebSocketStore((s) => s.disconnect)
   const { workspaceId: wsId, workspaceName } = useActiveWorkspace()
   useWorkspaceRealtime(wsId, !!token)
+  // Stays mounted through every move of the history, so it is the first to see a back by the device and the
+  // screens that mount because of it can tell (see lib/device-back).
+  useDeviceBack()
   // One request for the navigator's state when the app opens; the 304 on the
   // next visit keeps what the cache holds.
   useChatState(wsId)

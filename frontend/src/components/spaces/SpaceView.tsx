@@ -8,6 +8,7 @@ import { useWorkspaceType } from '../../hooks/useWorkspaceType'
 import { useConversations } from '../../hooks/useConversations'
 import { usePeople } from '../../hooks/usePeople'
 import { usePhone } from '../../hooks/usePhone'
+import { useDeviceBack } from '../../hooks/useDeviceBack'
 import { useMessageActions } from '../../hooks/useMessageActions'
 import { useFocusMessage } from '../../hooks/useFocusMessage'
 import { useDelayedFlag } from '../../hooks/useDelayedFlag'
@@ -103,6 +104,9 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
 
   const messagesQ = useMessages(channelId)
   const phone = usePhone()
+  // Reached by the device back (from another conversation, say): the device has drawn that step, so nothing of this screen's own fades or slides in over it.
+  const { byDevice } = useDeviceBack()
+  const quietTab = useRef<Tab | null>(byDevice ? tab : null)
   // The level and the star ride on the unread list the navigator already holds, so no request of their own.
   const notify = useNotificationLevel(channelId, conv?.title ?? '', { fetchLevel: false })
   const star = useStarConversation()
@@ -425,7 +429,7 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
           role="tabpanel"
           id={`${idPrefix}-panel-${tab}`}
           aria-labelledby={`${idPrefix}-tab-${tab}`}
-          className="flex-1 flex flex-col min-h-0 animate-fade-in"
+          className={`flex-1 flex flex-col min-h-0 ${quietTab.current === tab ? '' : 'animate-fade-in'}`}
           key={tab}
         >
           {tab === 'chat' && (
@@ -526,7 +530,7 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
         </div>
       </section>
 
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="wait" initial={!quietTab.current}>
         {panel?.kind === 'thread' && (
           <ThreadPanel
             key={`thread-${panel.id}`}

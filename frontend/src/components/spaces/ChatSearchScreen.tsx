@@ -5,6 +5,7 @@ import { motion } from 'motion/react'
 import { ArrowLeft, CircleAlert, SearchX, X } from 'lucide-react'
 import type { Message } from '../../api/messaging'
 import { useCreateDM } from '../../hooks/useMessaging'
+import { useDeviceBack } from '../../hooks/useDeviceBack'
 import { useMessageSearch } from '../../hooks/useMessageSearch'
 import { useModalFocus } from '../../hooks/useModalFocus'
 import { feedSearch } from '../../hooks/useShortcutScreen'
@@ -59,6 +60,8 @@ export function ChatSearchScreen({ conversations, people, onClose }: {
   const navigate = useNavigate()
   const me = useAuthStore((s) => s.user?.id ?? '')
   const createDM = useCreateDM()
+  // Reached again by the device back (from a result's conversation): the device has drawn that step, so no fade-in over it.
+  const { byDevice } = useDeviceBack()
   const surfaceRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
@@ -143,6 +146,7 @@ export function ChatSearchScreen({ conversations, people, onClose }: {
       aria-modal="true"
       aria-label="Tìm trong chat"
       {...m.scrim}
+      initial={byDevice ? false : m.scrim.initial}
       className="fixed inset-x-0 top-0 h-app z-modal flex flex-col min-h-0 bg-base pt-safe"
     >
       <form
