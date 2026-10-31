@@ -50,6 +50,30 @@ describe('Chat on a wide screen', () => {
     expectNoIds()
   })
 
+  it('Báo cho tôi khi: a switch saves the account\'s push preferences at once, the rest as they were', async () => {
+    const user = userEvent.setup()
+    await renderSettings(`/settings/chat?ws=${WS}`)
+    const before = structuredClone(server.push)
+    const call = await screen.findByRole('switch', { name: 'Cuộc gọi đến' })
+    await waitFor(() => expect(call).toBeEnabled())
+    expect(call).toHaveAttribute('aria-checked', 'true')
+    await user.click(call)
+    await waitFor(() => expect(putsTo('/me/push-preferences')).toHaveLength(1))
+    expect(putsTo('/me/push-preferences')[0]!.body).toEqual({ ...before, kinds: { ...before.kinds, incoming_call: false } })
+    await waitFor(() => expect(call).toHaveAttribute('aria-checked', 'false'))
+  })
+
+  it('Báo cho tôi khi: a refused save puts the switch back and says so', async () => {
+    const user = userEvent.setup()
+    server.settingsDown = true
+    await renderSettings(`/settings/chat?ws=${WS}`)
+    const mention = await screen.findByRole('switch', { name: 'Được nhắc tên' })
+    await waitFor(() => expect(mention).toBeEnabled())
+    await user.click(mention)
+    await waitFor(() => expect(useToastStore.getState().toasts.map((t) => t.message)).toContain('Không lưu được cài đặt thông báo'))
+    await waitFor(() => expect(mention).toHaveAttribute('aria-checked', 'true'))
+  })
+
   it('picking a level saves only that key at once', async () => {
     const user = userEvent.setup()
     await renderSettings(`/settings/chat?ws=${WS}`)

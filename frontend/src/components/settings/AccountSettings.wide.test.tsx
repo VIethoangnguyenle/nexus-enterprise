@@ -2,35 +2,30 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { apiFetch, logoutSession } from '../../api/client'
+import { ApiError, apiFetch, apiUpload, logoutSession } from '../../api/client'
+import { loadPreferences, switchPreferencesTo } from '../../lib/preferences'
 import * as pushLib from '../../lib/push'
 import { resetClient } from '../../test/render'
 import { expectNoIds } from '../../test/no-ids'
 import { useToastStore } from '../primitives'
-import { SESSION_OTHER, WS, renderSettings, resetSettingsServer, server, settingsAnswer, viewport } from './settings-test-server'
+import {
+  AVATAR_URL, SESSION_OTHER, WS, renderSettings, resetSettingsServer, server, settingsAnswer, settingsUpload, viewport,
+} from './settings-test-server'
 
 vi.mock('../../api/client', async (orig) => ({
   ...(await orig<typeof import('../../api/client')>()),
   apiFetch: vi.fn(),
+  apiUpload: vi.fn(),
   logoutSession: vi.fn(),
 }))
 const api = vi.mocked(apiFetch)
 
-/** Every PATCH of the person's own profile, as sent. */
-let profilePatches: unknown[] = []
-
 beforeEach(() => {
   viewport(false)
   resetSettingsServer()
-  profilePatches = []
   api.mockReset()
-  api.mockImplementation(((path: string, init?: RequestInit) => {
-    if (path === '/me/profile' && init?.method === 'PATCH') {
-      profilePatches.push(JSON.parse(String(init.body)))
-      return Promise.resolve({ status: 'updated' })
-    }
-    return settingsAnswer(path, init)
-  }) as typeof apiFetch)
+  api.mockImplementation(settingsAnswer as typeof apiFetch)
+  vi.mocked(apiUpload).mockImplementation(settingsUpload as typeof apiUpload)
   vi.mocked(logoutSession).mockClear()
   useToastStore.getState().clear()
 })
@@ -43,6 +38,16 @@ afterEach(() => {
 
 const page = (name: string) => screen.findByRole('region', { name })
 const pushPuts = () => server.writes.filter((w) => w.method === 'PUT' && w.path === '/me/push-preferences')
+/** Every PATCH of the person's own profile, as sent. */
+const profilePatches = () => server.writes.filter((w) => w.method === 'PATCH' && w.path === '/me/profile').map((w) => w.body)
+const toasts = () => useToastStore.getState().toasts.map((t) => t.message)
+/** The form of Tài khoản và hồ sơ, once the stored profile is in it. */
+async function accountForm() {
+  await renderSettings(`/settings/account?ws=${WS}`)
+  const form = await screen.findByRole('form', { name: 'Hồ sơ' })
+  await waitFor(() => expect(within(form).getByLabelText('Tên hiển thị')).toHaveValue('Lê Thị Hoa'))
+  return form
+}
 
 describe('Tài khoản và hồ sơ on a wide screen', () => {
   it('the form, what an administrator set read only with the role, and Đăng xuất last', async () => {
@@ -54,8 +59,11 @@ describe('Tài khoản và hồ sơ on a wide screen', () => {
     expect(within(form).getByLabelText(/Chức danh/)).toHaveValue('Kế toán trưởng')
     expect(within(form).getByLabelText(/Nơi làm việc/)).toHaveValue('')
     expect(within(form).getByText('hoa@novapay.vn')).toBeInTheDocument()
+    expect(within(form).getByText(/Đổi email cần quản trị viên\./)).toBeInTheDocument()
     expect(within(form).queryByRole('textbox', { name: /Email/ })).toBeNull()
+    // The department is the one an administrator assigned in this workspace.
     expect(within(form).getByText('Phòng Tài chính')).toBeInTheDocument()
+    expect(within(form).getByText('Do quản trị viên đặt.')).toBeInTheDocument()
     expect(within(form).getByText('Vai trò')).toBeInTheDocument()
     expect(within(form).getByText('Chủ sở hữu')).toBeInTheDocument()
     const buttons = within(account).getAllByRole('button')
@@ -67,21 +75,104 @@ describe('Tài khoản và hồ sơ on a wide screen', () => {
 
   it('a personal workspace shows no department and no role', async () => {
     server.personal = true
-    await renderSettings(`/settings/account?ws=${WS}`)
-    const form = await screen.findByRole('form', { name: 'Hồ sơ' })
-    await waitFor(() => expect(within(form).getByLabelText('Tên hiển thị')).toHaveValue('Lê Thị Hoa'))
+    const form = await accountForm()
     expect(within(form).queryByText('Phòng ban')).toBeNull()
     expect(within(form).queryByText('Vai trò')).toBeNull()
+    expect(screen.queryByText('Phòng Tài chính')).toBeNull()
+    // The title still shows under the name.
+    expect(within(form).getByText('Kế toán trưởng')).toBeInTheDocument()
+  })
+
+  it('reads the person from their own record, never by searching the directory', async () => {
+    await accountForm()
+    const paths = api.mock.calls.map(([p]) => String(p))
+    expect(paths).toContain(`/me?workspace=${WS}`)
+    expect(paths.some((p) => p.includes('/contacts'))).toBe(false)
+  })
+
+  it('shows Chưa có for a department the administrator has not assigned, with nothing to type in', async () => {
+    server.department = ''
+    const form = await accountForm()
+    expect(within(form).getByText('Chưa có')).toBeInTheDocument()
+    expect(within(form).queryByRole('textbox', { name: /Phòng ban/ })).toBeNull()
+  })
+
+  it('Lưu thay đổi and Huỷ are off until something changes', async () => {
+    const user = userEvent.setup()
+    await accountForm()
+    const save = screen.getByRole('button', { name: 'Lưu thay đổi' })
+    expect(save).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Huỷ' })).toBeDisabled()
+    await user.type(screen.getByLabelText(/Chức danh/), '!')
+    expect(save).toBeEnabled()
   })
 
   it('Lưu thay đổi sends only the fields that changed', async () => {
     const user = userEvent.setup()
-    await renderSettings(`/settings/account?ws=${WS}`)
-    const place = await screen.findByLabelText(/Nơi làm việc/)
-    await waitFor(() => expect(screen.getByLabelText('Tên hiển thị')).toHaveValue('Lê Thị Hoa'))
-    await user.type(place, 'Hà Nội')
+    await accountForm()
+    await user.type(screen.getByLabelText(/Nơi làm việc/), 'Hà Nội')
     await user.click(screen.getByRole('button', { name: 'Lưu thay đổi' }))
-    await waitFor(() => expect(profilePatches).toEqual([{ location: 'Hà Nội' }]))
+    await waitFor(() => expect(profilePatches()).toEqual([{ location: 'Hà Nội' }]))
+  })
+
+  it('a save says so, reads the record again and leaves nothing to save', async () => {
+    const user = userEvent.setup()
+    await accountForm()
+    const title = screen.getByLabelText(/Chức danh/)
+    await user.clear(title)
+    await user.type(title, 'Giám đốc tài chính')
+    const reads = () => api.mock.calls.filter(([p]) => String(p).startsWith('/me?')).length
+    const before = reads()
+    await user.click(screen.getByRole('button', { name: 'Lưu thay đổi' }))
+    await waitFor(() => expect(profilePatches()).toEqual([{ title: 'Giám đốc tài chính' }]))
+    await waitFor(() => expect(toasts()).toContain('Đã lưu hồ sơ'))
+    await waitFor(() => expect(reads()).toBeGreaterThan(before))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Lưu thay đổi' })).toBeDisabled())
+    expect(title).toHaveValue('Giám đốc tài chính')
+  })
+
+  it('refuses an empty name when leaving the field or saving, and sends nothing', async () => {
+    const user = userEvent.setup()
+    await accountForm()
+    const name = screen.getByLabelText('Tên hiển thị')
+    await user.clear(name)
+    await user.tab()
+    expect(await screen.findByText('Nhập tên để mọi người nhận ra bạn.')).toBeInTheDocument()
+    expect(name).toHaveAttribute('aria-invalid', 'true')
+    await user.click(screen.getByRole('button', { name: 'Lưu thay đổi' }))
+    expect(profilePatches()).toEqual([])
+    expect(name).toHaveFocus()
+  })
+
+  it('keeps what was typed and explains when the server refuses', async () => {
+    const user = userEvent.setup()
+    server.profileFails = new ApiError('bad', 400)
+    await accountForm()
+    const title = screen.getByLabelText(/Chức danh/)
+    await user.type(title, ' cấp cao')
+    await user.click(screen.getByRole('button', { name: 'Lưu thay đổi' }))
+    await waitFor(() => expect(toasts().some((m) => /Không lưu hồ sơ được/.test(m))).toBe(true))
+    expect(title).toHaveValue('Kế toán trưởng cấp cao')
+    expect(toasts()).not.toContain('Đã lưu hồ sơ')
+  })
+
+  it('Huỷ puts the stored values back', async () => {
+    const user = userEvent.setup()
+    await accountForm()
+    const title = screen.getByLabelText(/Chức danh/)
+    await user.type(title, 'xyz')
+    await user.click(screen.getByRole('button', { name: 'Huỷ' }))
+    expect(title).toHaveValue('Kế toán trưởng')
+  })
+
+  it('says it could not load the profile, and retries', async () => {
+    const user = userEvent.setup()
+    server.meDown = true
+    await renderSettings(`/settings/account?ws=${WS}`)
+    expect(await screen.findByText(/Không tải được hồ sơ của bạn/)).toBeInTheDocument()
+    server.meDown = false
+    await user.click(screen.getByRole('button', { name: 'Thử lại' }))
+    expect(await screen.findByLabelText('Tên hiển thị')).toBeInTheDocument()
   })
 
   it('Đăng xuất signs out of this browser', async () => {
@@ -91,6 +182,118 @@ describe('Tài khoản và hồ sơ on a wide screen', () => {
     const buttons = screen.getAllByRole('button', { name: 'Đăng xuất' })
     await user.click(buttons[buttons.length - 1]!)
     expect(logoutSession).toHaveBeenCalledOnce()
+  })
+})
+
+describe('Ảnh đại diện on a wide screen', () => {
+  const png = () => new File([new Uint8Array(2048)], 'anh.png', { type: 'image/png' })
+  const picker = () => screen.getByLabelText('Tệp ảnh từ máy') as HTMLInputElement
+  const sent = (method: string) => server.writes.filter((w) => w.method === method && w.path === '/me/avatar')
+  const picture = () => screen.findByRole('button', { name: 'Đổi ảnh đại diện' })
+  /** Waits for the picture to show, then opens the menu: it offers Bỏ ảnh. */
+  const openWithPicture = async (user: ReturnType<typeof userEvent.setup>) => {
+    await waitFor(() => expect(document.querySelector('img[src^="/api/auth/avatars/"]')).not.toBeNull())
+    await user.click(await picture())
+    expect(await screen.findByRole('menuitem', { name: 'Bỏ ảnh' })).toBeInTheDocument()
+  }
+
+  it('changes the picture by touching it: no Đổi ảnh or Bỏ ảnh buttons beside it, no hint line', async () => {
+    await renderSettings(`/settings/account?ws=${WS}`)
+    expect(await picture()).toHaveAttribute('aria-haspopup', 'menu')
+    expect(screen.queryByRole('button', { name: 'Đổi ảnh' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Bỏ ảnh' })).toBeNull()
+    expect(screen.queryByText(/JPG hoặc PNG, tối đa 5 MB/)).toBeNull()
+    expect(picker()).toHaveAttribute('accept', 'image/jpeg,image/png')
+  })
+
+  it('shows the name beside the picture', async () => {
+    await renderSettings(`/settings/account?ws=${WS}`)
+    const button = await picture()
+    expect(within(button.parentElement!.parentElement!).getByText('Lê Thị Hoa')).toBeInTheDocument()
+  })
+
+  it('offers only Tải ảnh lên while there is no picture', async () => {
+    const user = userEvent.setup()
+    await renderSettings(`/settings/account?ws=${WS}`)
+    await user.click(await picture())
+    expect((await screen.findAllByRole('menuitem')).map((i) => i.textContent)).toEqual(['Tải ảnh lên'])
+  })
+
+  it('uploads the chosen picture at once, says so, and the picture shows', async () => {
+    const user = userEvent.setup()
+    await renderSettings(`/settings/account?ws=${WS}`)
+    await picture()
+    await user.upload(picker(), png())
+    await waitFor(() => expect(sent('PUT')).toHaveLength(1))
+    await waitFor(() => expect(toasts()).toContain('Đã đổi ảnh'))
+    // The person's own record was read again and now carries the picture: the menu offers Bỏ ảnh.
+    await openWithPicture(user)
+    expect(profilePatches()).toEqual([])
+    expectNoIds(document.body)
+  })
+
+  it('refuses a file that is not a JPG or PNG without sending anything', async () => {
+    const user = userEvent.setup({ applyAccept: false })
+    await renderSettings(`/settings/account?ws=${WS}`)
+    await picture()
+    await user.upload(picker(), new File(['GIF89a'], 'anh.gif', { type: 'image/gif' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/JPG hoặc PNG/)
+    expect(sent('PUT')).toHaveLength(0)
+  })
+
+  it('refuses a file over 5 MB without sending anything', async () => {
+    const user = userEvent.setup()
+    await renderSettings(`/settings/account?ws=${WS}`)
+    await picture()
+    await user.upload(picker(), new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'lon.png', { type: 'image/png' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/5 MB/)
+    expect(sent('PUT')).toHaveLength(0)
+  })
+
+  it('explains in words when the server refuses the picture', async () => {
+    server.avatarFails = new ApiError('the file is not a JPEG or PNG picture', 400, { code: 'avatar_not_image' })
+    const user = userEvent.setup()
+    await renderSettings(`/settings/account?ws=${WS}`)
+    await picture()
+    await user.upload(picker(), png())
+    expect(await screen.findByRole('alert')).toHaveTextContent(/JPG hoặc PNG/)
+    expect(screen.queryByText(/not a JPEG/)).toBeNull()
+    expect(toasts()).not.toContain('Đã đổi ảnh')
+  })
+
+  it('asks to come back when the server is busy with another picture', async () => {
+    server.avatarFails = new ApiError('busy', 503, { code: 'avatar_busy' })
+    const user = userEvent.setup()
+    await renderSettings(`/settings/account?ws=${WS}`)
+    await picture()
+    await user.upload(picker(), png())
+    expect(await screen.findByRole('alert')).toHaveTextContent(/bận/)
+  })
+
+  it('Bỏ ảnh removes the picture and says so', async () => {
+    server.profile.avatar_url = AVATAR_URL
+    const user = userEvent.setup()
+    await renderSettings(`/settings/account?ws=${WS}`)
+    await openWithPicture(user)
+    await user.click(screen.getByRole('menuitem', { name: 'Bỏ ảnh' }))
+    await waitFor(() => expect(sent('DELETE')).toHaveLength(1))
+    await waitFor(() => expect(toasts()).toContain('Đã bỏ ảnh'))
+    // The picture is gone, so the menu is back to Tải ảnh lên.
+    await waitFor(() => expect(document.querySelector('img[src^="/api/auth/avatars/"]')).toBeNull())
+    await user.click(await picture())
+    expect((await screen.findAllByRole('menuitem')).map((i) => i.textContent)).toEqual(['Tải ảnh lên'])
+  })
+
+  it('keeps the picture and says why when removing it fails', async () => {
+    server.profile.avatar_url = AVATAR_URL
+    server.removeFails = new ApiError('boom', 500)
+    const user = userEvent.setup()
+    await renderSettings(`/settings/account?ws=${WS}`)
+    await openWithPicture(user)
+    await user.click(screen.getByRole('menuitem', { name: 'Bỏ ảnh' }))
+    await waitFor(() => expect(toasts().some((m) => /bỏ ảnh đại diện/.test(m))).toBe(true))
+    expect(toasts()).not.toContain('Đã bỏ ảnh')
+    await openWithPicture(user)
   })
 })
 
@@ -116,7 +319,7 @@ describe('Hồ sơ trong tổ chức on a wide screen', () => {
     await user.clear(title)
     await user.type(title, 'Giám đốc tài chính')
     await user.click(screen.getByRole('button', { name: 'Lưu thay đổi' }))
-    await waitFor(() => expect(profilePatches).toEqual([{ title: 'Giám đốc tài chính' }]))
+    await waitFor(() => expect(profilePatches()).toEqual([{ title: 'Giám đốc tài chính' }]))
     await waitFor(() => expect(useToastStore.getState().toasts.map((t) => t.message)).toContain('Đã lưu hồ sơ'))
   })
 
@@ -129,7 +332,7 @@ describe('Hồ sơ trong tổ chức on a wide screen', () => {
     await user.type(title, 'x'.repeat(121))
     await user.click(screen.getByRole('button', { name: 'Lưu thay đổi' }))
     expect(await screen.findByText('Tối đa 120 ký tự.')).toBeInTheDocument()
-    expect(profilePatches).toEqual([])
+    expect(profilePatches()).toEqual([])
     expect(title).toHaveFocus()
   })
 })
@@ -213,6 +416,36 @@ describe('Thông báo on a wide screen', () => {
     expect(within(modules).getByRole('button', { name: /^Tài liệu/ })).toBeInTheDocument()
   })
 
+  it('says push is not on this environment, with no switch, when Nexus has no push service', async () => {
+    await renderSettings(`/settings/notifications?ws=${WS}`)
+    expect(await screen.findByText('Chưa có trên môi trường này')).toBeInTheDocument()
+    expect(screen.queryByRole('switch', { name: 'Thông báo đẩy trên máy này' })).toBeNull()
+  })
+
+  it('says the preferences could not load, and retries', async () => {
+    const user = userEvent.setup()
+    let down = true
+    api.mockImplementation(((path: string, init?: RequestInit) =>
+      down && path === '/me/push-preferences' ? Promise.reject(new ApiError('boom', 500)) : settingsAnswer(path, init)) as typeof apiFetch)
+    await renderSettings(`/settings/notifications?ws=${WS}`)
+    expect(await screen.findByText(/Không tải được cài đặt thông báo/)).toBeInTheDocument()
+    down = false
+    await user.click(screen.getByRole('button', { name: 'Thử lại' }))
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Bắt đầu' })).toHaveValue('22:00'))
+    expect(screen.queryByText(/Không tải được cài đặt thông báo/)).toBeNull()
+  })
+
+  it('a refused save puts the switch back and says so', async () => {
+    const user = userEvent.setup()
+    server.settingsDown = true
+    await renderSettings(`/settings/notifications?ws=${WS}`)
+    const quiet = await screen.findByRole('switch', { name: 'Giờ yên lặng' })
+    await waitFor(() => expect(quiet).toHaveAttribute('aria-checked', 'true'))
+    await user.click(quiet)
+    await waitFor(() => expect(toasts()).toContain('Không lưu được cài đặt thông báo'))
+    await waitFor(() => expect(quiet).toHaveAttribute('aria-checked', 'true'))
+  })
+
   describe('push on this browser', () => {
     beforeEach(() => {
       vi.spyOn(pushLib, 'getOneSignalAppId').mockReturnValue('app')
@@ -243,6 +476,57 @@ describe('Thông báo on a wide screen', () => {
       await renderSettings(`/settings/notifications?ws=${WS}`)
       expect(await screen.findByText('Thêm Nexus vào màn hình chính để nhận thông báo trên iPhone.')).toBeInTheDocument()
     })
+
+    it('the switch opts this device out, and says so at once', async () => {
+      const user = userEvent.setup()
+      await renderSettings(`/settings/notifications?ws=${WS}`)
+      const sw = await screen.findByRole('switch', { name: 'Thông báo đẩy trên máy này' })
+      await waitFor(() => expect(sw).toHaveAttribute('aria-checked', 'true'))
+      await user.click(sw)
+      expect(pushLib.setSubscriptionOptIn).toHaveBeenCalledWith(false)
+      expect(sw).toHaveAttribute('aria-checked', 'false')
+    })
+
+    it('the switch is off and says it is checking until the push service answers', async () => {
+      vi.mocked(pushLib.isSubscriptionOptedIn).mockReturnValue(new Promise(() => {}))
+      await renderSettings(`/settings/notifications?ws=${WS}`)
+      expect(await screen.findByText(/Đang kiểm tra/)).toBeInTheDocument()
+      expect(screen.getByRole('switch', { name: 'Thông báo đẩy trên máy này' })).toBeDisabled()
+    })
+
+    it('a push service that cannot start says so and offers to try again, instead of checking forever', async () => {
+      const user = userEvent.setup()
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const optedIn = vi.mocked(pushLib.isSubscriptionOptedIn)
+      optedIn.mockReset().mockRejectedValueOnce(new Error('OneSignal init timed out')).mockResolvedValue(true)
+      await renderSettings(`/settings/notifications?ws=${WS}`)
+      expect(await screen.findByText('Chưa kết nối được dịch vụ thông báo')).toBeInTheDocument()
+      expect(screen.queryByText(/Đang kiểm tra/)).toBeNull()
+      expect(screen.getByRole('switch', { name: 'Thông báo đẩy trên máy này' })).toBeDisabled()
+      expect(warn).toHaveBeenCalledWith('[push] could not read device subscription', expect.any(Error))
+
+      await user.click(screen.getByRole('button', { name: 'Thử kết nối lại' }))
+      await waitFor(() => expect(screen.getByRole('switch', { name: 'Thông báo đẩy trên máy này' })).toHaveAttribute('aria-checked', 'true'))
+      expect(optedIn).toHaveBeenCalledTimes(2)
+      expect(screen.queryByText('Chưa kết nối được dịch vụ thông báo')).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Thử kết nối lại' })).toBeNull()
+    })
+
+    it('says so when the push service fails after the first read', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      vi.mocked(pushLib.initOneSignal).mockRejectedValue(new Error('boom'))
+      await renderSettings(`/settings/notifications?ws=${WS}`)
+      expect(await screen.findByText('Chưa kết nối được dịch vụ thông báo')).toBeInTheDocument()
+    })
+
+    it('a blocked browser stays blocked, with no offer to try again', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      vi.mocked(pushLib.getNotificationPermission).mockReturnValue('denied')
+      vi.mocked(pushLib.isSubscriptionOptedIn).mockRejectedValue(new Error('x'))
+      await renderSettings(`/settings/notifications?ws=${WS}`)
+      expect(await screen.findByText('Trình duyệt đang chặn')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Thử kết nối lại' })).toBeNull()
+    })
   })
 })
 
@@ -257,6 +541,74 @@ describe('Giao diện, ngôn ngữ on a wide screen', () => {
     expect(within(look).getByRole('radiogroup', { name: 'Ngôn ngữ' })).toBeInTheDocument()
     expect(within(look).getByRole('switch', { name: 'Thu gọn sidebar' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Quay lại' })).toBeNull()
+  })
+
+  describe('the choices, kept for the person on this device', () => {
+    const open = () => renderSettings(`/settings/appearance?ws=${WS}`)
+    beforeEach(() => {
+      localStorage.clear()
+      switchPreferencesTo('u-hoa')
+    })
+    afterEach(() => {
+      localStorage.clear()
+      switchPreferencesTo(undefined)
+    })
+
+    it('the device\'s choice of theme comes first and is selected', async () => {
+      await open()
+      const group = await screen.findByRole('radiogroup', { name: 'Chủ đề' })
+      expect(within(group).getByRole('radio', { name: 'Theo hệ thống' })).toBeChecked()
+    })
+
+    it('a theme applies at once and is kept for this person only', async () => {
+      const user = userEvent.setup()
+      await open()
+      await user.click(await screen.findByRole('radio', { name: 'Tối' }))
+      expect(document.documentElement.dataset.theme).toBe('dark')
+      expect(screen.getByRole('radio', { name: 'Tối' })).toBeChecked()
+      expect(loadPreferences('u-hoa').theme).toBe('dark')
+      expect(loadPreferences('someone-else').theme).toBe('system')
+      await user.click(screen.getByRole('radio', { name: 'Sáng' }))
+      expect(document.documentElement.dataset.theme).toBeUndefined()
+    })
+
+    it('the arrow keys move between the themes', async () => {
+      const user = userEvent.setup()
+      await open()
+      const themes = await screen.findByRole('radiogroup', { name: 'Chủ đề' })
+      within(themes).getByRole('radio', { name: 'Theo hệ thống' }).focus()
+      await user.keyboard('{ArrowRight}')
+      expect(within(themes).getByRole('radio', { name: 'Sáng' })).toBeChecked()
+      await user.keyboard('{ArrowRight}')
+      expect(within(themes).getByRole('radio', { name: 'Tối' })).toBeChecked()
+      await user.keyboard('{ArrowRight}')
+      expect(within(themes).getByRole('radio', { name: 'Theo hệ thống' })).toBeChecked()
+    })
+
+    it('"Luôn bật" for reduced motion marks the page, and going back to the system clears it', async () => {
+      const user = userEvent.setup()
+      await open()
+      await user.click(await screen.findByRole('radio', { name: 'Luôn bật' }))
+      expect(document.documentElement.dataset.motion).toBe('reduce')
+      await user.click(within(screen.getByRole('radiogroup', { name: 'Giảm chuyển động' })).getByRole('radio', { name: 'Theo hệ thống' }))
+      expect(document.documentElement.dataset.motion).toBeUndefined()
+    })
+
+    it('Thu gọn sidebar is a switch, on by default, and kept', async () => {
+      const user = userEvent.setup()
+      await open()
+      const sw = await screen.findByRole('switch', { name: 'Thu gọn sidebar' })
+      expect(sw).toBeChecked() // the rail is the default
+      await user.click(sw)
+      expect(sw).not.toBeChecked()
+      expect(loadPreferences('u-hoa').sidebarCollapsed).toBe(false)
+    })
+
+    it('has no switch for realtime colour: it is information, not a preference', async () => {
+      await open()
+      await screen.findByRole('radiogroup', { name: 'Chủ đề' })
+      expect(screen.queryByText(/Màu theo người/)).toBeNull()
+    })
   })
 })
 

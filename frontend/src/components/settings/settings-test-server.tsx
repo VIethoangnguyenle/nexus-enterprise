@@ -17,6 +17,8 @@ export const SESSION_HERE = '1b2c3d4e-5f60-4718-89ab-cdef01234567'
 export const SESSION_OTHER = '2c3d4e5f-6071-4829-9abc-def012345678'
 export const CAL_MINE = '3d4e5f60-7182-493a-abcd-ef0123456789'
 export const CAL_TEAM = '4e5f6071-8293-4a4b-bcde-f01234567890'
+/** Where a picture the server keeps is read from. */
+export const AVATAR_URL = '/api/auth/avatars/0123456789abcdef0123456789abcdef'
 
 const fresh = () => ({
   personal: false,
@@ -26,6 +28,22 @@ const fresh = () => ({
   ownerNames: ['Lê Thị Hoa', 'Trần Minh Đức'],
   /** Set to make every PUT of a module's settings fail. */
   settingsDown: false,
+  /** The person's own record (`/me`); a PATCH of the profile changes it. */
+  profile: { display_name: 'Lê Thị Hoa', title: 'Kế toán trưởng', location: '', avatar_url: '' },
+  /** The department an administrator assigned here; an organization only. */
+  department: 'Phòng Tài chính',
+  meDown: false,
+  profileFails: null as ApiError | null,
+  avatarFails: null as ApiError | null,
+  removeFails: null as ApiError | null,
+  /** The workspace's name once a save of the details changed it; null is the default name for its kind. */
+  workspaceName: null as string | null,
+  description: 'Thanh toán số',
+  /** More of the details answer (the type, who converted it), laid over the rest. */
+  detailsExtra: {} as Record<string, unknown>,
+  detailsDown: false,
+  detailsFails: null as ApiError | null,
+  leaveFails: null as ApiError | null,
   drive: { view: 'auto', sort: 'modified', folders_first: true, cellular_previews: true, notify_shared: true } as Record<string, unknown>,
   approval: { default_tab: 'pending', sort: 'newest', notify_pending: true, notify_result: true } as Record<string, unknown>,
   asset: { default_tab: 'overview', sort: 'name', notify_requests: true, notify_maintenance: true } as Record<string, unknown>,
@@ -70,13 +88,26 @@ export function settingsAnswer(path: string, init?: RequestInit): Promise<unknow
     return ok({ workspaces: [{ id: WS, name: 'NovaPay', role: server.role, member_count: server.personal ? 1 : 7, domain: '', type: server.personal ? 'personal' : 'organization' }] })
   }
   if (p === '/me') {
+    if (server.meDown) return fail(500)
     return ok({
       user: {
-        id: 'u-hoa', username: 'hoa', ngac_node_id: 'n-hoa', email: 'hoa@novapay.vn', union_id: '', display_name: 'Lê Thị Hoa',
-        title: 'Kế toán trưởng', location: '', avatar_url: '', email_verified: true, needs_profile: false, language: 'vi',
+        id: 'u-hoa', username: 'hoa', ngac_node_id: 'n-hoa', email: 'hoa@novapay.vn', union_id: '', ...server.profile,
+        email_verified: true, needs_profile: false, language: 'vi',
       },
-      current_tenant: { id: WS, name: 'NovaPay', role: server.role, open_id: '', department: server.personal ? '' : 'Phòng Tài chính' },
+      current_tenant: { id: WS, name: 'NovaPay', role: server.role, open_id: '', department: server.personal ? '' : server.department },
     })
+  }
+  if (p === '/me/profile' && method === 'PATCH') {
+    if (server.profileFails) return Promise.reject(server.profileFails)
+    for (const key of ['display_name', 'title', 'location'] as const) {
+      if (typeof body?.[key] === 'string') server.profile[key] = body[key]
+    }
+    return ok({ status: 'updated' })
+  }
+  if (p === '/me/avatar' && method === 'DELETE') {
+    if (server.removeFails) return Promise.reject(server.removeFails)
+    server.profile.avatar_url = ''
+    return ok({ avatar_url: '' })
   }
   if (p === '/me/push-preferences') {
     if (method === 'PUT') {
@@ -87,10 +118,19 @@ export function settingsAnswer(path: string, init?: RequestInit): Promise<unknow
   }
   if (p === `/workspaces/${WS}/settings`) return ok({ settings: {} })
   if (p === `/workspaces/${WS}/details`) {
+    if (method === 'PATCH') {
+      if (server.detailsFails) return Promise.reject(server.detailsFails)
+      if (typeof body?.name === 'string') server.workspaceName = body.name
+      if (typeof body?.description === 'string') server.description = body.description
+    } else if (server.detailsDown) return fail(500)
     return ok({
-      name: server.personal ? 'Lê Thị Hoa' : 'NovaPay', description: 'Thanh toán số', can_manage: server.canManage,
+      name: server.workspaceName ?? (server.personal ? 'Lê Thị Hoa' : 'NovaPay'), description: server.description, can_manage: server.canManage,
       type: server.personal ? 'personal' : 'organization', is_owner: server.role === 'owner', owner_names: server.ownerNames,
+      ...server.detailsExtra,
     })
+  }
+  if (p === `/workspaces/${WS}/leave` && method === 'POST') {
+    return server.leaveFails ? Promise.reject(server.leaveFails) : ok({ status: 'left' })
   }
   if (p === `/workspaces/${WS}/locks`) {
     if (server.personal) return fail(400)
@@ -168,6 +208,17 @@ export function settingsAnswer(path: string, init?: RequestInit): Promise<unknow
     return ok({ workspace_id: WS, max_bytes: 10 * 1024 ** 3, used_bytes: 2.4 * 1024 ** 3, used_files: 312 })
   }
   return Promise.reject(new Error(`unexpected ${method} ${p}`))
+}
+
+/** A new profile picture: `PUT /me/avatar` goes through `apiUpload`, as a form with the file. */
+export function settingsUpload(path: string, body: FormData, method = 'POST'): Promise<unknown> {
+  server.writes.push({ method, path, body: undefined })
+  if (path !== '/me/avatar' || method !== 'PUT' || !(body.get('file') instanceof File)) {
+    return Promise.reject(new Error(`unexpected upload ${method} ${path}`))
+  }
+  if (server.avatarFails) return Promise.reject(server.avatarFails)
+  server.profile.avatar_url = AVATAR_URL
+  return ok({ avatar_url: AVATAR_URL })
 }
 
 /** The viewport: below 1024 (the phone's pages) or the desktop's. */

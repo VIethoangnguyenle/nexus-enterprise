@@ -11,7 +11,7 @@ import { useAuthStore } from '../../stores/auth.store'
 import { TextField, toast } from '../primitives'
 import { AvatarEdit } from '../patterns/AvatarEdit'
 import { EditFieldScreen } from './EditFieldScreen'
-import { ProfileFormBar, ProfileLoadFailed, ProfileLoading, ProfileTab, RoleField, useProfileForm } from './ProfileTab'
+import { AccountProfileForm, ProfileFormBar, ProfileLoadFailed, ProfileLoading, RoleField, useProfileForm } from './ProfileForm'
 import { ReadOnlyField } from './ReadOnlyField'
 import { SettingsGroup, SettingsPage, SettingsRow } from './SettingsGroup'
 import { useWorkspaceLead } from './modules/workspace-lead'
@@ -74,7 +74,7 @@ function AccountForm() {
   const { back } = useSettingsNav()
   return (
     <SettingsPage title="Tài khoản và hồ sơ" lead={ACCOUNT_LEAD} onBack={back}>
-      <ProfileTab />
+      <AccountProfileForm />
     </SettingsPage>
   )
 }

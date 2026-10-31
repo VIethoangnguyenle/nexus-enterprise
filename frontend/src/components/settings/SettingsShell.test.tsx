@@ -117,8 +117,6 @@ describe('Cài đặt on a wide screen', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Tài khoản và hồ sơ' })).toBeInTheDocument()
   })
 
-
-
   it('lands a personal workspace on Tài khoản và hồ sơ for a page only an organization has', async () => {
     server.personal = true
     const router = await renderSettings(`/settings/approval?ws=${WS}`)
@@ -127,12 +125,16 @@ describe('Cài đặt on a wide screen', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Tài khoản và hồ sơ' })).toBeInTheDocument()
   })
 
-  it('ends the list with Giới thiệu and the build the person is running', async () => {
+  it('ends the list with Giới thiệu and the build the person is running, whatever section is open', async () => {
     vi.stubEnv('VITE_APP_VERSION', '2026.10.18 · 6368e8e')
+    const user = userEvent.setup()
     await renderSettings(`/settings?ws=${WS}`)
     const list = await nav()
     const line = within(list).getByText('Giới thiệu · 2026.10.18 · 6368e8e')
     expect(list.lastElementChild).toBe(line)
+    await user.click(within(list).getByRole('link', { name: 'Giao diện, ngôn ngữ' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Giao diện, ngôn ngữ' })).toBeInTheDocument()
+    expect(within(await nav()).getByText('Giới thiệu · 2026.10.18 · 6368e8e')).toBeInTheDocument()
   })
 })
 

@@ -59,12 +59,12 @@ function SystemThumbnail() {
 }
 
 /**
- * Giao diện, ngôn ngữ on a wide screen (the former Giao diện tab, mockup §5): theme as three cards that apply at
+ * Giao diện, ngôn ngữ on a wide screen (mockup settings-desktop.html §5): theme as three cards that apply at
  * once, reduced motion, the account's language, and (where there is one) the sidebar. Theme and motion live on this
  * device under the signed-in person. Realtime colour is not a setting: it is information, so there is nothing to
  * turn off (DESIGN.md §7).
  */
-export function AppearanceTab() {
+export function AppearanceOptions() {
   const { prefs, update } = usePreferences()
   const language = useAccountLanguage()
   // The sidebar exists only where the bottom bar does not.

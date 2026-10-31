@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Globe, Palette, Sparkles } from 'lucide-react'
 import { useAccountLanguage } from '../../hooks/useAccountLanguage'
 import { usePreferences } from '../../hooks/usePreferences'
-import { AppearanceTab, LANGUAGE_CHOICES, THEME_CHOICES } from './AppearanceTab'
+import { AppearanceOptions, LANGUAGE_CHOICES, THEME_CHOICES } from './AppearanceOptions'
 import { ChoicePage, SettingsGroup, SettingsPage, SettingsRow, SettingsSwitch, choiceLabel } from './SettingsGroup'
 import { ACCOUNT_LEAD } from './settings-model'
 import { useSettingsWide } from './settings-layout'
@@ -16,14 +16,14 @@ const ICON = { size: 18, strokeWidth: 1.75 } as const
  * not shown. Inside the desktop shell the theme cards, the choices side by side and the sidebar switch.
  */
 export function AppearanceScreen() {
-  return useSettingsWide() ? <AppearanceOptions /> : <AppearanceRows />
+  return useSettingsWide() ? <AppearanceWide /> : <AppearanceRows />
 }
 
-function AppearanceOptions() {
+function AppearanceWide() {
   const { back } = useSettingsNav()
   return (
     <SettingsPage title="Giao diện, ngôn ngữ" lead={ACCOUNT_LEAD} onBack={back}>
-      <AppearanceTab />
+      <AppearanceOptions />
     </SettingsPage>
   )
 }

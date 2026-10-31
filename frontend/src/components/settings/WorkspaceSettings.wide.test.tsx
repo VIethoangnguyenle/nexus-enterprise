@@ -2,7 +2,9 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { apiFetch } from '../../api/client'
+import { ApiError, apiFetch } from '../../api/client'
+import { keys } from '../../hooks/keys'
+import { queryClient } from '../../lib/query-client'
 import { resetClient } from '../../test/render'
 import { expectNoIds } from '../../test/no-ids'
 import { useToastStore } from '../primitives'
@@ -30,6 +32,7 @@ afterEach(() => {
 
 const page = () => screen.findByRole('region', { name: 'Cài đặt workspace' })
 const writesTo = (suffix: string) => server.writes.filter((w) => w.path.split('?')[0]!.endsWith(suffix))
+const toasts = () => useToastStore.getState().toasts.map((t) => t.message)
 
 describe('Cài đặt workspace on a wide screen: an organization administrator', () => {
   it('the header, Thông tin as a form, every admin row with its count, the rule, modules, the type card and Rời', async () => {
@@ -56,10 +59,12 @@ describe('Cài đặt workspace on a wide screen: an organization administrator'
     expect(within(ws).getByRole('button', { name: 'Rời workspace' })).toBeInTheDocument()
     // Subpages have no way back on a wide screen: none is offered.
     expect(screen.queryByRole('button', { name: 'Quay lại' })).toBeNull()
+    // No icon picker: there is no server behind one.
+    expect(screen.queryByRole('button', { name: /Đổi biểu tượng/ })).toBeNull()
     expectNoIds()
   })
 
-  it('saves the name and description from the form, sending only what changed', async () => {
+  it('saves the name from the form, sending only what changed; the switcher and sidebar read the new name', async () => {
     const user = userEvent.setup()
     await renderSettings(`/settings/workspace?ws=${WS}`)
     const name = await screen.findByRole('textbox', { name: 'Tên workspace' })
@@ -67,10 +72,49 @@ describe('Cài đặt workspace on a wide screen: an organization administrator'
     await user.type(name, 'NovaPay Group')
     const save = screen.getByRole('button', { name: 'Lưu thay đổi' })
     expect(save).toBeEnabled()
+    const lists = () => api.mock.calls.filter(([p]) => p === '/workspaces').length
+    const before = lists()
     await user.click(save)
     await waitFor(() => expect(writesTo('/details')).toEqual([
       { method: 'PATCH', path: `/workspaces/${WS}/details`, body: { name: 'NovaPay Group' } },
     ]))
+    await waitFor(() => expect(toasts()).toContain('Đã lưu workspace'))
+    // The list of workspaces the switcher and sidebar read was asked for again.
+    await waitFor(() => expect(lists()).toBeGreaterThan(before))
+    expect(queryClient.getQueryData(keys.workspaces.details(WS))).toMatchObject({ name: 'NovaPay Group' })
+  })
+
+  it('changes the description alone', async () => {
+    const user = userEvent.setup()
+    await renderSettings(`/settings/workspace?ws=${WS}`)
+    const desc = await screen.findByRole('textbox', { name: /Mô tả/ })
+    await user.clear(desc)
+    await user.type(desc, 'Mô tả mới')
+    await user.click(screen.getByRole('button', { name: 'Lưu thay đổi' }))
+    await waitFor(() => expect(writesTo('/details')).toEqual([
+      { method: 'PATCH', path: `/workspaces/${WS}/details`, body: { description: 'Mô tả mới' } },
+    ]))
+  })
+
+  it('explains a refusal from the server and keeps the typing', async () => {
+    const user = userEvent.setup()
+    server.detailsFails = new ApiError('denied', 403)
+    await renderSettings(`/settings/workspace?ws=${WS}`)
+    const name = await screen.findByRole('textbox', { name: 'Tên workspace' })
+    await user.type(name, ' 2')
+    await user.click(screen.getByRole('button', { name: 'Lưu thay đổi' }))
+    await waitFor(() => expect(toasts().some((m) => /Bạn chưa có quyền lưu thông tin workspace/.test(m))).toBe(true))
+    expect(name).toHaveValue('NovaPay 2')
+  })
+
+  it('says it could not load, and retries', async () => {
+    const user = userEvent.setup()
+    server.detailsDown = true
+    await renderSettings(`/settings/workspace?ws=${WS}`)
+    expect(await screen.findByText(/Không tải được thông tin workspace/)).toBeInTheDocument()
+    server.detailsDown = false
+    await user.click(screen.getByRole('button', { name: 'Thử lại' }))
+    expect(await screen.findByRole('textbox', { name: 'Tên workspace' })).toBeInTheDocument()
   })
 
   it('refuses an empty name and sends nothing', async () => {
@@ -191,5 +235,111 @@ describe('Cài đặt workspace on a wide screen: a personal workspace', () => {
     expect(within(ws).queryByRole('button', { name: 'Rời workspace' })).toBeNull()
     expect(api.mock.calls.some(([p]) => String(p).includes('/locks'))).toBe(false)
     expectNoIds()
+  })
+})
+
+describe('Rời workspace on a wide screen', () => {
+  const leaves = () => server.writes.filter((w) => w.method === 'POST' && w.path === `/workspaces/${WS}/leave`)
+  const openDialog = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(await screen.findByRole('button', { name: 'Rời workspace' }))
+    return screen.findByRole('dialog', { name: /^Rời / })
+  }
+
+  it('asks first, says what is lost, and sends nothing until confirmed', async () => {
+    const user = userEvent.setup()
+    await renderSettings(`/settings/workspace?ws=${WS}`)
+    const dialog = await openDialog(user)
+    expect(within(dialog).getByText(/mất quyền truy cập mọi thứ trong/)).toBeInTheDocument()
+    expect(leaves()).toHaveLength(0)
+    await user.click(within(dialog).getByRole('button', { name: 'Huỷ' }))
+    expect(leaves()).toHaveLength(0)
+  })
+
+  it('leaves, says so, and goes to the workspace picker', async () => {
+    const user = userEvent.setup()
+    const router = await renderSettings(`/settings/workspace?ws=${WS}`)
+    const dialog = await openDialog(user)
+    await user.click(within(dialog).getByRole('button', { name: 'Rời workspace' }))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/workspace-select'))
+    expect(leaves()).toHaveLength(1)
+    expect(leaves()[0]!.body).toBeUndefined() // nobody is named: it is always the caller
+    expect(toasts().some((m) => /Bạn đã rời/.test(m))).toBe(true)
+  })
+
+  it('is there for a member without Quản lý too', async () => {
+    const user = userEvent.setup()
+    server.canManage = false
+    server.role = 'member'
+    const router = await renderSettings(`/settings/workspace?ws=${WS}`)
+    const dialog = await openDialog(user)
+    await user.click(within(dialog).getByRole('button', { name: 'Rời workspace' }))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/workspace-select'))
+  })
+
+  it('tells the last Owner what to do instead, and stays; opening it again starts clean', async () => {
+    const user = userEvent.setup()
+    server.leaveFails = new ApiError('last', 409, { reason: 'last_owner' })
+    const router = await renderSettings(`/settings/workspace?ws=${WS}`)
+    const dialog = await openDialog(user)
+    await user.click(within(dialog).getByRole('button', { name: 'Rời workspace' }))
+    expect(await screen.findByText(/chủ sở hữu cuối cùng của workspace này/)).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/settings/workspace')
+
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Huỷ' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await openDialog(user)
+    expect(screen.queryByText(/chủ sở hữu cuối cùng của workspace này/)).toBeNull()
+  })
+
+  it('explains any other refusal and stays', async () => {
+    const user = userEvent.setup()
+    server.leaveFails = new ApiError('boom', 500)
+    const router = await renderSettings(`/settings/workspace?ws=${WS}`)
+    const dialog = await openDialog(user)
+    await user.click(within(dialog).getByRole('button', { name: 'Rời workspace' }))
+    await waitFor(() => expect(toasts().some((m) => /Máy chủ đang gặp sự cố/.test(m))).toBe(true))
+    expect(router.state.location.pathname).toBe('/settings/workspace')
+  })
+})
+
+describe('Loại workspace on a wide screen: information, no conversion', () => {
+  const card = () => screen.findByRole('region', { name: 'Loại workspace' })
+
+  it('a personal workspace says what it has, for its owner, with nothing to convert it', async () => {
+    server.personal = true
+    server.detailsExtra = { is_owner: true, owner_name: 'Lê Thị Hoa' }
+    await renderSettings(`/settings/workspace?ws=${WS}`)
+    expect(await screen.findByRole('heading', { level: 3, name: 'Workspace cá nhân' })).toBeInTheDocument()
+    expect(screen.getByText('Có Tin nhắn, Tài liệu và Danh bạ. Không có Tài sản, Phê duyệt và duyệt tài liệu.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Chuyển thành workspace tổ chức' })).toBeNull()
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+  })
+
+  it('a personal workspace seen by someone else has nothing to convert it either', async () => {
+    server.personal = true
+    server.detailsExtra = { is_owner: false, owner_name: 'Lê Thị Hoa' }
+    await renderSettings(`/settings/workspace?ws=${WS}`)
+    expect(await screen.findByRole('heading', { level: 3, name: 'Workspace cá nhân' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Chuyển thành workspace tổ chức' })).toBeNull()
+  })
+
+  it.each([
+    ['no type', { type: undefined }],
+    ['a type it does not know', { type: 'mystery' }],
+  ])('shows no type card when the server sends %s', async (_case, extra) => {
+    server.detailsExtra = extra
+    await renderSettings(`/settings/workspace?ws=${WS}`)
+    await screen.findByRole('textbox', { name: 'Tên workspace' })
+    expect(screen.queryByRole('heading', { level: 3, name: /Workspace (cá nhân|tổ chức)/ })).toBeNull()
+  })
+
+  it('an organization that was converted says who did it, and where to set Phê duyệt and Tài sản', async () => {
+    server.detailsExtra = { converted_by_name: 'Lê Thị Hoa', converted_at: '2026-10-11T10:42:00Z' }
+    await renderSettings(`/settings/workspace?ws=${WS}`)
+    const type = await card()
+    expect(await within(type).findByRole('heading', { level: 3, name: 'Workspace tổ chức' })).toBeInTheDocument()
+    expect(within(type).getByText(/đã chuyển sang workspace tổ chức/)).toBeInTheDocument()
+    expect(within(type).getByText('Lê Thị Hoa')).toBeInTheDocument()
+    expect(within(type).getByRole('link', { name: /Đặt quyền Phê duyệt và Tài sản/ })).toBeInTheDocument()
   })
 })

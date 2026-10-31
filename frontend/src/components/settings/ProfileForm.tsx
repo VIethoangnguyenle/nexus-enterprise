@@ -110,11 +110,11 @@ export function ProfileFormBar({ saving, changed, onReset }: { saving: boolean; 
 }
 
 /**
- * Tài khoản và hồ sơ on a wide screen (mockup settings-desktop.html §6, the former Hồ sơ tab): the three things a
- * person can change about themselves, what they can only see (in an organization also the department and role an
- * administrator set), and signing out. Only what changed is sent.
+ * Tài khoản và hồ sơ on a wide screen (mockup settings-desktop.html §6): the picture, the three things a person can
+ * change about themselves, what they can only see (in an organization also the department and role an administrator
+ * set), and signing out. Only what changed is sent.
  */
-export function ProfileTab() {
+export function AccountProfileForm() {
   const me = useAuthStore((s) => s.user)
   const { isPersonal } = useWorkspaceType()
   const { q, person, tenant, initial, form, errors, changes, saving, refs, set, blur, submit, reset } = useProfileForm()
