@@ -14,3 +14,13 @@
 
 ## Done when
 Plan acceptance criteria 1–7 hold.
+
+## Status (2026-11-01): done
+- [x] 1. Entry points: no desktop module header has a ⋯ or settings menu, so no row was added (the ⋯ → Cài đặt
+  <phân hệ> rows are phone-only). Lịch's ⚙ already opens `/settings/calendar` (phase 03).
+- [x] 2. Retired (`SettingsTabs` went in phase 01): `WorkspaceTab`, the `NotificationSettings` component (its `PushBanners` now in
+  `PushBanners.tsx`), `tabSearch`. Renamed: `ProfileTab` → `AccountProfileForm` (`ProfileForm.tsx`), `AppearanceTab` →
+  `AppearanceOptions` (`AppearanceOptions.tsx`). The tests of the retired panes moved to `AccountSettings.wide`,
+  `WorkspaceSettings.wide`, `ModuleSettings.wide` and `SettingsShell` tests, against the live sections.
+- [x] 3. Specs: `user-settings` and `contacts-documents-settings-screens`.
+- [x] 4. Screenshots: `plans/reports/desktop-settings-shots/` (1440×900, light and dark; admin, member, personal).

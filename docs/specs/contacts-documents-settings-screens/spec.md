@@ -43,7 +43,7 @@ Choosing a person SHALL open a profile card: a cover in the person's colour, a 6
 
 #### Scenario: One's own profile
 - **WHEN** the signed-in person opens themselves
-- **THEN** the three actions are replaced by "Sửa hồ sơ", which opens Cài đặt › Hồ sơ
+- **THEN** the three actions are replaced by "Sửa hồ sơ", which opens Cài đặt › Tài khoản và hồ sơ
 
 #### Scenario: Calling someone offline
 - **WHEN** the person is shown "Ngoại tuyến" and "Gọi" is pressed
@@ -79,20 +79,25 @@ The list panel of Tài liệu SHALL carry a Văn bản group above the folder tr
 ### Requirement: The editor is a page for one author
 A document SHALL open fresh each time. Someone who may only read SHALL see it as text with the reason, without toolbar or title field. Someone who may write SHALL have a toolbar (paragraph style, bold, italic, underline, strike, lists, quote, undo, redo) in which every control works, a status menu (Bản nháp, Đang dùng, Lưu trữ) saved at once, and Ctrl/Cmd+S. A document that cannot be opened (deleted or forbidden, answered alike) SHALL say so and point back to the list.
 
-### Requirement: Cài đặt has three tabs, the open one in the URL
-Cài đặt SHALL have Hồ sơ, Workspace and Giao diện, with `?tab=workspace` and `?tab=giao-dien` for the last two and Hồ sơ by default; an unknown value opens Hồ sơ.
+### Requirement: Cài đặt is a list of sections, each at its own address
+On a desktop (1024 px and wider) Cài đặt SHALL be a section list beside the open section, at the same addresses as the phone's pages (`/settings/<section>`, see `user-settings`): Tài khoản và hồ sơ (`account`), Thông báo, Giao diện và ngôn ngữ (`appearance`), Thiết bị và phiên, and, in the workspace, Hồ sơ trong tổ chức, one section per module and Cài đặt workspace (`workspace`). `/settings` SHALL open Tài khoản và hồ sơ. The former tabs' addresses SHALL be replaced by their section: `?tab=ho-so` → `account`, `?tab=workspace` → `workspace`, `?tab=giao-dien` → `appearance`, `?tab=thong-bao` → `notifications`, and an unknown value → `account`, keeping the workspace. There are no tabs. Below 1024 px `/settings` is Tôi, which lists the same sections as rows.
 
-#### Scenario: Hồ sơ saves only what changed
+#### Scenario: An old tab address
+- **WHEN** a person on a desktop opens `/settings?ws=<workspace>&tab=workspace`
+- **THEN** the address becomes `/settings/workspace?ws=<workspace>`, Cài đặt workspace is open and is the current item of the list
+
+#### Scenario: Tài khoản và hồ sơ saves only what changed
 - **WHEN** a person changes their title and saves
 - **THEN** the request carries only the title, so a field set meanwhile by an administrator is not overwritten, and the new value shows in the sidebar, chat and tables
+- **AND** Lưu thay đổi and Huỷ are off until something changes, an empty name is refused when the field is left or saved and nothing is sent, a refusal from the server keeps what was typed, and Huỷ puts the stored values back
 
 #### Scenario: Fields that cannot be changed here
-- **WHEN** Hồ sơ is shown
-- **THEN** email and department are text in a sunk box with the reason beside it
+- **WHEN** Tài khoản và hồ sơ is shown on a desktop
+- **THEN** email, and in an organization the department and role, are text in a sunk box with the reason beside it; a department nobody assigned reads "Chưa có"; a personal workspace shows no department or role
 
 #### Scenario: Changing the picture
-- **WHEN** a person touches their picture in Hồ sơ (one button around it, no Đổi ảnh button beside it), picks Đổi ảnh or Tải ảnh lên from the menu (Chụp ảnh or Chọn ảnh in the sheet below 768 px) and chooses a JPG or PNG of at most 5 MB
-- **THEN** it is uploaded at once (not with Lưu thay đổi), "Đã đổi ảnh" is said, and the new picture shows in Hồ sơ, the sidebar and the account sheet without a reload; elsewhere it shows from the next directory read
+- **WHEN** a person touches their picture in Tài khoản và hồ sơ (one button around it, no Đổi ảnh button beside it), picks Đổi ảnh or Tải ảnh lên from the menu (Chụp ảnh or Chọn ảnh in the sheet below 768 px) and chooses a JPG or PNG of at most 5 MB
+- **THEN** it is uploaded at once (not with Lưu thay đổi), "Đã đổi ảnh" is said, and the new picture shows in Tài khoản và hồ sơ, the sidebar and the account sheet without a reload; elsewhere it shows from the next directory read
 
 #### Scenario: A picture that cannot be used
 - **WHEN** the chosen file is not a JPG or PNG, or is over 5 MB
@@ -107,8 +112,8 @@ Cài đặt SHALL have Hồ sơ, Workspace and Giao diện, with `?tab=workspace
 - **THEN** the initials on the person's colour show instead, never an empty circle
 
 #### Scenario: Workspace without Quản lý
-- **WHEN** a member without `manage` opens the Workspace tab
-- **THEN** the name and description are plain text with the reason, there is nothing to save and the manager-only member list is not requested
+- **WHEN** a member without `manage` opens Cài đặt workspace on a desktop
+- **THEN** the name and description are plain text with "Do quản trị viên đặt", there is nothing to save and the manager-only member list is not requested
 
 #### Scenario: Leaving
 - **WHEN** a member (manager or not) chooses "Rời workspace" and confirms the consequence
@@ -116,8 +121,8 @@ Cài đặt SHALL have Hồ sơ, Workspace and Giao diện, with `?tab=workspace
 - **AND** the last Owner is told to hand over ownership first, the dialog stays, and opening it again starts clean
 
 #### Scenario: Workspace with Quản lý
-- **WHEN** a manager changes the name
-- **THEN** only the name is sent, the switcher and the sidebar show the new name, and a link points to Quản trị for people, roles and departments
+- **WHEN** a manager changes the name in Cài đặt workspace on a desktop
+- **THEN** only the name is sent, "Đã lưu workspace" is said, the switcher and the sidebar show the new name, and the rows Thành viên, Phòng ban and Vai trò và quyền (each with its count) open Quản trị for people, departments and roles
 
 ### Requirement: A person is never shown by a username
 A missing display name SHALL read "Thành viên" in the directory, the sidebar, the profile and the name field; a username is a login handle.
@@ -129,7 +134,7 @@ Saving SHALL be held while a delete is in flight and carry on if the delete is r
 A script in the page SHALL put the stored theme and motion choice on the document before the application loads, reading the signed-in person's own choice and else the device's last; any failure leaves the defaults. `motion-reduce:` styles SHALL follow "Luôn bật" as well as the system setting. The sidebar rail's link names SHALL carry the unread count.
 
 ### Requirement: Giao diện is kept on this device for this person
-The Giao diện tab SHALL offer the theme (Theo hệ thống, Sáng, Tối) as radio cards that apply at once and without a colour cross-fade, reduced motion (Theo hệ thống, Luôn bật) and a switch to collapse the sidebar to a rail of icons with tooltips. The choices SHALL be stored under the signed-in person in the browser and never sent to the server. Realtime colour SHALL NOT be a setting: it is information (DESIGN.md §7).
+Giao diện và ngôn ngữ on a desktop (`/settings/appearance`) SHALL offer the theme (Theo hệ thống, Sáng, Tối) as radio cards that apply at once and without a colour cross-fade, reduced motion (Theo hệ thống, Luôn bật) and a switch to collapse the sidebar to a rail of icons with tooltips. The choices SHALL be stored under the signed-in person in the browser and never sent to the server. Realtime colour SHALL NOT be a setting: it is information (DESIGN.md §7).
 
 #### Scenario: Two people on one browser
 - **WHEN** one chooses Tối and another signs in
@@ -139,7 +144,8 @@ The Giao diện tab SHALL offer the theme (Theo hệ thống, Sáng, Tối) as r
 - Danh bạ (categories, department browsing, scope-wide search, profile card with Gọi, hidden person card) is built on desktop, tablet and phone (design approved 2026-10-17, `design/mockups/contacts-lark.html`). The place is in the address: `?cat=` (`org`, `roles`, `groups`, `members`; `search` is the phone's search screen), the open place (`dept`, `role`, `chat` for a group), the open profile (`person`) and the search (`q`); a phone has one history entry per level, so the system back climbs the stack one level at a time. "Gọi" starts a voice call (the call screen offers the camera). On a phone the top bar keeps its hint "Tìm người", and a group's screen has "Mở nhóm" at the end of its bar.
 - Hồ sơ has no crop or zoom for a picture: the centre square is kept. There is no larger view of a picture yet; the 1024 px size is stored for it. An invitation and the "converted by" line name a person without an id, so they show initials only.
 - Hồ sơ saves Nơi làm việc where the mockup shows a phone number (the profile API has no phone). Department is the profile's free text, not the organisation's department.
-- Workspace cannot change the icon and shows no organisation field: neither has a server behind it.
+- Desktop Cài đặt replaced its tabs (Hồ sơ, Workspace, Giao diện, Thông báo) with the section list on 2026-11-01 (plan `plans/261101-0200-desktop-settings-parity`, mockup `design/mockups/settings-desktop.html`).
+- Cài đặt workspace cannot change the icon and shows no organisation field: neither has a server behind it.
 - Presence "đang xem" and live cursors are not drawn: see `text-documents`.
 
 ### Requirement: The legacy document routes pass the drive's refusals through
