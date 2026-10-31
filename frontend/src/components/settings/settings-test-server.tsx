@@ -25,6 +25,8 @@ const fresh = () => ({
   /** Set to make every PUT of a module's settings fail. */
   settingsDown: false,
   drive: { view: 'auto', sort: 'modified', folders_first: true, cellular_previews: true, notify_shared: true } as Record<string, unknown>,
+  approval: { default_tab: 'pending', sort: 'newest', notify_pending: true, notify_result: true } as Record<string, unknown>,
+  asset: { default_tab: 'overview', sort: 'name', notify_requests: true, notify_maintenance: true } as Record<string, unknown>,
   chat: { enter_to_send: false, link_preview: true, open_at: 'all', sort: 'activity', double_tap: '👍', default_level: null } as Record<string, unknown>,
   push: {
     kinds: { direct: true, mention: true, thread_reply: true, incoming_call: true },
@@ -101,6 +103,20 @@ export function settingsAnswer(path: string, init?: RequestInit): Promise<unknow
       server.chat = { ...server.chat, ...body }
     }
     return ok(server.chat)
+  }
+  if (p === '/approval/settings') {
+    if (method === 'PUT') {
+      if (server.settingsDown) return fail(500)
+      server.approval = { ...server.approval, ...body }
+    }
+    return ok(server.approval)
+  }
+  if (p === `/workspaces/${WS}/asset-settings`) {
+    if (method === 'PUT') {
+      if (server.settingsDown) return fail(500)
+      server.asset = { ...server.asset, ...body }
+    }
+    return ok(server.asset)
   }
   if (p === '/auth/sessions') return ok({ sessions: server.sessions })
   if (p.startsWith('/auth/sessions/') && method === 'DELETE') {

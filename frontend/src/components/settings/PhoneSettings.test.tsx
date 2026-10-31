@@ -199,10 +199,9 @@ describe('module pages', () => {
   it('on a wide screen the options that only shape the phone are not offered', async () => {
     viewport(false)
     await renderSettings(`/settings/chat?ws=${WS}`)
-    await screen.findByRole('heading', { name: 'Cài đặt Chat' })
+    await screen.findByRole('heading', { level: 1, name: 'Chat' })
     expect(screen.queryByRole('switch', { name: /^Enter để gửi/ })).toBeNull()
-    for (const label of ['Mở Chat ở', 'Sắp xếp']) expect(screen.queryByRole('button', { name: new RegExp(`^${label}`) }), label).toBeNull()
-    expect(screen.getByRole('button', { name: /^Cảm xúc khi chạm đúp/ })).toBeInTheDocument()
+    for (const label of ['Mở Chat ở', 'Sắp xếp', 'Cảm xúc khi chạm đúp']) expect(screen.queryByRole('button', { name: new RegExp(`^${label}`) }), label).toBeNull()
     cleanup()
     resetClient()
 
