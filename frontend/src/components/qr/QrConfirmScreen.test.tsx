@@ -24,6 +24,7 @@ const ME_ID = '7f3c2a10-0000-4000-8000-000000000001'
 let calls: { path: string; body?: unknown }[]
 let scanError: Error | null
 let approveError: Error | null
+let sameNetwork: boolean
 
 function fakeApi(path: string, options: RequestInit = {}): Promise<unknown> {
   const body = options.body ? JSON.parse(String(options.body)) : undefined
@@ -36,7 +37,7 @@ function fakeApi(path: string, options: RequestInit = {}): Promise<unknown> {
   }
   if (path === '/auth/qr/scan') {
     if (scanError) return Promise.reject(scanError)
-    return Promise.resolve({ browser: 'Chrome', os: 'Windows', created_at: new Date().toISOString(), tenant_name: 'NovaPay' })
+    return Promise.resolve({ browser: 'Chrome', os: 'Windows', created_at: new Date().toISOString(), tenant_name: 'NovaPay', same_network: sameNetwork })
   }
   if (path === '/auth/qr/approve') return approveError ? Promise.reject(approveError) : Promise.resolve({})
   if (path === '/auth/qr/decline') return Promise.resolve({})
@@ -69,6 +70,7 @@ beforeEach(() => {
   calls = []
   scanError = null
   approveError = null
+  sameNetwork = true
   queryClient.clear()
   sessionStorage.clear()
   vi.mocked(apiFetch).mockImplementation(fakeApi as typeof apiFetch)
@@ -98,12 +100,26 @@ describe('Confirming a computer from the phone', () => {
     expectNoIds()
   })
 
-  it('approves and says so', async () => {
+  it('warns loudly when the computer is on another network, and only then', async () => {
+    await open()
+    await screen.findByText('Chrome trên Windows')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('shows the other-network warning above the usual one', async () => {
+    sameNetwork = false
+    await open()
+    expect(await screen.findByRole('alert')).toHaveTextContent('Máy tính này ở mạng khác với điện thoại.')
+    expect(screen.getByRole('note')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Đăng nhập' })).toBeEnabled()
+  })
+
+  it('approves and says what is left to do on the computer', async () => {
     await open()
     await userEvent.click(await screen.findByRole('button', { name: 'Đăng nhập' }))
-    expect(await screen.findByRole('heading', { name: 'Đã đăng nhập trên máy tính' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Đã xác nhận' })).toBeInTheDocument()
     expect(calls.map((c) => c.path)).toContain('/auth/qr/approve')
-    expect(screen.getByText('Chrome trên Windows đã vào NovaPay với tài khoản của bạn.')).toBeInTheDocument()
+    expect(screen.getByText('Bấm Tiếp tục trên máy tính để vào NovaPay.')).toBeInTheDocument()
   })
 
   it('declines when Huỷ is tapped, and leaves', async () => {
@@ -126,7 +142,7 @@ describe('Confirming a computer from the phone', () => {
     await open()
     await userEvent.click(await screen.findByRole('button', { name: 'Đăng nhập' }))
     expect(await screen.findByRole('heading', { name: 'Không đăng nhập được vào NovaPay' })).toBeInTheDocument()
-    expect(screen.queryByText('Đã đăng nhập trên máy tính')).not.toBeInTheDocument()
+    expect(screen.queryByText('Đã xác nhận')).not.toBeInTheDocument()
   })
 
   it('never sends a malformed token to the server', async () => {

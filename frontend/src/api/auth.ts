@@ -147,18 +147,18 @@ export type QrStatus = 'pending' | 'scanned' | 'approved' | 'declined'
  */
 export interface QrTicket { token: string; poll_secret: string; expires_in: number }
 
-/** POST /api/auth/qr/status. Once approved it carries the session, as a verified code does. */
+/** POST /api/auth/qr/status. No session here: an approval waits for the computer to confirm (claim). */
 export interface QrStatusResponse {
   status: QrStatus
-  /** Who scanned the code: a name and picture, never an id. */
-  scanner?: { display_name: string; avatar_url: string }
-  access_token?: string
-  user?: SessionUser
-  needs_profile?: boolean
+  /** Who scanned the code and the workspace the computer would enter: names only, never an id. */
+  scanner?: { display_name: string; avatar_url: string; tenant_name: string }
 }
 
-/** POST /api/auth/qr/scan: which computer is asking, and the workspace it would enter. */
-export interface QrScanResponse { browser: string; os: string; created_at: string; tenant_name: string }
+/**
+ * POST /api/auth/qr/scan: which computer is asking, the workspace it would enter,
+ * and whether it asked from the phone's network (false: the phone warns).
+ */
+export interface QrScanResponse { browser: string; os: string; created_at: string; tenant_name: string; same_network: boolean }
 
 /**
  * Sign-in by QR code. The computer (not signed in) creates a code and polls it;
@@ -171,6 +171,14 @@ export const qrApi = {
     publicFetch<QrStatusResponse>('/auth/qr/status', {
       method: 'POST', body: JSON.stringify({ token, poll_secret: pollSecret }),
     }),
+  /** "Tiếp tục" on the computer: the session, answered like a verified code. */
+  claim: (token: string, pollSecret: string) =>
+    publicFetch<Omit<OTPVerifyResponse, 'is_new_user'>>('/auth/qr/claim', {
+      method: 'POST', body: JSON.stringify({ token, poll_secret: pollSecret }),
+    }),
+  /** "Không phải tôi" on the computer: the code is removed. */
+  cancel: (token: string, pollSecret: string) =>
+    publicFetch<void>('/auth/qr/cancel', { method: 'POST', body: JSON.stringify({ token, poll_secret: pollSecret }) }),
   scan: (token: string) =>
     apiFetch<QrScanResponse>('/auth/qr/scan', { method: 'POST', body: JSON.stringify({ token }) }),
   approve: (token: string) =>

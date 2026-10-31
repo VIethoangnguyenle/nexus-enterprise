@@ -23,6 +23,15 @@ let server: {
   gone: boolean
   failing: number
   polls: string[]
+  claims: number
+  cancels: number
+  claimGone: boolean
+  needsProfile: boolean
+}
+
+const APPROVED = {
+  status: 'approved',
+  scanner: { display_name: 'Lê Thị Hoa', avatar_url: '', tenant_name: 'NovaPay' },
 }
 
 const tokenOf = (n: number) => `token-${n}`.padEnd(43, 'x')
@@ -44,6 +53,19 @@ function qrFetch(path: string, options: RequestInit = {}): Promise<unknown> {
     if (server.gone) return Promise.reject(new ApiError('gone', 410, { code: 'qr_unavailable' }))
     return Promise.resolve(structuredClone(server.status))
   }
+  if (path === '/auth/qr/claim') {
+    server.claims += 1
+    if (server.claimGone) return Promise.reject(new ApiError('gone', 410, { code: 'qr_unavailable' }))
+    return Promise.resolve({
+      // Payload {"tenant_id":"t-1"}: the session is for the phone's workspace.
+      access_token: 'h.eyJ0ZW5hbnRfaWQiOiJ0LTEifQ.s', needs_profile: server.needsProfile,
+      user: { id: 'u-1', username: 'hoa.le', ngac_node_id: 'n-1', email: 'hoa@novapay.vn', union_id: 'x', email_verified: true },
+    })
+  }
+  if (path === '/auth/qr/cancel') {
+    server.cancels += 1
+    return Promise.resolve({})
+  }
   return authFixtureApi(path, options)
 }
 
@@ -54,7 +76,10 @@ beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true })
   startAuthTest({ signedIn: false })
   localStorage.clear()
-  server = { creates: 0, expiresIn: 120, status: { status: 'pending' }, gone: false, failing: 0, polls: [] }
+  server = {
+    creates: 0, expiresIn: 120, status: { status: 'pending' }, gone: false, failing: 0, polls: [],
+    claims: 0, cancels: 0, claimGone: false, needsProfile: false,
+  }
   vi.mocked(publicFetch).mockImplementation(qrFetch as typeof publicFetch)
 })
 afterEach(() => {
@@ -67,11 +92,10 @@ describe('Login by QR code on a computer', () => {
     localStorage.setItem('nexus.login.method', 'qr')
     const router = await renderAuthScreen(LoginScreen, '/login')
     await screen.findByRole('img', { name: 'Mã QR đăng nhập' })
-    server.status = {
-      status: 'approved', access_token: 'h.eyJ0ZW5hbnRfaWQiOiJ0LTEifQ.s', needs_profile: true,
-      user: { id: 'u-1', username: 'hoa.le', ngac_node_id: 'n-1', email: 'hoa@novapay.vn', union_id: 'x', email_verified: true },
-    }
+    server.status = APPROVED
+    server.needsProfile = true
     await tick(2100)
+    await userEvent.click(await screen.findByRole('button', { name: 'Tiếp tục' }))
     await waitFor(() => expect(where(router).path).toBe('/register'))
   })
 
@@ -117,20 +141,56 @@ describe('Login by QR code on a computer', () => {
     expectNoIds()
   })
 
-  it('signs in straight into the phone\'s workspace once the phone approves', async () => {
+  it('asks the person at the computer to confirm, then goes straight into the phone\'s workspace', async () => {
     localStorage.setItem('nexus.login.method', 'qr')
     const router = await renderAuthScreen(LoginScreen, '/login')
     await screen.findByRole('img', { name: 'Mã QR đăng nhập' })
-    server.status = {
-      // Payload {"tenant_id":"t-1"}: the session is for the phone's workspace.
-      status: 'approved', access_token: 'h.eyJ0ZW5hbnRfaWQiOiJ0LTEifQ.s', needs_profile: false,
-      user: { id: 'u-1', username: 'hoa.le', ngac_node_id: 'n-1', email: 'hoa@novapay.vn', union_id: 'x', email_verified: true },
-    }
+    server.status = APPROVED
     await tick(2100)
+    expect(await screen.findByRole('heading', { name: 'Tiếp tục với tên Lê Thị Hoa?' })).toBeInTheDocument()
+    expect(screen.getByText('NovaPay')).toBeInTheDocument()
+    expect(screen.getByRole('note')).toHaveTextContent('Nếu đây không phải bạn')
+    // Nothing is signed in, and polling stops, until the person here decides.
+    expect(useAuthStore.getState().accessToken).toBeNull()
+    const polled = server.polls.length
+    await tick(6000)
+    expect(server.polls.length).toBe(polled)
+    expect(server.claims).toBe(0)
+    expectNoIds()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }))
     await waitFor(() => expect(where(router).path).toBe('/channels'))
+    expect(server.claims).toBe(1)
     expect(where(router).search).toMatchObject({ ws: 't-1' })
     expect(useAuthStore.getState().tenantId).toBe('t-1')
     expect(useAuthStore.getState().user?.id).toBe('u-1')
+  })
+
+  it('throws the approval away on Không phải tôi and shows a new code', async () => {
+    localStorage.setItem('nexus.login.method', 'qr')
+    await renderAuthScreen(LoginScreen, '/login')
+    await screen.findByRole('img', { name: 'Mã QR đăng nhập' })
+    server.status = APPROVED
+    await tick(2100)
+    server.status = { status: 'pending' }
+    await userEvent.click(await screen.findByRole('button', { name: 'Không phải tôi' }))
+    await waitFor(() => expect(server.cancels).toBe(1))
+    await waitFor(() => expect(server.creates).toBe(2))
+    expect(await screen.findByRole('img', { name: 'Mã QR đăng nhập' })).toBeInTheDocument()
+    expect(server.claims).toBe(0)
+    expect(useAuthStore.getState().accessToken).toBeNull()
+  })
+
+  it('says the code expired when confirming came too late', async () => {
+    localStorage.setItem('nexus.login.method', 'qr')
+    await renderAuthScreen(LoginScreen, '/login')
+    await screen.findByRole('img', { name: 'Mã QR đăng nhập' })
+    server.status = APPROVED
+    server.claimGone = true
+    await tick(2100)
+    await userEvent.click(await screen.findByRole('button', { name: 'Tiếp tục' }))
+    expect(await screen.findByText('Mã đã hết hạn')).toBeInTheDocument()
+    expect(useAuthStore.getState().accessToken).toBeNull()
   })
 
   it('says the phone declined, and stops polling until asked for a new code', async () => {

@@ -10,6 +10,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
+	"net"
 	"strings"
 	"time"
 
@@ -65,6 +67,9 @@ type QRPhone struct {
 	NGACNodeID string
 	TenantID   string
 	SessionID  string
+	// IP is the address the phone's request came from. It is compared with the
+	// computer's and never shown or kept.
+	IP string
 }
 
 // QRScan is what the phone shows before the person approves.
@@ -73,15 +78,21 @@ type QRScan struct {
 	OS         string
 	CreatedAt  time.Time
 	TenantName string
+	// SameNetwork is false when the computer asked from another network than the
+	// phone scans from (or its network is unknown): the phone then warns.
+	SameNetwork bool
 }
 
-// QRScanner is who scanned the code, as the computer shows them.
+// QRScanner is who scanned the code and where the computer would land, as the
+// computer shows them before its person confirms.
 type QRScanner struct {
 	DisplayName string
 	AvatarURL   string
+	TenantName  string
 }
 
-// QRSession is the session handed to the computer once the phone approved.
+// QRSession is the session handed to the computer once the phone approved and
+// the person at the computer confirmed.
 type QRSession struct {
 	Token      string
 	SessionID  string
@@ -101,7 +112,6 @@ type QRSession struct {
 type QRPoll struct {
 	Status  string
 	Scanner *QRScanner // set once scanned
-	Session *QRSession // set exactly once, on the poll that collects an approval
 }
 
 type qrState struct {
@@ -110,11 +120,29 @@ type qrState struct {
 	Browser   string    `json:"browser,omitempty"`
 	OS        string    `json:"os,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
+	// Network is the computer's network prefix (IPv4 /24, IPv6 /64), only for
+	// comparing with the phone's; empty when the address was not usable.
+	Network string `json:"network,omitempty"`
 
-	ScannerUserID string `json:"scanner_user_id,omitempty"`
-	ScannerTenant string `json:"scanner_tenant,omitempty"`
-	ScannerName   string `json:"scanner_name,omitempty"`
-	ScannerAvatar string `json:"scanner_avatar,omitempty"`
+	ScannerUserID     string `json:"scanner_user_id,omitempty"`
+	ScannerTenant     string `json:"scanner_tenant,omitempty"`
+	ScannerName       string `json:"scanner_name,omitempty"`
+	ScannerAvatar     string `json:"scanner_avatar,omitempty"`
+	ScannerTenantName string `json:"scanner_tenant_name,omitempty"`
+}
+
+// qrNetwork is the network an address belongs to for the "same network" check:
+// IPv4 /24, IPv6 /64. Offices and homes reach the server from one address or a
+// few neighbouring ones; anything else is another network.
+func qrNetwork(ip string) string {
+	addr := net.ParseIP(strings.TrimSpace(ip))
+	if addr == nil {
+		return ""
+	}
+	if v4 := addr.To4(); v4 != nil {
+		return v4.Mask(net.CIDRMask(24, 32)).String() + "/24"
+	}
+	return addr.Mask(net.CIDRMask(64, 128)).String() + "/64"
 }
 
 func qrKey(token string) string {
@@ -135,8 +163,9 @@ func qrSecret() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-// CreateQRLogin issues a new code for the browser described by userAgent.
-func (s *Service) CreateQRLogin(ctx context.Context, userAgent string) (QRTicket, error) {
+// CreateQRLogin issues a new code for the browser described by userAgent,
+// asking from ip.
+func (s *Service) CreateQRLogin(ctx context.Context, userAgent, ip string) (QRTicket, error) {
 	if s.rdb == nil {
 		return QRTicket{}, ErrQRUnavailable
 	}
@@ -149,7 +178,10 @@ func (s *Service) CreateQRLogin(ctx context.Context, userAgent string) (QRTicket
 		return QRTicket{}, fmt.Errorf("qr poll secret: %w", err)
 	}
 	browser, os := ParseUserAgent(userAgent)
-	st := qrState{Status: QRPending, PollHash: qrHash(poll), Browser: browser, OS: os, CreatedAt: time.Now().UTC()}
+	st := qrState{
+		Status: QRPending, PollHash: qrHash(poll), Browser: browser, OS: os,
+		CreatedAt: time.Now().UTC(), Network: qrNetwork(ip),
+	}
 	payload, err := json.Marshal(st)
 	if err != nil {
 		return QRTicket{}, fmt.Errorf("encode qr state: %w", err)
@@ -218,30 +250,29 @@ func (s *Service) qrUpdate(ctx context.Context, token string, change func(*qrSta
 	return outcome
 }
 
-// PollQRLogin is the computer asking how its code is doing. On the poll after
-// an approval it mints the session and removes the code, so the session is
-// handed out exactly once and only to the browser holding pollSecret.
+// qrPollerOwns refuses anyone but the page that created the code.
+func qrPollerOwns(st *qrState, pollSecret string) error {
+	if pollSecret == "" || subtle.ConstantTimeCompare([]byte(qrHash(pollSecret)), []byte(st.PollHash)) != 1 {
+		return ErrQRUnavailable
+	}
+	return nil
+}
+
+// PollQRLogin is the computer asking how its code is doing. An approval is
+// reported with who approved it and where the computer would land, and waits
+// for the person at the computer to confirm (ClaimQRLogin) or refuse
+// (CancelQRLogin). Only the page holding pollSecret is answered.
 func (s *Service) PollQRLogin(ctx context.Context, token, pollSecret string) (*QRPoll, error) {
 	var out QRPoll
 	err := s.qrUpdate(ctx, token, func(st *qrState) (bool, error) {
-		if pollSecret == "" || subtle.ConstantTimeCompare([]byte(qrHash(pollSecret)), []byte(st.PollHash)) != 1 {
-			return false, ErrQRUnavailable
+		if err := qrPollerOwns(st, pollSecret); err != nil {
+			return false, err
 		}
 		out.Status = st.Status
 		if st.ScannerUserID != "" {
-			out.Scanner = &QRScanner{DisplayName: st.ScannerName, AvatarURL: st.ScannerAvatar}
+			out.Scanner = &QRScanner{DisplayName: st.ScannerName, AvatarURL: st.ScannerAvatar, TenantName: st.ScannerTenantName}
 		}
-		switch st.Status {
-		case QRApproved:
-			// The session is minted before the code is removed: if the user cannot
-			// be read the code stays, and the next poll tries again.
-			session, err := s.qrSession(ctx, *st)
-			if err != nil {
-				return false, err
-			}
-			out.Session = session
-			return true, nil
-		case QRDeclined:
+		if st.Status == QRDeclined {
 			// Told once; the code is finished either way.
 			return true, nil
 		}
@@ -251,6 +282,43 @@ func (s *Service) PollQRLogin(ctx context.Context, token, pollSecret string) (*Q
 		return nil, err
 	}
 	return &out, nil
+}
+
+// ClaimQRLogin is the person at the computer confirming "continue as …" after
+// the phone approved. It mints the session and removes the code in one step, so
+// the session is handed out once and only to the page holding pollSecret; if
+// the user cannot be read the code stays and the page can try again.
+func (s *Service) ClaimQRLogin(ctx context.Context, token, pollSecret string) (*QRSession, error) {
+	var out *QRSession
+	err := s.qrUpdate(ctx, token, func(st *qrState) (bool, error) {
+		if err := qrPollerOwns(st, pollSecret); err != nil {
+			return false, err
+		}
+		if st.Status != QRApproved {
+			return false, ErrQRUnavailable
+		}
+		session, err := s.qrSession(ctx, *st)
+		if err != nil {
+			return false, err
+		}
+		out = session
+		return true, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// CancelQRLogin is "Không phải tôi" on the computer: the code is removed
+// whatever state it is in, so nothing approved on it can be collected.
+func (s *Service) CancelQRLogin(ctx context.Context, token, pollSecret string) error {
+	return s.qrUpdate(ctx, token, func(st *qrState) (bool, error) {
+		if err := qrPollerOwns(st, pollSecret); err != nil {
+			return false, err
+		}
+		return true, nil
+	})
 }
 
 // qrSession mints the computer's session for an approved code.
@@ -312,8 +380,12 @@ func (s *Service) ScanQRLogin(ctx context.Context, token string, phone QRPhone) 
 		}
 		st.Status = QRScanned
 		st.ScannerUserID, st.ScannerTenant = phone.UserID, phone.TenantID
-		st.ScannerName, st.ScannerAvatar = name, user.AvatarURL
-		out = QRScan{Browser: st.Browser, OS: st.OS, CreatedAt: st.CreatedAt, TenantName: tenantName}
+		st.ScannerName, st.ScannerAvatar, st.ScannerTenantName = name, user.AvatarURL, tenantName
+		phoneNet := qrNetwork(phone.IP)
+		out = QRScan{
+			Browser: st.Browser, OS: st.OS, CreatedAt: st.CreatedAt, TenantName: tenantName,
+			SameNetwork: st.Network != "" && st.Network == phoneNet,
+		}
 		return false, nil
 	})
 	if err != nil {
@@ -331,13 +403,23 @@ func (s *Service) ApproveQRLogin(ctx context.Context, token string, phone QRPhon
 	if _, err := s.qrMemberTenant(ctx, phone); err != nil {
 		return err
 	}
-	return s.qrUpdate(ctx, token, func(st *qrState) (bool, error) {
+	var approved qrState
+	err := s.qrUpdate(ctx, token, func(st *qrState) (bool, error) {
 		if st.Status != QRScanned || st.ScannerUserID != phone.UserID || st.ScannerTenant != phone.TenantID {
 			return false, ErrQRUnavailable
 		}
 		st.Status = QRApproved
+		approved = *st
 		return false, nil
 	})
+	if err != nil {
+		return err
+	}
+	slog.Info("audit: qr sign-in approved from a phone",
+		"user_id", phone.UserID, "tenant_id", phone.TenantID, "approving_session_id", phone.SessionID,
+		"browser", approved.Browser, "os", approved.OS,
+		"same_network", approved.Network != "" && approved.Network == qrNetwork(phone.IP))
+	return nil
 }
 
 // DeclineQRLogin refuses the computer. Only the person who scanned may.

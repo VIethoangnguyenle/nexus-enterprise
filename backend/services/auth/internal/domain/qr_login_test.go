@@ -13,6 +13,9 @@ import (
 	"ngac-platform/services/auth/internal/store"
 )
 
+// deskIP is the computer's address; phones scan from it unless a test says otherwise.
+const deskIP = "203.0.113.10"
+
 const chromeOnWindows = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 
 // qrWorld is a service with real Redis, one tenant and one active member of it.
@@ -51,12 +54,12 @@ func (q qrWorld) phoneOf(u *store.User, tenant string) domain.QRPhone {
 	}); err != nil {
 		q.t.Fatal(err)
 	}
-	return domain.QRPhone{UserID: u.ID, Username: u.Username, NGACNodeID: u.NGACNodeID, TenantID: tenant, SessionID: sessionID}
+	return domain.QRPhone{UserID: u.ID, Username: u.Username, NGACNodeID: u.NGACNodeID, TenantID: tenant, SessionID: sessionID, IP: "203.0.113.77"}
 }
 
 func (q qrWorld) create(t *testing.T) domain.QRTicket {
 	t.Helper()
-	ticket, err := q.svc.CreateQRLogin(context.Background(), chromeOnWindows)
+	ticket, err := q.svc.CreateQRLogin(context.Background(), chromeOnWindows, deskIP)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -88,18 +91,26 @@ func TestQRLogin_FullFlowSignsTheComputerInToThePhonesTenant(t *testing.T) {
 	if err != nil || poll.Status != domain.QRScanned || poll.Scanner == nil {
 		t.Fatalf("after scan: %+v, %v", poll, err)
 	}
-	if poll.Session != nil {
-		t.Fatal("a scan alone must not hand out a session")
+	if _, err := q.svc.ClaimQRLogin(ctx, ticket.Token, ticket.PollSecret); !errors.Is(err, domain.ErrQRUnavailable) {
+		t.Fatalf("a scan alone must not hand out a session: %v", err)
 	}
 
 	if err := q.svc.ApproveQRLogin(ctx, ticket.Token, q.phoneOf(q.phone, q.tenant)); err != nil {
 		t.Fatalf("approve: %v", err)
 	}
+	// Approved: the computer is told who and where, and asks its person to confirm.
 	poll, err = q.svc.PollQRLogin(ctx, ticket.Token, ticket.PollSecret)
-	if err != nil || poll.Status != domain.QRApproved || poll.Session == nil {
+	if err != nil || poll.Status != domain.QRApproved || poll.Scanner == nil || poll.Scanner.TenantName != "NovaPay" {
 		t.Fatalf("after approve: %+v, %v", poll, err)
 	}
-	s := poll.Session
+	// Polling again does not use the approval up.
+	if again, err := q.svc.PollQRLogin(ctx, ticket.Token, ticket.PollSecret); err != nil || again.Status != domain.QRApproved {
+		t.Fatalf("second poll after approve: %+v, %v", again, err)
+	}
+	s, err := q.svc.ClaimQRLogin(ctx, ticket.Token, ticket.PollSecret)
+	if err != nil {
+		t.Fatalf("claim: %v", err)
+	}
 	if s.UserID != q.phone.ID || s.TenantID != q.tenant || s.SessionID == "" {
 		t.Errorf("session %+v", s)
 	}
@@ -107,9 +118,12 @@ func TestQRLogin_FullFlowSignsTheComputerInToThePhonesTenant(t *testing.T) {
 		t.Errorf("token tenant = %q, want the phone's %q", got, q.tenant)
 	}
 
-	// Single use: the session is handed out once.
-	if _, err := q.svc.PollQRLogin(ctx, ticket.Token, ticket.PollSecret); !errors.Is(err, domain.ErrQRUnavailable) {
+	// Single use: the session is handed out once, and the code is gone.
+	if _, err := q.svc.ClaimQRLogin(ctx, ticket.Token, ticket.PollSecret); !errors.Is(err, domain.ErrQRUnavailable) {
 		t.Fatalf("second claim: err = %v, want ErrQRUnavailable", err)
+	}
+	if _, err := q.svc.PollQRLogin(ctx, ticket.Token, ticket.PollSecret); !errors.Is(err, domain.ErrQRUnavailable) {
+		t.Fatalf("poll after claim: err = %v, want ErrQRUnavailable", err)
 	}
 }
 
@@ -127,10 +141,16 @@ func TestQRLogin_OnlyTheBrowserThatCreatedTheCodeGetsTheSession(t *testing.T) {
 		if p, err := q.svc.PollQRLogin(ctx, ticket.Token, secret); !errors.Is(err, domain.ErrQRUnavailable) {
 			t.Errorf("%s poll secret: got %+v, %v; want ErrQRUnavailable", name, p, err)
 		}
+		if s, err := q.svc.ClaimQRLogin(ctx, ticket.Token, secret); !errors.Is(err, domain.ErrQRUnavailable) {
+			t.Errorf("%s claim secret: got %+v, %v; want ErrQRUnavailable", name, s, err)
+		}
+		if err := q.svc.CancelQRLogin(ctx, ticket.Token, secret); !errors.Is(err, domain.ErrQRUnavailable) {
+			t.Errorf("%s cancel secret: %v; want ErrQRUnavailable", name, err)
+		}
 	}
 	// The rightful browser can still claim it afterwards.
-	if p, err := q.svc.PollQRLogin(ctx, ticket.Token, ticket.PollSecret); err != nil || p.Session == nil {
-		t.Fatalf("rightful claim: %+v, %v", p, err)
+	if s, err := q.svc.ClaimQRLogin(ctx, ticket.Token, ticket.PollSecret); err != nil || s == nil {
+		t.Fatalf("rightful claim: %+v, %v", s, err)
 	}
 }
 
@@ -191,8 +211,8 @@ func TestQRLogin_RefusesAPhoneThatIsNoLongerAMemberOfItsTenant(t *testing.T) {
 	if err := q.svc.ApproveQRLogin(ctx, ticket.Token, q.phoneOf(q.phone, q.tenant)); !errors.Is(err, domain.ErrAccessDenied) {
 		t.Fatalf("approve after removal: err = %v, want ErrAccessDenied", err)
 	}
-	if p, _ := q.svc.PollQRLogin(ctx, ticket.Token, ticket.PollSecret); p != nil && p.Session != nil {
-		t.Fatal("a refused approval must not leave a session to claim")
+	if _, err := q.svc.ClaimQRLogin(ctx, ticket.Token, ticket.PollSecret); !errors.Is(err, domain.ErrQRUnavailable) {
+		t.Fatalf("a refused approval must not leave a session to claim: %v", err)
 	}
 
 	// A phone with no tenant at all.
@@ -227,8 +247,8 @@ func TestQRLogin_AnEndedPhoneSessionCannotHandOutANewOne(t *testing.T) {
 	if err := q.svc.ApproveQRLogin(ctx, ticket.Token, phone); !errors.Is(err, domain.ErrQRSessionEnded) {
 		t.Fatalf("approve from an ended session: err = %v, want ErrQRSessionEnded", err)
 	}
-	if p, _ := q.svc.PollQRLogin(ctx, ticket.Token, ticket.PollSecret); p != nil && p.Session != nil {
-		t.Fatal("an ended session must not leave a session to claim")
+	if _, err := q.svc.ClaimQRLogin(ctx, ticket.Token, ticket.PollSecret); !errors.Is(err, domain.ErrQRUnavailable) {
+		t.Fatalf("an ended session must not leave a session to claim: %v", err)
 	}
 
 	// Every session of the person revoked (an account takeover being cleaned up).
@@ -270,7 +290,7 @@ func TestQRLogin_TheTenantIsTheOneScannedFrom(t *testing.T) {
 	if _, err := q.svc.ScanQRLogin(ctx, ticket.Token, q.phoneOf(q.phone, stranger)); !errors.Is(err, domain.ErrAccessDenied) {
 		t.Errorf("re-scan into a non-member tenant: err = %v, want ErrAccessDenied", err)
 	}
-	if p, _ := q.svc.PollQRLogin(ctx, ticket.Token, ticket.PollSecret); p == nil || p.Status != domain.QRScanned || p.Session != nil {
+	if p, _ := q.svc.PollQRLogin(ctx, ticket.Token, ticket.PollSecret); p == nil || p.Status != domain.QRScanned {
 		t.Errorf("the code must still wait for its first scan's tenant, got %+v", p)
 	}
 }
@@ -309,11 +329,61 @@ func TestQRLogin_DeclineEndsTheCode(t *testing.T) {
 		t.Fatalf("decline: %v", err)
 	}
 	p, err := q.svc.PollQRLogin(ctx, ticket.Token, ticket.PollSecret)
-	if err != nil || p.Status != domain.QRDeclined || p.Session != nil {
+	if err != nil || p.Status != domain.QRDeclined {
 		t.Fatalf("after decline: %+v, %v", p, err)
 	}
 	if err := q.svc.ApproveQRLogin(ctx, ticket.Token, q.phoneOf(q.phone, q.tenant)); !errors.Is(err, domain.ErrQRUnavailable) {
 		t.Errorf("approve after decline: err = %v, want ErrQRUnavailable", err)
+	}
+}
+
+func TestQRLogin_NotMeOnTheComputerEndsTheCode(t *testing.T) {
+	q := newQRWorld(t)
+	ctx := context.Background()
+	ticket := q.create(t)
+	if _, err := q.svc.ScanQRLogin(ctx, ticket.Token, q.phoneOf(q.phone, q.tenant)); err != nil {
+		t.Fatal(err)
+	}
+	if err := q.svc.ApproveQRLogin(ctx, ticket.Token, q.phoneOf(q.phone, q.tenant)); err != nil {
+		t.Fatal(err)
+	}
+	if err := q.svc.CancelQRLogin(ctx, ticket.Token, ticket.PollSecret); err != nil {
+		t.Fatalf("cancel: %v", err)
+	}
+	if _, err := q.svc.ClaimQRLogin(ctx, ticket.Token, ticket.PollSecret); !errors.Is(err, domain.ErrQRUnavailable) {
+		t.Fatalf("claim after Không phải tôi: %v, want ErrQRUnavailable", err)
+	}
+}
+
+func TestQRLogin_ThePhoneIsToldWhenTheComputerIsOnAnotherNetwork(t *testing.T) {
+	q := newQRWorld(t)
+	ctx := context.Background()
+	cases := []struct {
+		name, desk, phone string
+		same              bool
+	}{
+		{"same address", "203.0.113.10", "203.0.113.10", true},
+		{"same IPv4 /24", "203.0.113.10", "203.0.113.200", true},
+		{"other IPv4 network", "203.0.113.10", "198.51.100.7", false},
+		{"same IPv6 /64", "2001:db8:1:2::10", "2001:db8:1:2:abcd::1", true},
+		{"other IPv6 /64", "2001:db8:1:2::10", "2001:db8:1:3::1", false},
+		{"IPv4 against IPv6", "203.0.113.10", "2001:db8::1", false},
+		{"unknown computer address", "", "203.0.113.10", false},
+	}
+	for _, c := range cases {
+		ticket, err := q.svc.CreateQRLogin(ctx, chromeOnWindows, c.desk)
+		if err != nil {
+			t.Fatal(err)
+		}
+		phone := q.phoneOf(q.phone, q.tenant)
+		phone.IP = c.phone
+		scan, err := q.svc.ScanQRLogin(ctx, ticket.Token, phone)
+		if err != nil {
+			t.Fatalf("%s: scan: %v", c.name, err)
+		}
+		if scan.SameNetwork != c.same {
+			t.Errorf("%s: same network = %v, want %v", c.name, scan.SameNetwork, c.same)
+		}
 	}
 }
 
@@ -330,13 +400,16 @@ func TestQRLogin_UnknownTokensAreIndistinguishable(t *testing.T) {
 		if err := q.svc.ApproveQRLogin(ctx, tok, q.phoneOf(q.phone, q.tenant)); !errors.Is(err, domain.ErrQRUnavailable) {
 			t.Errorf("approve %q: %v", tok, err)
 		}
+		if _, err := q.svc.ClaimQRLogin(ctx, tok, "x"); !errors.Is(err, domain.ErrQRUnavailable) {
+			t.Errorf("claim %q: %v", tok, err)
+		}
 	}
 }
 
 func TestQRLogin_WithoutRedisIsUnavailableNotAPanic(t *testing.T) {
 	w := newFakeWorld()
 	svc := w.service(t) // no Redis
-	if _, err := svc.CreateQRLogin(context.Background(), chromeOnWindows); !errors.Is(err, domain.ErrQRUnavailable) {
+	if _, err := svc.CreateQRLogin(context.Background(), chromeOnWindows, deskIP); !errors.Is(err, domain.ErrQRUnavailable) {
 		t.Errorf("create without Redis: %v", err)
 	}
 	if _, err := svc.PollQRLogin(context.Background(), "t", "s"); !errors.Is(err, domain.ErrQRUnavailable) {

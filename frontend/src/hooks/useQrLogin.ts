@@ -14,7 +14,8 @@ export const QR_MAX_RENEWALS = 5
 /** Failed polls in a row before the screen says the connection is gone. */
 export const QR_FAILURES_BEFORE_NOTICE = 3
 
-export type QrPhase = 'loading' | 'pending' | 'scanned' | 'approving' | 'declined' | 'expired' | 'failed'
+export type QrPhase =
+  | 'loading' | 'pending' | 'scanned' | 'confirm' | 'approving' | 'declined' | 'expired' | 'failed'
 
 export interface QrLogin {
   phase: QrPhase
@@ -25,6 +26,10 @@ export interface QrLogin {
   reconnecting: boolean
   /** A new code, after an expiry, a decline or a failure. */
   renew: () => void
+  /** "Tiếp tục với tên …": collects the session the phone approved. */
+  confirm: () => void
+  /** "Không phải tôi": throws the approved code away and shows a new one. */
+  notMe: () => void
 }
 
 type Ended = 'expired' | 'declined' | 'failed'
@@ -33,8 +38,9 @@ type Ended = 'expired' | 'declined' | 'failed'
  * The computer's side of sign-in by QR code (design/mockups/qr-login.html §1, §2).
  * Fetches a code, polls it every two seconds while the tab is visible, swaps it
  * for a fresh one before it runs out (up to five times with nobody scanning),
- * and signs the browser in once the phone approves. `onSignedIn` gets whether
- * the profile step is still owed.
+ * and, once the phone approves, asks the person at the computer to confirm who
+ * they are signing in as before collecting the session (design §1 note 5).
+ * `onSignedIn` gets whether the profile step is still owed.
  */
 export function useQrLogin(onSignedIn: (needsProfile: boolean) => void): QrLogin {
   const login = useAuthStore((s) => s.login)
@@ -43,7 +49,6 @@ export function useQrLogin(onSignedIn: (needsProfile: boolean) => void): QrLogin
   const [reconnecting, setReconnecting] = useState(false)
   const renewals = useRef(0)
   const failures = useRef(0)
-  const signedIn = useRef(false)
   const onSignedInRef = useRef(onSignedIn)
   onSignedInRef.current = onSignedIn
 
@@ -79,6 +84,7 @@ export function useQrLogin(onSignedIn: (needsProfile: boolean) => void): QrLogin
     refetchIntervalInBackground: false,
     refetchInterval: (q) => {
       const s = q.state.data?.status
+      // An approval stops the polling: the person at the computer decides next.
       return s === undefined || s === 'pending' || s === 'scanned' ? QR_POLL_MS : false
     },
     queryFn: async (): Promise<QrStatusResponse | { status: 'expired' }> => {
@@ -103,12 +109,23 @@ export function useQrLogin(onSignedIn: (needsProfile: boolean) => void): QrLogin
     if (!data) return
     if (data.status === 'expired') setEnded('expired')
     else if (data.status === 'declined') setEnded('declined')
-    else if (data.status === 'approved' && data.access_token && data.user && !signedIn.current) {
-      signedIn.current = true
-      login(data.access_token, sessionUser(data.user))
-      onSignedInRef.current(data.needs_profile === true)
-    }
-  }, [data, login])
+  }, [data])
+
+  const claim = useMutation({
+    meta: { silentError: true },
+    mutationFn: (t: { token: string; secret: string }) => qrApi.claim(t.token, t.secret),
+    onSuccess: (r) => {
+      login(r.access_token, sessionUser(r.user))
+      onSignedInRef.current(r.needs_profile === true)
+    },
+    // Too late (the code ran out) or gone: start over with a new code.
+    onError: (err) => setEnded(err instanceof ApiError && err.status === 410 ? 'expired' : 'failed'),
+  })
+  // The code is passed in: `renew` replaces the ticket before the request leaves.
+  const cancel = useMutation({
+    meta: { silentError: true },
+    mutationFn: (t: { token: string; secret: string }) => qrApi.cancel(t.token, t.secret),
+  })
 
   // Before an unscanned code runs out, swap it, a limited number of times.
   const waiting = !ended && !!ticket && (!data || data.status === 'pending')
@@ -131,10 +148,18 @@ export function useQrLogin(onSignedIn: (needsProfile: boolean) => void): QrLogin
     createRef.current()
   }, [])
 
+  const confirm = () => { if (ticket && !claim.isPending) claim.mutate({ token: ticket.token, secret: ticket.secret }) }
+  // The code goes whether or not the server hears it: a new one replaces it at once.
+  const notMe = () => {
+    if (ticket) cancel.mutate({ token: ticket.token, secret: ticket.secret })
+    renew()
+  }
+
   let phase: QrPhase
   if (ended) phase = ended
   else if (!ticket) phase = 'loading'
-  else if (data?.status === 'approved') phase = 'approving'
+  else if (claim.isPending || claim.isSuccess) phase = 'approving'
+  else if (data?.status === 'approved') phase = 'confirm'
   else if (data?.status === 'scanned') phase = 'scanned'
   else phase = 'pending'
 
@@ -145,5 +170,7 @@ export function useQrLogin(onSignedIn: (needsProfile: boolean) => void): QrLogin
     scanner: (data && 'scanner' in data && data.scanner) || null,
     reconnecting,
     renew,
+    confirm,
+    notMe,
   }
 }

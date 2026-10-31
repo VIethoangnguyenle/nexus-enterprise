@@ -117,7 +117,8 @@ func TestQRLoginREST_PhoneApprovesAndTheComputerGetsASession(t *testing.T) {
 		t.Fatalf("scan: %d %s", rec.Code, rec.Body)
 	}
 	scan := decode(t, rec)
-	if scan["browser"] != "Chrome" || scan["os"] != "Windows" || scan["tenant_name"] != "NovaPay" || scan["created_at"] == nil {
+	if scan["browser"] != "Chrome" || scan["os"] != "Windows" || scan["tenant_name"] != "NovaPay" || scan["created_at"] == nil ||
+		scan["same_network"] != true {
 		t.Errorf("scan body %v", scan)
 	}
 
@@ -135,15 +136,27 @@ func TestQRLoginREST_PhoneApprovesAndTheComputerGetsASession(t *testing.T) {
 		t.Fatalf("approve: %d %s", rec.Code, rec.Body)
 	}
 
+	// Approved: the computer is told who and where, and nothing more yet.
 	rec = q.call("/api/auth/qr/status", "", statusBody(token, poll))
+	st = decode(t, rec)
+	scanner, _ = st["scanner"].(map[string]any)
+	if st["status"] != "approved" || scanner["display_name"] != "Lê Thị Hoa" || scanner["tenant_name"] != "NovaPay" {
+		t.Fatalf("approved status %v", st)
+	}
+	if strings.Contains(rec.Body.String(), "access_token") || cookieNamed(rec, refreshCookieName) != nil {
+		t.Fatal("no session before the person at the computer confirms")
+	}
+
+	// "Tiếp tục" on the computer.
+	rec = q.call("/api/auth/qr/claim", "", statusBody(token, poll))
 	if rec.Code != http.StatusOK {
-		t.Fatalf("collect: %d %s", rec.Code, rec.Body)
+		t.Fatalf("claim: %d %s", rec.Code, rec.Body)
 	}
 	body := decode(t, rec)
 	access, _ := body["access_token"].(string)
 	user, _ := body["user"].(map[string]any)
-	if body["status"] != "approved" || access == "" || user["id"] != q.phone.ID {
-		t.Fatalf("approved body %v", body)
+	if access == "" || user["id"] != q.phone.ID {
+		t.Fatalf("claim body %v", body)
 	}
 	if got := tenantOfToken(t, access); got != q.tenant {
 		t.Errorf("computer's token is for %q, want the phone's tenant %q", got, q.tenant)
@@ -153,8 +166,25 @@ func TestQRLoginREST_PhoneApprovesAndTheComputerGetsASession(t *testing.T) {
 	}
 
 	// Collected once only.
-	if rec := q.call("/api/auth/qr/status", "", statusBody(token, poll)); rec.Code != http.StatusGone || decode(t, rec)["code"] != "qr_unavailable" {
-		t.Errorf("second collect: %d %s", rec.Code, rec.Body)
+	if rec := q.call("/api/auth/qr/claim", "", statusBody(token, poll)); rec.Code != http.StatusGone || decode(t, rec)["code"] != "qr_unavailable" {
+		t.Errorf("second claim: %d %s", rec.Code, rec.Body)
+	}
+}
+
+func TestQRLoginREST_NotMeCancelsTheCode(t *testing.T) {
+	q := newQRApp(t)
+	token, secret := q.create(t)
+	phone := q.phoneToken(t, q.phone, q.tenant)
+	q.call("/api/auth/qr/scan", phone, `{"token":"`+token+`"}`)
+	q.call("/api/auth/qr/approve", phone, `{"token":"`+token+`"}`)
+	if rec := q.call("/api/auth/qr/cancel", "", statusBody(token, "guess")); rec.Code != http.StatusGone {
+		t.Errorf("cancel with a wrong secret: %d", rec.Code)
+	}
+	if rec := q.call("/api/auth/qr/cancel", "", statusBody(token, secret)); rec.Code != http.StatusNoContent {
+		t.Fatalf("cancel: %d %s", rec.Code, rec.Body)
+	}
+	if rec := q.call("/api/auth/qr/claim", "", statusBody(token, secret)); rec.Code != http.StatusGone {
+		t.Errorf("claim after cancel: %d %s", rec.Code, rec.Body)
 	}
 }
 
@@ -168,16 +198,18 @@ func TestQRLoginREST_AnotherBrowserWithTheTokenGetsNothing(t *testing.T) {
 	for name, body := range map[string]string{
 		"no secret": `{"token":"` + token + `"}`, "wrong secret": statusBody(token, "guess"), "the token as secret": statusBody(token, token),
 	} {
-		rec := q.call("/api/auth/qr/status", "", body)
-		if rec.Code != http.StatusGone {
-			t.Errorf("%s: %d %s", name, rec.Code, rec.Body)
-		}
-		if strings.Contains(rec.Body.String(), "access_token") || cookieNamed(rec, refreshCookieName) != nil {
-			t.Errorf("%s: a session leaked", name)
+		for _, path := range []string{"/api/auth/qr/status", "/api/auth/qr/claim"} {
+			rec := q.call(path, "", body)
+			if rec.Code != http.StatusGone {
+				t.Errorf("%s %s: %d %s", name, path, rec.Code, rec.Body)
+			}
+			if strings.Contains(rec.Body.String(), "access_token") || cookieNamed(rec, refreshCookieName) != nil {
+				t.Errorf("%s %s: a session leaked", name, path)
+			}
 		}
 	}
-	if rec := q.call("/api/auth/qr/status", "", statusBody(token, secret)); decode(t, rec)["status"] != "approved" {
-		t.Errorf("the rightful page must still collect: %s", rec.Body)
+	if rec := q.call("/api/auth/qr/claim", "", statusBody(token, secret)); rec.Code != http.StatusOK {
+		t.Errorf("the rightful page must still collect: %d %s", rec.Code, rec.Body)
 	}
 }
 

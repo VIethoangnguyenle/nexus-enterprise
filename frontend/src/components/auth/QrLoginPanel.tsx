@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Clock, RefreshCw, WifiOff, X } from 'lucide-react'
+import { Clock, RefreshCw, ShieldAlert, WifiOff, X } from 'lucide-react'
 import { useQrLogin, type QrPhase } from '../../hooks/useQrLogin'
 import { qrLoginUrl } from '../../lib/qr-login'
 import { Avatar, Button, Heading, Spinner, Text } from '../primitives'
@@ -30,7 +30,7 @@ function NewCode({ onClick }: { onClick: () => void }) {
 /** What lies over the code once it is no longer simply waiting. */
 function Veil({ phase, scanner, onRenew }: {
   phase: QrPhase
-  scanner: { display_name: string; avatar_url: string } | null
+  scanner: { display_name: string; avatar_url: string; tenant_name: string } | null
   onRenew: () => void
 }): ReactNode {
   switch (phase) {
@@ -82,6 +82,37 @@ function Veil({ phase, scanner, onRenew }: {
 }
 
 /**
+ * The last step on the computer (design/mockups/qr-login.html §1 note 5): the
+ * phone approved, and the person here says whether that is them. Stops someone
+ * who scanned the code off this screen from signing it into their account.
+ */
+function ConfirmWho({ scanner, busy, onConfirm, onNotMe }: {
+  scanner: { display_name: string; avatar_url: string; tenant_name: string }
+  busy: boolean
+  onConfirm: () => void
+  onNotMe: () => void
+}) {
+  return (
+    <>
+      <div className="grid justify-items-center gap-3 text-center">
+        <Avatar name={scanner.display_name} src={scanner.avatar_url || undefined} size={64} />
+        <Heading as="h1" look="page">Tiếp tục với tên {scanner.display_name}?</Heading>
+        <Text variant="body" muted className="block">
+          Điện thoại của {scanner.display_name} vừa xác nhận. Máy tính này sẽ vào{' '}
+          <b className="font-semibold text-ink">{scanner.tenant_name || 'tổ chức đang mở trên điện thoại'}</b> bằng tài khoản đó.
+        </Text>
+      </div>
+      <div className="flex gap-2.5 items-start p-3 rounded-surface bg-warning-wash text-ink" role="note">
+        <ShieldAlert size={16} strokeWidth={1.75} className="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
+        <Text variant="small">Nếu đây không phải bạn, chọn “Không phải tôi”. Ai đó có thể đã quét mã trên màn hình của bạn.</Text>
+      </div>
+      <Button variant="primary" size="md" className="w-full h-11" loading={busy} onClick={onConfirm}>Tiếp tục</Button>
+      <Button variant="secondary" size="md" className="w-full h-11" disabled={busy} onClick={onNotMe}>Không phải tôi</Button>
+    </>
+  )
+}
+
+/**
  * Sign in by QR code on a computer (design/mockups/qr-login.html §1, §2): the
  * code, a countdown to its swap, and each state laid over the code itself so the
  * frame never changes size.
@@ -93,6 +124,10 @@ export function QrLoginPanel({ onSignedIn, onUseForm }: {
   const qr = useQrLogin(onSignedIn)
   const countdown = useCountdown(qr.phase === 'pending' ? qr.expiresAt : null)
   const veiled = qr.phase !== 'pending'
+
+  if ((qr.phase === 'confirm' || qr.phase === 'approving') && qr.scanner) {
+    return <ConfirmWho scanner={qr.scanner} busy={qr.phase === 'approving'} onConfirm={qr.confirm} onNotMe={qr.notMe} />
+  }
 
   return (
     <>

@@ -1004,6 +1004,8 @@ Danh bạ kiểu Lark: list panel chọn danh mục (§5), content duyệt danh 
   của mã (đã quét, đang đăng nhập, bị huỷ, hết hạn) phủ lên chính mã, khung không đổi kích thước.
 - Điện thoại: "Quét mã QR" trong sheet nút + và sheet tài khoản; máy quét toàn màn trên nền stage; màn xác nhận nói máy nào xin
   vào, tài khoản và tổ chức, luôn có cảnh báo lừa đảo, nút Đăng nhập ở vùng ngón cái.
+- Hai lớp chống lừa đảo (thêm 2026-11-01): máy tính hỏi lại "Tiếp tục với tên …?" trước khi vào (có "Không phải tôi");
+  điện thoại hiện cảnh báo đỏ khi máy tính ở mạng khác. Mỗi lần duyệt ghi nhật ký kiểm toán.
 - Ngoại lệ màu có ghi chú: mã QR dùng trắng thật và đen thật ở cả hai chế độ (camera cần vùng sáng); máy quét luôn tối (token stage).
 
 ## 7. Motion

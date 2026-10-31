@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate, useRouter } from '@tanstack/react-router'
-import { Building2, CircleCheck, Clock, Laptop, Lock, Monitor, ScanLine, ShieldAlert } from 'lucide-react'
+import { Building2, CircleAlert, CircleCheck, Clock, Laptop, Lock, Monitor, ScanLine, ShieldAlert } from 'lucide-react'
 import { qrApi, type QrScanResponse } from '../../api/auth'
 import { ApiError } from '../../api/client'
 import { useMe } from '../../hooks/useAuth'
@@ -144,8 +144,8 @@ function Confirm({ token }: { token: string }) {
       <QrPhoneFrame
         tone="success"
         icon={<CircleCheck size={32} strokeWidth={1.75} />}
-        title="Đã đăng nhập trên máy tính"
-        line={`${describeDevice(device.browser, device.os)} đã vào ${device.tenant_name || 'tổ chức đang mở'} với tài khoản của bạn.`}
+        title="Đã xác nhận"
+        line={`Bấm Tiếp tục trên máy tính để vào ${device.tenant_name || 'tổ chức đang mở'}.`}
         actions={<Button variant="primary" size="md" className="w-full h-11" onClick={leave}>Xong</Button>}
       />
     )
@@ -206,6 +206,16 @@ function Ask({ device, name, avatar, hueKey, title, busy, approving, onApprove, 
           </span>
         </div>
       </div>
+      {/* The computer asked from another network than this phone's: the strongest sign of a forwarded code. */}
+      {!device.same_network && (
+        <div className="flex gap-2.5 items-start p-3 rounded-surface bg-danger-wash text-ink" role="alert">
+          <CircleAlert size={16} strokeWidth={1.75} className="mt-0.5 shrink-0 text-danger" aria-hidden="true" />
+          <Text variant="small">
+            <b className="font-semibold">Máy tính này ở mạng khác với điện thoại.</b> Nếu bạn không ở ngay trước nó, hãy huỷ: có
+            thể ai đó đang mượn mã để vào tài khoản của bạn.
+          </Text>
+        </div>
+      )}
       {/* Always shown, never dismissible: QR sign-in is phished by sending someone your own code. */}
       <div className="flex gap-2.5 items-start p-3 rounded-surface bg-warning-wash text-ink" role="note">
         <ShieldAlert size={16} strokeWidth={1.75} className="mt-0.5 shrink-0 text-warning" aria-hidden="true" />

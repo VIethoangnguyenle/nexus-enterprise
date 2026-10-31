@@ -762,7 +762,7 @@ html.reduce .cam .finder .line { animation: none; top: 50%; }
     <button class="btn sm" type="button" data-act="d-qr">Mã QR</button>
     <button class="btn sm" type="button" data-act="d-form">Email hoặc Google</button>
     <button class="btn sm" type="button" data-act="d-scanned">Điện thoại vừa quét</button>
-    <button class="btn sm" type="button" data-act="d-ok">Điện thoại chạm Đăng nhập</button>
+    <button class="btn sm" type="button" data-act="d-ok">Điện thoại chạm Đăng nhập → xác nhận trên máy tính</button>
   </div>
   <div class="scroll">
     <div class="auth" id="auth-desk">
@@ -793,6 +793,12 @@ html.reduce .cam .finder .line { animation: none; top: 50%; }
           </div>
           <p class="foot">Chưa đăng nhập trên điện thoại? <button class="link" type="button" data-act="d-form">Dùng email hoặc Google</button></p>
         </div>
+        <div class="box" id="d-confirmbox" hidden data-cx="5">
+          <div class="t" style="text-align:center;justify-items:center"><span class="av" style="--p:var(--color-person-2);width:64px;height:64px;font-size:1.25rem">HL</span><h3 style="margin-top:12px">Tiếp tục với tên Lê Thị Hoa?</h3><p>Điện thoại của Lê Thị Hoa vừa xác nhận. Máy tính này sẽ vào <b style="color:var(--color-ink)">NovaPay</b> bằng tài khoản đó.</p></div>
+          <div class="alert" style="background:var(--color-warning-wash)"><svg class="i s" style="color:var(--color-warning)"><use href="#i-shield"/></svg><span>Nếu đây không phải bạn, chọn “Không phải tôi”. Ai đó có thể đã quét mã trên màn hình của bạn.</span></div>
+          <button class="btn primary wide" type="button" data-act="d-new">Tiếp tục</button>
+          <button class="btn wide" type="button" data-act="d-new">Không phải tôi</button>
+        </div>
         <div class="box" id="d-formbox" hidden>
           <div class="t"><h3>Đăng nhập vào Nexus Hub</h3><p>Dùng email công việc hoặc số điện thoại.</p></div>
           <button class="btn g wide" type="button"><svg class="gicon"><use href="#g-logo"/></svg>Tiếp tục với Google</button>
@@ -809,6 +815,7 @@ html.reduce .cam .finder .line { animation: none; top: 50%; }
     <li><span class="cxn">2</span><b>Mã QR</b> 216px, nền trắng thật cả ở chế độ tối (camera cần vùng sáng xung quanh, ngoại lệ màu ghi trong comment). Logo N ở giữa trong vùng sửa lỗi mức H. Mã là đường dẫn <code>/qr/…</code> trên chính tên miền Nexus, mang một chuỗi ngẫu nhiên dùng một lần, không mang tên, email hay ID nào.</li>
     <li><span class="cxn">3</span><b>Thời hạn</b> 2 phút. Trước khi hết hạn máy tính tự lấy mã mới (không bắt người bấm) cho tới 5 lần liên tiếp không ai quét; sau đó dừng và hiện trạng thái Hết hạn với nút “Lấy mã mới”, để tab bỏ quên không gọi server mãi. Đếm ngược chỉ là chữ phụ, không thanh tiến trình.</li>
     <li><span class="cxn">4</span><b>Hướng dẫn</b> nói đúng chỗ bấm trên điện thoại. Không có chữ “mở app”: Nexus trên điện thoại là trang web.</li>
+    <li><span class="cxn">5</span><b>Xác nhận lần cuối</b> (thêm 2026-11-01): sau khi điện thoại bấm Đăng nhập, máy tính chưa vào ngay mà hỏi “Tiếp tục với tên …?”, kèm tổ chức sẽ vào và cảnh báo. Phiên chỉ được tạo khi bấm Tiếp tục; “Không phải tôi” huỷ mã và lấy mã mới. Chặn kiểu kẻ xấu quét trộm mã trên màn hình của bạn để đăng nhập máy bạn vào tài khoản của họ. Còn hạn của mã (2 phút) để bấm.</li>
   </ol>
 </section>
 
@@ -909,11 +916,22 @@ html.reduce .cam .finder .line { animation: none; top: 50%; }
         </div></div>
       </div>
     </div>
-    <div class="ph"><small>Đã đăng nhập</small>
+    <div class="ph"><small>Máy tính ở mạng khác</small>
+      <div class="phone" style="grid-template-rows:1fr" aria-label="Cảnh báo khác mạng">
+        <div class="single"><div class="box fill">
+          <button class="ibtn" type="button" aria-label="Đóng" style="width:44px;height:44px;margin-left:-10px"><svg class="i"><use href="#i-x"/></svg></button>
+          <div class="hero"><span class="big"><svg class="i"><use href="#i-laptop"/></svg></span><h3>Đăng nhập Nexus trên máy tính?</h3></div>
+          <div class="devcard"><span class="ic"><svg class="i"><use href="#i-monitor"/></svg></span><span><b>Chrome trên Windows</b><small>Tạo mã lúc 09:41 · vừa quét</small></span></div>
+          <div class="alert" style="align-self:start" data-cx="7"><svg class="i s"><use href="#i-alert"/></svg><span><b>Máy tính này ở mạng khác với điện thoại.</b> Nếu bạn không ở ngay trước nó, hãy huỷ: có thể ai đó đang mượn mã để vào tài khoản của bạn.</span></div>
+          <div class="acts-bottom"><button class="btn primary wide" type="button">Đăng nhập</button><button class="btn wide" type="button">Huỷ</button></div>
+        </div></div>
+      </div>
+    </div>
+    <div class="ph"><small>Đã xác nhận</small>
       <div class="phone" style="grid-template-rows:1fr" aria-label="Đã đăng nhập trên máy tính">
         <div class="single"><div class="box fill">
           <span style="height:44px"></span>
-          <div class="hero"><span class="big ok"><svg class="i"><use href="#i-ok"/></svg></span><h3>Đã đăng nhập trên máy tính</h3><p>Chrome trên Windows đã vào NovaPay với tài khoản của bạn.</p></div>
+          <div class="hero"><span class="big ok"><svg class="i"><use href="#i-ok"/></svg></span><h3>Đã xác nhận</h3><p>Bấm Tiếp tục trên máy tính để vào NovaPay.</p></div>
           <span></span><span></span>
           <div class="acts-bottom" data-cx="5"><button class="btn primary wide" type="button">Xong</button></div>
         </div></div>
@@ -935,7 +953,8 @@ html.reduce .cam .finder .line { animation: none; top: 50%; }
     <li><span class="cxn">2</span><b>Vào với tư cách</b>: người và tổ chức đang mở trên điện thoại. Máy tính sẽ vào đúng tổ chức này; muốn tổ chức khác thì đổi sau trên máy tính.</li>
     <li><span class="cxn">3</span><b>Cảnh báo lừa đảo</b> luôn hiện, không đóng được. Đây là kiểu tấn công chính của đăng nhập QR: kẻ xấu gửi mã của máy họ cho bạn quét.</li>
     <li><span class="cxn">4</span><b>Đăng nhập</b> là primary, nằm ở vùng ngón cái; Huỷ là secondary, báo cho máy tính trạng thái Bị từ chối. Đóng (×) cũng tính là Huỷ. Màn này hết hạn cùng lúc với mã (2 phút).</li>
-    <li><span class="cxn">5</span><b>Xong</b> quay về màn trước khi mở máy quét (hoặc Trang chủ nếu mở bằng camera thường).</li>
+    <li><span class="cxn">5</span><b>Đã xác nhận</b>, chưa phải đã đăng nhập: máy tính còn bước Tiếp tục. <b>Xong</b> quay về màn trước khi mở máy quét (hoặc Trang chủ nếu mở bằng camera thường).</li>
+    <li><span class="cxn">7</span><b>Khác mạng</b> (thêm 2026-11-01): khi địa chỉ mạng của máy tính lúc tạo mã và của điện thoại lúc quét không cùng dải (IPv4 cùng /24, IPv6 cùng /64), hiện thêm khối cảnh báo đỏ nói rõ rủi ro. Không chặn: điện thoại dùng 4G cạnh máy tính ở văn phòng là chuyện thường. Không hiện địa chỉ IP. Mỗi lần duyệt được ghi nhật ký kiểm toán (người, tổ chức, trình duyệt, cùng mạng hay không).</li>
     <li><span class="cxn">6</span><b>Chưa đăng nhập trên điện thoại</b>: không có cách xác nhận khác. Sau khi đăng nhập, trình duyệt quay lại đúng màn Xác nhận của mã này nếu mã còn hạn.</li>
   </ol>
 </section>
@@ -1120,8 +1139,12 @@ html.reduce .cam .finder .line { animation: none; top: 50%; }
   A['d-qr'] = function () { showBox(true); };
   A['d-form'] = function () { showBox(false); };
   A['d-scanned'] = function () { showBox(true); setState(dqr, dveil, dttl, 'scanned'); };
-  A['d-ok'] = function () { showBox(true); setState(dqr, dveil, dttl, 'ok'); };
-  A['d-new'] = function () { left = 120; drawQR(dqr.querySelector('svg.code'), Math.floor(Math.random() * 999) + 1); setState(dqr, dveil, dttl, null); };
+  A['d-ok'] = function () {
+    var a = document.getElementById('d-qrbox'), f = document.getElementById('d-formbox'), c = document.getElementById('d-confirmbox');
+    a.hidden = true; f.hidden = true; c.hidden = false; M.replay(c, 'enter'); M.placeCx();
+  };
+  A['d-new'] = function () {
+    var cb = document.getElementById('d-confirmbox'); if (cb && !cb.hidden) { cb.hidden = true; showBox(true); } left = 120; drawQR(dqr.querySelector('svg.code'), Math.floor(Math.random() * 999) + 1); setState(dqr, dveil, dttl, null); };
 
   /* section 2: static state strip */
   var strip = document.getElementById('dst');
@@ -1136,7 +1159,7 @@ html.reduce .cam .finder .line { animation: none; top: 50%; }
   A['p-approve'] = function () {
     var b = document.getElementById('p-ok'); var w = b.offsetWidth; b.style.width = w + 'px';
     b.setAttribute('aria-busy', 'true'); b.innerHTML = '<span class="skel" style="width:14px;height:14px;border-radius:50%"></span>Đang đăng nhập';
-    setTimeout(function () { b.removeAttribute('aria-busy'); b.innerHTML = '<svg class="i s"><use href="#i-ok"/></svg>Đã đăng nhập'; showBox(true); setState(dqr, dveil, dttl, 'ok'); }, 900);
+    setTimeout(function () { b.removeAttribute('aria-busy'); b.innerHTML = '<svg class="i s"><use href="#i-ok"/></svg>Đã xác nhận'; A['d-ok'](); }, 900);
   };
   A['p-reset'] = function () { var b = document.getElementById('p-ok'); b.style.width = ''; b.textContent = 'Đăng nhập'; A['d-new'](); };
 })();
