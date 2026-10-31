@@ -85,6 +85,54 @@ describe('Tôi', () => {
   })
 })
 
+describe('Tài khoản và hồ sơ and Hồ sơ trong tổ chức', () => {
+  const profilePatches = () => server.writes.filter((w) => w.method === 'PATCH' && w.path === '/me/profile').map((w) => w.body)
+
+  it('in an organization the account page keeps the name, place and email; title, department and role are not on it', async () => {
+    await renderSettings(`/settings/account?ws=${WS}`)
+    const account = await screen.findByRole('region', { name: 'Tài khoản và hồ sơ' })
+    await within(account).findByText('Lê Thị Hoa')
+    for (const label of ['Tên hiển thị', 'Nơi làm việc', 'Email đăng nhập']) expect(within(account).getByText(label), label).toBeInTheDocument()
+    for (const label of ['Chức danh', 'Phòng ban', 'Vai trò']) expect(within(account).queryByText(label), label).toBeNull()
+    expect(within(account).queryByText('Kế toán trưởng')).toBeNull()
+    expect(within(account).queryByText('Phòng Tài chính')).toBeNull()
+    expect(within(account).queryByText('Chủ sở hữu')).toBeNull()
+    expectNoIds()
+  })
+
+  it('in an organization Hồ sơ trong tổ chức holds the title, and the department and role an administrator set', async () => {
+    await renderSettings(`/settings/org-profile?ws=${WS}`)
+    const org = await screen.findByRole('region', { name: 'Hồ sơ trong tổ chức' })
+    expect(await within(org).findByRole('button', { name: /^Chức danh.*Kế toán trưởng/ })).toBeInTheDocument()
+    expect(within(org).getByText('Phòng ban')).toBeInTheDocument()
+    expect(await within(org).findByText('Phòng Tài chính')).toBeInTheDocument()
+    expect(within(org).getByText('Vai trò')).toBeInTheDocument()
+    expect(within(org).getByText('Chủ sở hữu')).toBeInTheDocument()
+    expectNoIds()
+  })
+
+  it('in an organization the title is changed from Hồ sơ trong tổ chức, sending only the title', async () => {
+    const user = userEvent.setup()
+    await renderSettings(`/settings/org-profile?ws=${WS}`)
+    await user.click(await screen.findByRole('button', { name: /^Chức danh.*Kế toán trưởng/ }))
+    const field = await screen.findByRole('textbox', { name: 'Chức danh' })
+    await user.clear(field)
+    await user.type(field, 'Giám đốc tài chính')
+    await user.click(screen.getByRole('button', { name: 'Lưu' }))
+    await waitFor(() => expect(profilePatches()).toEqual([{ title: 'Giám đốc tài chính' }]))
+  })
+
+  it('in a personal workspace the account page keeps the title, with no department or role', async () => {
+    server.personal = true
+    await renderSettings(`/settings/account?ws=${WS}`)
+    const account = await screen.findByRole('region', { name: 'Tài khoản và hồ sơ' })
+    expect(await within(account).findByRole('button', { name: /^Chức danh.*Kế toán trưởng/ })).toBeInTheDocument()
+    for (const label of ['Tên hiển thị', 'Nơi làm việc', 'Email đăng nhập']) expect(within(account).getByText(label), label).toBeInTheDocument()
+    expect(within(account).queryByText('Phòng ban')).toBeNull()
+    expect(within(account).queryByText('Vai trò')).toBeNull()
+  })
+})
+
 describe('Cài đặt workspace', () => {
   it('an organization administrator: information, members and organization, the rule, modules, storage and Rời', async () => {
     await renderSettings(`/settings/workspace?ws=${WS}`)

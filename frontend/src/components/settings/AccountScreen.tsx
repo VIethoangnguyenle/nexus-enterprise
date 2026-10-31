@@ -11,7 +11,7 @@ import { useAuthStore } from '../../stores/auth.store'
 import { TextField, toast } from '../primitives'
 import { AvatarEdit } from '../patterns/AvatarEdit'
 import { EditFieldScreen } from './EditFieldScreen'
-import { AccountProfileForm, ProfileFormBar, ProfileLoadFailed, ProfileLoading, RoleField, useProfileForm } from './ProfileForm'
+import { AccountProfileForm, ProfileFormBar, ProfileLoadFailed, ProfileLoading, RoleField, accountFields, useProfileForm } from './ProfileForm'
 import { ReadOnlyField } from './ReadOnlyField'
 import { SettingsGroup, SettingsPage, SettingsRow } from './SettingsGroup'
 import { useWorkspaceLead } from './modules/workspace-lead'
@@ -63,8 +63,9 @@ const shown = (v: string | undefined) => v?.trim() || 'Chưa có'
 
 /**
  * Tài khoản và hồ sơ. On a phone (mockup mobile-shell.html §3) the picture, then each field a person sets as a row
- * that opens a page to edit that one field; below, what an administrator sets, read only. Inside the desktop shell
- * (mockup settings-desktop.html §6) the same fields as one form with Lưu thay đổi, and Đăng xuất at the end.
+ * that opens a page to edit that one field; below, the email, read only. Inside the desktop shell (mockup
+ * settings-desktop.html §6) the same fields as one form with Lưu thay đổi, and Đăng xuất at the end. In an
+ * organization the title, department and role live only on Hồ sơ trong tổ chức (DESIGN.md §6).
  */
 export function AccountScreen() {
   return useSettingsWide() ? <AccountForm /> : <AccountRows />
@@ -83,7 +84,7 @@ function AccountRows() {
   const { back } = useSettingsNav()
   const me = useAuthStore((s) => s.user)
   const { isPersonal } = useWorkspaceType()
-  const { q, person, tenant, values, editor, edit } = useProfilePage()
+  const { q, person, values, editor, edit } = useProfilePage()
   const upload = useUploadAvatar()
   const remove = useRemoveAvatar()
   const [avatarError, setAvatarError] = useState<string | null>(null)
@@ -129,7 +130,7 @@ function AccountRows() {
       </div>
 
       <SettingsGroup>
-        {(['displayName', 'title', 'location'] as const).map((f) => (
+        {accountFields(isPersonal).map((f) => (
           <SettingsRow
             key={f}
             label={FIELDS[f].title}
@@ -141,8 +142,6 @@ function AccountRows() {
 
       <SettingsGroup title="Quản trị viên đặt" note="Email dùng để nhận mã đăng nhập. Đổi email cần quản trị viên.">
         <SettingsRow label="Email đăng nhập" hint={person?.email} />
-        {!isPersonal && <SettingsRow label="Phòng ban" value={person ? shown(tenant?.department) : undefined} />}
-        {!isPersonal && <SettingsRow label="Vai trò" value={tenant?.role ? roleLabel(tenant.role) : undefined} />}
       </SettingsGroup>
     </SettingsPage>
   )

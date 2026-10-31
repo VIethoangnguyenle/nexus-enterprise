@@ -87,13 +87,17 @@ On a desktop (1024 px and wider) Cài đặt SHALL be a section list beside the 
 - **THEN** the address becomes `/settings/workspace?ws=<workspace>`, Cài đặt workspace is open and is the current item of the list
 
 #### Scenario: Tài khoản và hồ sơ saves only what changed
-- **WHEN** a person changes their title and saves
-- **THEN** the request carries only the title, so a field set meanwhile by an administrator is not overwritten, and the new value shows in the sidebar, chat and tables
+- **WHEN** a person changes their workplace (or, in a personal workspace, their title) and saves
+- **THEN** the request carries only that field, so a field set meanwhile by an administrator is not overwritten, and the new value shows in the sidebar, chat and tables
 - **AND** Lưu thay đổi and Huỷ are off until something changes, an empty name is refused when the field is left or saved and nothing is sent, a refusal from the server keeps what was typed, and Huỷ puts the stored values back
 
 #### Scenario: Fields that cannot be changed here
-- **WHEN** Tài khoản và hồ sơ is shown on a desktop
-- **THEN** email, and in an organization the department and role, are text in a sunk box with the reason beside it; a department nobody assigned reads "Chưa có"; a personal workspace shows no department or role
+- **WHEN** Tài khoản và hồ sơ is shown on a desktop or a phone
+- **THEN** it holds the picture, Tên hiển thị, Nơi làm việc and the email, the email as text with the reason beside it (a sunk box on a desktop); in an organization it shows no Chức danh, Phòng ban or Vai trò, and a personal workspace keeps Chức danh here and has no department or role
+
+#### Scenario: Organization details live only on Hồ sơ trong tổ chức
+- **WHEN** a person in an organization opens Hồ sơ trong tổ chức on a desktop or a phone
+- **THEN** Chức danh is editable there and saving sends only the title; Phòng ban and Vai trò are read only with the reason that an administrator sets them, and a department nobody assigned reads "Chưa có"
 
 #### Scenario: Changing the picture
 - **WHEN** a person touches their picture in Tài khoản và hồ sơ (one button around it, no Đổi ảnh button beside it), picks Đổi ảnh or Tải ảnh lên from the menu (Chụp ảnh or Chọn ảnh in the sheet below 768 px) and chooses a JPG or PNG of at most 5 MB

@@ -16,6 +16,13 @@ import { ReadOnlyField } from './ReadOnlyField'
 import { FIELD_MAX, NAME_MAX, profileChanges, profileOf, validateProfile, type ProfileErrors, type ProfileForm } from './settings-model'
 
 /**
+ * The fields Tài khoản và hồ sơ edits. In an organization the title belongs to Hồ sơ trong tổ chức, the one place for
+ * what is set per organization; a personal workspace has no such page, so the title stays here.
+ */
+export const accountFields = (isPersonal: boolean): readonly (keyof ProfileForm)[] =>
+  isPersonal ? ['displayName', 'title', 'location'] : ['displayName', 'location']
+
+/**
  * The person's own profile as a form: the stored values, what is being typed, the errors, and saving only what
  * changed. Errors show when a field is left and when saving; saving focuses the first field at fault. `fields` are the
  * ones the form shows: only those are checked before saving.
@@ -110,25 +117,23 @@ export function ProfileFormBar({ saving, changed, onReset }: { saving: boolean; 
 }
 
 /**
- * Tài khoản và hồ sơ on a wide screen (mockup settings-desktop.html §6): the picture, the three things a person can
- * change about themselves, what they can only see (in an organization also the department and role an administrator
- * set), and signing out. Only what changed is sent.
+ * Tài khoản và hồ sơ on a wide screen (mockup settings-desktop.html §6): the picture, what a person can change about
+ * themselves, the email they can only see, and signing out. In an organization the title, department and role are on
+ * Hồ sơ trong tổ chức instead; a personal workspace keeps the title here. Only what changed is sent.
  */
 export function AccountProfileForm() {
   const me = useAuthStore((s) => s.user)
   const { isPersonal } = useWorkspaceType()
-  const { q, person, tenant, initial, form, errors, changes, saving, refs, set, blur, submit, reset } = useProfileForm()
+  const { q, person, initial, form, errors, changes, saving, refs, set, blur, submit, reset } = useProfileForm(accountFields(isPersonal))
   const uploadAvatar = useUploadAvatar()
   const removeAvatar = useRemoveAvatar()
   const [avatarError, setAvatarError] = useState<string | null>(null)
 
   if (q.isError) return <ProfileLoadFailed retry={() => void q.refetch()} />
-  if (!q.data) return <ProfileLoading />
+  if (!q.data) return <ProfileLoading rows={isPersonal ? 4 : 3} />
 
-  // Departments and roles belong to company workspaces; a personal one shows none.
-  const department = isPersonal ? '' : (tenant?.department ?? '')
   const shownName = form.displayName.trim() || initial.displayName || UNKNOWN_PERSON
-  const subtitle = [initial.title, department].filter(Boolean).join(' · ')
+  const subtitle = isPersonal ? initial.title : ''
 
   // A chosen picture is sent at once; it is not part of the form's Lưu thay đổi.
   const changePicture = async (file: File) => {
@@ -188,17 +193,19 @@ export function AccountProfileForm() {
       />
       <p className="m-0 -mt-3.5 text-xs text-ink-muted">Mọi người thấy tên này trong chat, phê duyệt và danh bạ.</p>
 
-      <TextField
-        ref={refs.title}
-        label="Chức danh"
-        labelHint="(không bắt buộc)"
-        value={form.title}
-        maxLength={FIELD_MAX + 20}
-        autoComplete="organization-title"
-        error={errors.title}
-        onChange={(e) => set('title')(e.target.value)}
-        onBlur={blur('title')}
-      />
+      {isPersonal && (
+        <TextField
+          ref={refs.title}
+          label="Chức danh"
+          labelHint="(không bắt buộc)"
+          value={form.title}
+          maxLength={FIELD_MAX + 20}
+          autoComplete="organization-title"
+          error={errors.title}
+          onChange={(e) => set('title')(e.target.value)}
+          onBlur={blur('title')}
+        />
+      )}
 
       <TextField
         ref={refs.location}
@@ -212,8 +219,6 @@ export function AccountProfileForm() {
       />
 
       <ReadOnlyField label="Email đăng nhập" value={person?.email ?? ''} reason="Dùng để nhận mã đăng nhập. Đổi email cần quản trị viên." />
-      {!isPersonal && <ReadOnlyField label="Phòng ban" value={department} reason="Do quản trị viên đặt." />}
-      {!isPersonal && <RoleField role={tenant?.role} />}
 
       <ProfileFormBar saving={saving} changed={!!changes} onReset={reset} />
 

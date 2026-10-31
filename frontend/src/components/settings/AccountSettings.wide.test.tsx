@@ -50,22 +50,23 @@ async function accountForm() {
 }
 
 describe('Tài khoản và hồ sơ on a wide screen', () => {
-  it('the form, what an administrator set read only with the role, and Đăng xuất last', async () => {
+  it('the form with the email read only and Đăng xuất last; in an organization no title, department or role', async () => {
     await renderSettings(`/settings/account?ws=${WS}`)
     const account = await page('Tài khoản và hồ sơ')
     expect(within(account).getByText('Dùng chung mọi workspace')).toBeInTheDocument()
     const form = await within(account).findByRole('form', { name: 'Hồ sơ' })
     await waitFor(() => expect(within(form).getByLabelText('Tên hiển thị')).toHaveValue('Lê Thị Hoa'))
-    expect(within(form).getByLabelText(/Chức danh/)).toHaveValue('Kế toán trưởng')
     expect(within(form).getByLabelText(/Nơi làm việc/)).toHaveValue('')
     expect(within(form).getByText('hoa@novapay.vn')).toBeInTheDocument()
     expect(within(form).getByText(/Đổi email cần quản trị viên\./)).toBeInTheDocument()
     expect(within(form).queryByRole('textbox', { name: /Email/ })).toBeNull()
-    // The department is the one an administrator assigned in this workspace.
-    expect(within(form).getByText('Phòng Tài chính')).toBeInTheDocument()
-    expect(within(form).getByText('Do quản trị viên đặt.')).toBeInTheDocument()
-    expect(within(form).getByText('Vai trò')).toBeInTheDocument()
-    expect(within(form).getByText('Chủ sở hữu')).toBeInTheDocument()
+    // What belongs to the organization lives only on Hồ sơ trong tổ chức.
+    expect(within(form).queryByLabelText(/Chức danh/)).toBeNull()
+    expect(within(account).queryByText('Kế toán trưởng')).toBeNull()
+    expect(within(account).queryByText('Phòng ban')).toBeNull()
+    expect(within(account).queryByText('Phòng Tài chính')).toBeNull()
+    expect(within(account).queryByText('Vai trò')).toBeNull()
+    expect(within(account).queryByText('Chủ sở hữu')).toBeNull()
     const buttons = within(account).getAllByRole('button')
     expect(buttons[buttons.length - 1]).toHaveTextContent('Đăng xuất')
     // Nothing opens a page of its own: every field is edited in place.
@@ -73,14 +74,26 @@ describe('Tài khoản và hồ sơ on a wide screen', () => {
     expectNoIds()
   })
 
-  it('a personal workspace shows no department and no role', async () => {
+  it('a personal workspace keeps the title here, with no department and no role', async () => {
     server.personal = true
     const form = await accountForm()
+    expect(within(form).getByLabelText(/Chức danh/)).toHaveValue('Kế toán trưởng')
     expect(within(form).queryByText('Phòng ban')).toBeNull()
     expect(within(form).queryByText('Vai trò')).toBeNull()
     expect(screen.queryByText('Phòng Tài chính')).toBeNull()
     // The title still shows under the name.
     expect(within(form).getByText('Kế toán trưởng')).toBeInTheDocument()
+  })
+
+  it('a personal workspace saves only the title when only the title changed', async () => {
+    const user = userEvent.setup()
+    server.personal = true
+    await accountForm()
+    const title = screen.getByLabelText(/Chức danh/)
+    await user.clear(title)
+    await user.type(title, 'Giám đốc tài chính')
+    await user.click(screen.getByRole('button', { name: 'Lưu thay đổi' }))
+    await waitFor(() => expect(profilePatches()).toEqual([{ title: 'Giám đốc tài chính' }]))
   })
 
   it('reads the person from their own record, never by searching the directory', async () => {
@@ -90,20 +103,13 @@ describe('Tài khoản và hồ sơ on a wide screen', () => {
     expect(paths.some((p) => p.includes('/contacts'))).toBe(false)
   })
 
-  it('shows Chưa có for a department the administrator has not assigned, with nothing to type in', async () => {
-    server.department = ''
-    const form = await accountForm()
-    expect(within(form).getByText('Chưa có')).toBeInTheDocument()
-    expect(within(form).queryByRole('textbox', { name: /Phòng ban/ })).toBeNull()
-  })
-
   it('Lưu thay đổi and Huỷ are off until something changes', async () => {
     const user = userEvent.setup()
     await accountForm()
     const save = screen.getByRole('button', { name: 'Lưu thay đổi' })
     expect(save).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Huỷ' })).toBeDisabled()
-    await user.type(screen.getByLabelText(/Chức danh/), '!')
+    await user.type(screen.getByLabelText(/Nơi làm việc/), '!')
     expect(save).toBeEnabled()
   })
 
@@ -118,17 +124,16 @@ describe('Tài khoản và hồ sơ on a wide screen', () => {
   it('a save says so, reads the record again and leaves nothing to save', async () => {
     const user = userEvent.setup()
     await accountForm()
-    const title = screen.getByLabelText(/Chức danh/)
-    await user.clear(title)
-    await user.type(title, 'Giám đốc tài chính')
+    const place = screen.getByLabelText(/Nơi làm việc/)
+    await user.type(place, 'Hà Nội')
     const reads = () => api.mock.calls.filter(([p]) => String(p).startsWith('/me?')).length
     const before = reads()
     await user.click(screen.getByRole('button', { name: 'Lưu thay đổi' }))
-    await waitFor(() => expect(profilePatches()).toEqual([{ title: 'Giám đốc tài chính' }]))
+    await waitFor(() => expect(profilePatches()).toEqual([{ location: 'Hà Nội' }]))
     await waitFor(() => expect(toasts()).toContain('Đã lưu hồ sơ'))
     await waitFor(() => expect(reads()).toBeGreaterThan(before))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Lưu thay đổi' })).toBeDisabled())
-    expect(title).toHaveValue('Giám đốc tài chính')
+    expect(place).toHaveValue('Hà Nội')
   })
 
   it('refuses an empty name when leaving the field or saving, and sends nothing', async () => {
@@ -148,21 +153,21 @@ describe('Tài khoản và hồ sơ on a wide screen', () => {
     const user = userEvent.setup()
     server.profileFails = new ApiError('bad', 400)
     await accountForm()
-    const title = screen.getByLabelText(/Chức danh/)
-    await user.type(title, ' cấp cao')
+    const place = screen.getByLabelText(/Nơi làm việc/)
+    await user.type(place, 'Hà Nội')
     await user.click(screen.getByRole('button', { name: 'Lưu thay đổi' }))
     await waitFor(() => expect(toasts().some((m) => /Không lưu hồ sơ được/.test(m))).toBe(true))
-    expect(title).toHaveValue('Kế toán trưởng cấp cao')
+    expect(place).toHaveValue('Hà Nội')
     expect(toasts()).not.toContain('Đã lưu hồ sơ')
   })
 
   it('Huỷ puts the stored values back', async () => {
     const user = userEvent.setup()
     await accountForm()
-    const title = screen.getByLabelText(/Chức danh/)
-    await user.type(title, 'xyz')
+    const name = screen.getByLabelText('Tên hiển thị')
+    await user.type(name, 'xyz')
     await user.click(screen.getByRole('button', { name: 'Huỷ' }))
-    expect(title).toHaveValue('Kế toán trưởng')
+    expect(name).toHaveValue('Lê Thị Hoa')
   })
 
   it('says it could not load the profile, and retries', async () => {
@@ -309,6 +314,16 @@ describe('Hồ sơ trong tổ chức on a wide screen', () => {
     expect(within(org).getByRole('button', { name: 'Lưu thay đổi' })).toBeDisabled()
     expect(screen.queryByRole('button', { name: 'Quay lại' })).toBeNull()
     expectNoIds()
+  })
+
+  it('shows Chưa có for a department the administrator has not assigned, with nothing to type in', async () => {
+    server.department = ''
+    await renderSettings(`/settings/org-profile?ws=${WS}`)
+    const form = await screen.findByRole('form', { name: 'Hồ sơ trong tổ chức' })
+    await waitFor(() => expect(within(form).getByLabelText(/Chức danh/)).toHaveValue('Kế toán trưởng'))
+    expect(within(form).getByText('Chưa có')).toBeInTheDocument()
+    expect(within(form).getByText('Do quản trị viên đặt.')).toBeInTheDocument()
+    expect(within(form).queryByRole('textbox', { name: /Phòng ban/ })).toBeNull()
   })
 
   it('saving sends only the title', async () => {
