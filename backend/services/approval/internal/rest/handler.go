@@ -88,6 +88,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	approval.POST("/batch-approve", h.BatchApproveAction)
 
 	// Query tabs
+	approval.GET("/search", h.Search)
 	approval.GET("/pending", h.GetPending)
 	approval.GET("/history", h.GetHistory)
 	approval.GET("/my-requests", h.GetMyRequests)
@@ -96,6 +97,10 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	// Audit
 	approval.GET("/requests/:id", h.GetRequest)
 	approval.GET("/requests/:id/audit", h.GetAuditLog)
+
+	// User Settings
+	approval.GET("/settings", h.GetSettings)
+	approval.PUT("/settings", h.UpdateSettings)
 }
 
 // memberMiddleware refuses a person the graph no longer holds in the tenant of

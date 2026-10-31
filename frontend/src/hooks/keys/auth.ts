@@ -12,4 +12,6 @@ export const authKeys = {
   workspaces: () => ['auth', 'workspaces'] as const,
   /** Offers addressed to them. */
   invitations: () => ['auth', 'invitations'] as const,
+  /** The caller's own active sessions across devices. */
+  sessions: () => ['auth', 'sessions'] as const,
 }

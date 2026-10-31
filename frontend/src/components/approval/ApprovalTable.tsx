@@ -9,6 +9,7 @@ import type { PeopleDirectory } from '../../lib/people'
 import { personStyle } from '../../lib/person-hue'
 import { Checkbox, PersonChip, Pressable } from '../primitives'
 import { Marked } from '../patterns/Marked'
+import { SwipeRow, SwipeRowGroup, type SwipeAction } from '../patterns/SwipeRow'
 import { StatusPill } from './StatusPill'
 
 /**
@@ -52,6 +53,8 @@ interface ApprovalTableProps {
   onRowsGone?: () => void
   /** Words looked for: marked in each title. */
   highlight?: string
+  /** The buttons a swipe on a row reveals (phone, Chờ tôi); never a decision on its own. */
+  swipe?: (row: ApprovalRow) => { start: SwipeAction[]; end: SwipeAction[] }
 }
 
 /**
@@ -106,56 +109,60 @@ export function ApprovalTable(props: ApprovalTableProps) {
         <span role="columnheader" className="hidden @2xl:block text-right">Số tiền</span>
         <span role="columnheader" className="text-right">Trạng thái</span>
       </div>
-      <div role="rowgroup" ref={bodyRef} onKeyDown={onKeyDown}>
-        {loading ? (
-          [0, 1, 2, 3].map((i) => (
-            <div key={i} role="row" className={`${cols} h-14 border-b border-line`}>
-              {selection && <span />}
-              <span className="grid gap-1.5">
-                <span className="skeleton h-3.5 rounded-sm" style={{ width: `${72 - i * 9}%` }} />
-                <span className="skeleton h-3 w-1/4 rounded-sm" />
-              </span>
-              <span className="skeleton h-3.5 w-3/4 rounded-sm hidden @2xl:block" />
-              <span className="skeleton h-3.5 w-2/3 rounded-sm ml-auto hidden @2xl:block" />
-              <span className="skeleton h-5.5 w-20 rounded-full ml-auto" />
-            </div>
-          ))
-        ) : (
-          // Keyed by tab: leaving one swaps the rows at once; only rows that
-          // appear or go while the tab is open animate.
-          <AnimatePresence key={scope} onExitComplete={props.onRowsGone}>
-            {rows.map((row) => {
-              const id = row.request.id
-              const index = firstBatch.current?.ids.get(id)
-              const first = index !== undefined
-              const delay = first ? staggerDelay(index, m.reduced) : 0
-              const arrival = props.fresh.get(props.versionOf(row))
-              return (
-                <motion.div
-                  key={id}
-                  {...withDelay(first ? m.route : m.row, delay)}
-                  exit={m.row.exit}
-                  layout={m.layoutProp}
-                  transition={m.layout}
-                  className="overflow-hidden"
-                >
-                  <ApprovalRowView
-                    row={row}
-                    cols={cols}
-                    people={props.people}
-                    open={props.openId === id}
-                    ticked={!!selection?.ids.has(id)}
-                    selection={selection}
-                    tag={arrival?.source === 'other' ? props.tagOf(row, arrival) : undefined}
-                    onOpen={props.onOpen}
-                    highlight={props.highlight}
-                  />
-                </motion.div>
-              )
-            })}
-          </AnimatePresence>
-        )}
-      </div>
+      <SwipeRowGroup>
+        <div role="rowgroup" ref={bodyRef} onKeyDown={onKeyDown}>
+          {loading ? (
+            [0, 1, 2, 3].map((i) => (
+              <div key={i} role="row" className={`${cols} h-14 border-b border-line`}>
+                {selection && <span />}
+                <span className="grid gap-1.5">
+                  <span className="skeleton h-3.5 rounded-sm" style={{ width: `${72 - i * 9}%` }} />
+                  <span className="skeleton h-3 w-1/4 rounded-sm" />
+                </span>
+                <span className="skeleton h-3.5 w-3/4 rounded-sm hidden @2xl:block" />
+                <span className="skeleton h-3.5 w-2/3 rounded-sm ml-auto hidden @2xl:block" />
+                <span className="skeleton h-5.5 w-20 rounded-full ml-auto" />
+              </div>
+            ))
+          ) : (
+            // Keyed by tab: leaving one swaps the rows at once; only rows that
+            // appear or go while the tab is open animate.
+            <AnimatePresence key={scope} onExitComplete={props.onRowsGone}>
+              {rows.map((row) => {
+                const id = row.request.id
+                const index = firstBatch.current?.ids.get(id)
+                const first = index !== undefined
+                const delay = first ? staggerDelay(index, m.reduced) : 0
+                const arrival = props.fresh.get(props.versionOf(row))
+                return (
+                  <motion.div
+                    key={id}
+                    {...withDelay(first ? m.route : m.row, delay)}
+                    exit={m.row.exit}
+                    layout={m.layoutProp}
+                    transition={m.layout}
+                    className="overflow-hidden"
+                  >
+                    <SwipeRow id={id} disabled={!props.swipe} {...props.swipe?.(row)}>
+                      <ApprovalRowView
+                        row={row}
+                        cols={cols}
+                        people={props.people}
+                        open={props.openId === id}
+                        ticked={!!selection?.ids.has(id)}
+                        selection={selection}
+                        tag={arrival?.source === 'other' ? props.tagOf(row, arrival) : undefined}
+                        onOpen={props.onOpen}
+                        highlight={props.highlight}
+                      />
+                    </SwipeRow>
+                  </motion.div>
+                )
+              })}
+            </AnimatePresence>
+          )}
+        </div>
+      </SwipeRowGroup>
     </div>
   )
 }

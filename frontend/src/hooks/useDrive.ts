@@ -247,3 +247,78 @@ export function useRevokeShare(itemId: string) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.drive.shares(itemId) }),
   })
 }
+
+// --- Stars, quick access, recent (the phone's Tài liệu home) ---
+
+export const driveStarredQueryOptions = (wsId: string) =>
+  queryOptions({
+    queryKey: keys.drive.starred(wsId),
+    queryFn: async () => (await driveApi.listStarred(wsId)).items ?? [],
+    enabled: !!wsId,
+  })
+
+export const driveQuickAccessQueryOptions = (wsId: string) =>
+  queryOptions({
+    queryKey: keys.drive.quickAccess(wsId),
+    queryFn: async () => (await driveApi.quickAccess(wsId)).entries ?? [],
+    enabled: !!wsId,
+  })
+
+export const driveRecentQueryOptions = (wsId: string) =>
+  queryOptions({
+    queryKey: keys.drive.recent(wsId),
+    queryFn: async () => (await driveApi.recent(wsId)).items ?? [],
+    enabled: !!wsId,
+  })
+
+/** Items the user has starred in this workspace (and can still read). */
+export function useStarredItems(wsId: string, enabled = true) {
+  return useQuery({ ...driveStarredQueryOptions(wsId), enabled: !!wsId && enabled })
+}
+
+/** Up to six files for Truy cập nhanh, each with its reason. */
+export function useQuickAccess(wsId: string, enabled = true) {
+  return useQuery({ ...driveQuickAccessQueryOptions(wsId), enabled: !!wsId && enabled })
+}
+
+/** The workspace's files the user can read, last edited first. */
+export function useRecentFiles(wsId: string, enabled = true) {
+  return useQuery({ ...driveRecentQueryOptions(wsId), enabled: !!wsId && enabled })
+}
+
+/**
+ * Star or unstar items. The starred list is updated at once and put back if
+ * the server refuses; Truy cập nhanh is asked again afterwards.
+ */
+export function useToggleStars(wsId: string) {
+  return useMutation({
+    meta: { action: 'gắn sao' },
+    mutationFn: async ({ items, star }: { items: DriveItem[]; star: boolean }) => {
+      await Promise.all(items.map((i) => (star ? driveApi.starItem(i.id) : driveApi.unstarItem(i.id))))
+    },
+    onMutate: async ({ items, star }) => {
+      const key = keys.drive.starred(wsId)
+      await queryClient.cancelQueries({ queryKey: key })
+      const before = queryClient.getQueryData<DriveItem[]>(key)
+      const ids = new Set(items.map((i) => i.id))
+      queryClient.setQueryData<DriveItem[]>(key, (old = []) =>
+        star ? [...items.filter((i) => !old.some((o) => o.id === i.id)), ...old] : old.filter((o) => !ids.has(o.id)),
+      )
+      return { before }
+    },
+    onError: (_e, _v, ctx) => queryClient.setQueryData(keys.drive.starred(wsId), ctx?.before),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: keys.drive.starred(wsId) })
+      void queryClient.invalidateQueries({ queryKey: keys.drive.quickAccess(wsId) })
+    },
+  })
+}
+
+/** "Tạo bản sao": a copy of a file next to it (the server names it "Bản sao của …"). */
+export function useCopyItem(wsId: string) {
+  return useMutation({
+    meta: { action: 'tạo bản sao' },
+    mutationFn: (item: DriveItem) => driveApi.copyItem(item.id, item.parent_id ?? ''),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.drive.all(wsId) }),
+  })
+}

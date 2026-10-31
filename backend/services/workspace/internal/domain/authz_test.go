@@ -2,11 +2,11 @@ package domain_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -182,7 +182,9 @@ type fakePolicyWrite struct {
 	// onChildren, when set, sees every GetChildren as it is asked.
 	onChildren func(nodeID string)
 	assocs     []*policypb.CreateAssociationRequest
-	n          int
+	// applyWrites makes association writes show in the graph the fake reads from.
+	applyWrites bool
+	n           int
 }
 
 func (f *fakePolicyWrite) GetAssociations(_ context.Context, req *policypb.GetAssociationsRequest, _ ...grpc.CallOption) (*policypb.AssociationList, error) {
@@ -260,14 +262,34 @@ func (f *fakePolicyWrite) RemoveAssignment(_ context.Context, req *policypb.Remo
 	return &policypb.Empty{}, nil
 }
 
+// CreateAssociation replaces the one edge between a UA and an OA, as the policy
+// service does, and with applyWrites the graph the fake reads from shows it.
 func (f *fakePolicyWrite) CreateAssociation(_ context.Context, req *policypb.CreateAssociationRequest, _ ...grpc.CallOption) (*policypb.Association, error) {
 	f.record("CreateAssociation " + req.UaId + "->" + req.OaId)
 	f.assocs = append(f.assocs, req)
+	if f.applyWrites {
+		kept := f.src.assocs[req.UaId][:0:0]
+		for _, a := range f.src.assocs[req.UaId] {
+			if a.OaId != req.OaId {
+				kept = append(kept, a)
+			}
+		}
+		f.src.assocs[req.UaId] = append(kept, &policypb.Association{Id: "assoc", UaId: req.UaId, OaId: req.OaId, Operations: req.Operations})
+	}
 	return &policypb.Association{Id: "assoc"}, nil
 }
 
 func (f *fakePolicyWrite) RemoveAssociation(_ context.Context, req *policypb.RemoveAssociationRequest, _ ...grpc.CallOption) (*policypb.Empty, error) {
 	f.record("RemoveAssociation " + req.UaId + "->" + req.OaId)
+	if f.applyWrites {
+		kept := f.src.assocs[req.UaId][:0:0]
+		for _, a := range f.src.assocs[req.UaId] {
+			if a.OaId != req.OaId {
+				kept = append(kept, a)
+			}
+		}
+		f.src.assocs[req.UaId] = kept
+	}
 	return &policypb.Empty{}, nil
 }
 
@@ -277,11 +299,11 @@ type fakeWSStore struct {
 	mutations []string
 	// names are what people are called, keyed by the user node; converted records each conversion.
 	names     map[string]string
-	converted map[string]*store.Conversion
-	// locked is true while the owner lock is held; convertedLocked records whether
-	// it was held when a conversion was written.
-	locked          bool
-	convertedLocked []bool
+	converted map[string]*store.ConversionRecord
+	// locked is true while the owner lock is held.
+	locked bool
+	// settings are a person's options by "user|workspace", then key.
+	settings map[string]map[string]json.RawMessage
 	// beforeLock runs just before the owner lock is taken: a change that lands in
 	// that gap.
 	beforeLock func()
@@ -293,29 +315,11 @@ func (f *fakeWSStore) ConversionRecord(_ context.Context, id string) (*store.Con
 		return nil, store.ErrWorkspaceNotFound
 	}
 	if c := f.converted[id]; c != nil {
-		return &store.ConversionRecord{ByName: c.ByName, At: &c.At}, nil
+		return c, nil
 	}
 	return &store.ConversionRecord{}, nil
 }
 
-func (f *fakeWSStore) ConvertToOrganization(_ context.Context, id, byNodeID string) (*store.Conversion, error) {
-	f.convertedLocked = append(f.convertedLocked, f.locked)
-	w, ok := f.ws[id]
-	if !ok {
-		return nil, store.ErrWorkspaceNotFound
-	}
-	if w.Type != "personal" {
-		return nil, store.ErrNotPersonal
-	}
-	f.mutations = append(f.mutations, "convert "+id)
-	w.Type = "organization"
-	c := &store.Conversion{ByName: f.names[byNodeID], At: time.Date(2026, 10, 11, 9, 0, 0, 0, time.UTC)}
-	if f.converted == nil {
-		f.converted = map[string]*store.Conversion{}
-	}
-	f.converted[id] = c
-	return c, nil
-}
 
 func (f *fakeWSStore) UpdateDetails(_ context.Context, id string, name, desc *string) (string, string, error) {
 	f.mutations = append(f.mutations, "details "+id)
@@ -338,6 +342,34 @@ func (f *fakeWSStore) WithOwnerLock(ctx context.Context, _ string, fn func(conte
 	f.locked = true
 	defer func() { f.locked = false }()
 	return fn(ctx)
+}
+
+// GetUserSettings and PutUserSettings keep a person's settings per workspace, as the table does.
+func (f *fakeWSStore) GetUserSettings(_ context.Context, userID, wsID string) (map[string]json.RawMessage, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := map[string]json.RawMessage{}
+	for k, v := range f.settings[userID+"|"+wsID] {
+		out[k] = v
+	}
+	return out, nil
+}
+
+func (f *fakeWSStore) PutUserSettings(_ context.Context, userID, wsID string, kv map[string]json.RawMessage) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.settings == nil {
+		f.settings = map[string]map[string]json.RawMessage{}
+	}
+	row := userID + "|" + wsID
+	if f.settings[row] == nil {
+		f.settings[row] = map[string]json.RawMessage{}
+	}
+	for k, v := range kv {
+		f.settings[row][k] = v
+	}
+	f.mutations = append(f.mutations, "settings "+row)
+	return nil
 }
 
 func (f *fakeWSStore) Insert(_ context.Context, w *store.Workspace) error { f.ws[w.ID] = w; return nil }

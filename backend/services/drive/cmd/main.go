@@ -125,6 +125,23 @@ func main() {
 		}
 	}()
 
+	// Uploads the client never confirmed stay `pending` with a stored object
+	// behind them; once a day old they are removed, at start and then hourly.
+	go func() {
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for {
+			if _, err := svc.CleanupPendingUploads(ctx, 24*time.Hour); err != nil && ctx.Err() == nil {
+				slog.Error("stale upload cleanup failed", "error", err)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
+
 	bootstrap.Shutdown{GRPC: gs, Health: healthSrv, HTTP: []bootstrap.HTTPServer{e}, Cancel: cancel}.Wait()
 }
 

@@ -40,6 +40,7 @@ type MessageFacts struct {
 	ReplyCount       int32
 	CreatedAt        time.Time
 	Deleted          bool
+	Mentions         []string
 }
 
 // GetMessageFacts returns a message's facts; nil when there is no such message.
@@ -47,9 +48,9 @@ func (s *Store) GetMessageFacts(ctx context.Context, id string) (*MessageFacts, 
 	var f MessageFacts
 	err := s.db.QueryRow(ctx,
 		`SELECT channel_id, sender_id, COALESCE(parent_message_id, ''), COALESCE(linked_entity_type, ''),
-		        reply_count, created_at, deleted_at IS NOT NULL
+		        reply_count, created_at, deleted_at IS NOT NULL, COALESCE(mentions, '{}')
 		 FROM messages WHERE id = $1`, id).
-		Scan(&f.ChannelID, &f.SenderID, &f.ParentMessageID, &f.LinkedEntityType, &f.ReplyCount, &f.CreatedAt, &f.Deleted)
+		Scan(&f.ChannelID, &f.SenderID, &f.ParentMessageID, &f.LinkedEntityType, &f.ReplyCount, &f.CreatedAt, &f.Deleted, &f.Mentions)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

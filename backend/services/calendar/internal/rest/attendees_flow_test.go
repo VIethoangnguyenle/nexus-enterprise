@@ -287,11 +287,12 @@ func TestFreeBusySuggestionsSearchAndSettingsOverREST(t *testing.T) {
 	// Settings: defaults, then saved, then reflected in free/busy and in new events.
 	code, raw = f.do(http.MethodGet, f.base()+"/settings", "alice", "")
 	require.Equal(t, http.StatusOK, code)
-	assert.JSONEq(t, `{"tzid":"Asia/Ho_Chi_Minh","workStart":"08:00","workEnd":"17:30","defaultReminder":10}`, string(raw))
+	assert.JSONEq(t, `{"tzid":"Asia/Ho_Chi_Minh","workStart":"08:00","workEnd":"17:30","defaultReminder":10,"defaultView":"agenda","weekStart":1,"defaultDuration":30,"notifyInvites":true,"notifyChanges":true,"notifyReminders":true}`, string(raw))
 	code, raw = f.do(http.MethodPut, f.base()+"/settings", "alice", `{"tzid":"Asia/Bangkok","workStart":"09:30","workEnd":"18:00","defaultReminder":0}`)
 	require.Equal(t, http.StatusOK, code, string(raw))
 	code, raw = f.do(http.MethodGet, f.base()+"/settings", "alice", "")
-	assert.JSONEq(t, `{"tzid":"Asia/Bangkok","workStart":"09:30","workEnd":"18:00","defaultReminder":0}`, string(raw))
+	assert.JSONEq(t, `{"tzid":"Asia/Bangkok","workStart":"09:30","workEnd":"18:00","defaultReminder":0,"defaultView":"agenda","weekStart":1,"defaultDuration":30,"notifyInvites":true,"notifyChanges":true,"notifyReminders":true}`, string(raw),
+		"a body with only the zone, hours and reminder keeps every other setting")
 	code, raw = fb("carol", alice)
 	require.NoError(t, json.Unmarshal(raw, &seen))
 	assert.Equal(t, "09:30", seen.People[0].WorkStart)

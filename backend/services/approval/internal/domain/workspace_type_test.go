@@ -114,6 +114,18 @@ func entryPoints() []entryPoint {
 			_, err := s.UpdateTemplate(ctx, "n-u", "t", UpdateTemplateInput{TenantID: "tenant-1", ExpectedUpdatedAt: time.Now()})
 			return err
 		}},
+		{"GetUserSettings", false, func(s *Service, ctx context.Context) error {
+			_, err := s.GetUserSettings(ctx, "n-u")
+			return err
+		}},
+		{"UpdateUserSettings", false, func(s *Service, ctx context.Context) error {
+			_, err := s.UpdateUserSettings(ctx, "n-u", &ApprovalSettingsPatch{})
+			return err
+		}},
+		{"SearchRequests", false, func(s *Service, ctx context.Context) error {
+			_, _, err := s.SearchRequests(ctx, "n-u", SearchParams{Query: "test", Limit: 20})
+			return err
+		}},
 	}
 }
 
@@ -202,9 +214,9 @@ func TestGuard_FailsClosed(t *testing.T) {
 // proved refuses in a personal workspace.
 func TestEntryPointTableCoversEveryExportedMethod(t *testing.T) {
 	// Guard and event helpers that are not entry points: RequireOrganization and
-	// RequireMember are the guards; EventAudience runs only after a decision that
-	// was guarded.
-	notEntryPoints := map[string]bool{"RequireOrganization": true, "RequireMember": true, "EventAudience": true}
+	// RequireMember are the guards; EventAudience and NotifyOptOuts run only
+	// after a decision that was guarded, to address its event.
+	notEntryPoints := map[string]bool{"RequireOrganization": true, "RequireMember": true, "EventAudience": true, "NotifyOptOuts": true}
 	var want, got []string
 	typ := reflect.TypeOf(&Service{})
 	for i := 0; i < typ.NumMethod(); i++ {

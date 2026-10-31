@@ -234,6 +234,42 @@ not have. Screens fall back to initials when a picture does not load, so nothing
 rollback is meant to last, clear the links:
 `UPDATE users SET avatar_url = '' WHERE avatar_url LIKE '/api/auth/avatars/%';`
 
+## One-off: group managers backfill
+
+The release that adds group roles (owner, managers, `docs/specs/chat-group-management`) needs every group made before
+it to get its Managers UA (`Ch_<channel id>_Managers`). Until then those groups answer "group configuration unavailable"
+to appointing a manager or transferring ownership, and restricting "Ai được thêm người" leaves nobody able to add people.
+The command `backend/services/messaging/cmd/backfill-managers` does it, once, after that release is deployed and healthy.
+It is not in any image and not run by `deploy.sh`.
+
+It needs the new policy image running: the policy admits its service identity, `backfill-managers`, on exactly the
+writer's `FindNodeByName`, `CreateNode`, `CreateAssignment` and `CreateAssociation`, and an older policy refuses every
+call (each group is then reported FAILED and nothing is written). It writes through the policy writer, so decisions
+are invalidated as for any graph write; no restart or cache flush is needed afterwards. Rerunning is safe: each run
+writes every edge of a found UA again, so a run that failed part-way is finished by the next.
+
+On the server, from a checkout of the deployed commit, in a throwaway Go container on the compose network (it reads the
+database and dials `policy:50051` with the shared identity secret from `/opt/nexus/.env`):
+```bash
+git clone --depth 1 https://github.com/VIethoangnguyenle/nexus-enterprise.git /tmp/nexus-src && git -C /tmp/nexus-src fetch --depth 1 origin "$(cat /opt/nexus/.deployed-tag)" && git -C /tmp/nexus-src checkout FETCH_HEAD
+set -a; . /opt/nexus/.env; set +a
+run_backfill() {
+  docker run --rm --network nexus_nexus -v /tmp/nexus-src/backend:/src -w /src/services/messaging \
+    -e APP_ENV=production -e INTERNAL_IDENTITY_SECRET \
+    -e DATABASE_URL="postgres://${POSTGRES_USER:-ngac}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ngac}?sslmode=disable" \
+    -e POLICY_SERVICE_ADDR=policy:50051 \
+    golang:1.26-alpine go run ./cmd/backfill-managers "$@"
+}
+run_backfill -dry-run     # read-only: prints each group's owner and the UAs it would create; paste the summary in the PR
+run_backfill              # applies; exits non-zero and lists the groups that failed, if any
+run_backfill -dry-run     # expect "managers UAs created=0, failed=0"
+rm -rf /tmp/nexus-src
+```
+The summary line reads `<MODE> summary: N groups, owners kept=K moved=M, managers UAs created=C, failed=F`. A group
+whose creator has left gets the earliest current member as owner (`moved`). In dev the same command is
+`cd backend/services/messaging && APP_ENV=dev go run ./cmd/backfill-managers [-dry-run]`, with the dev stack's policy
+restarted on the new code first.
+
 ## Working on the server
 
 ```bash

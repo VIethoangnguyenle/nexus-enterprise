@@ -3,7 +3,8 @@
 // A message is pushed to the people it concerns: the other side of a direct
 // message, the users it mentions, the followers of the thread it replies in.
 // Each recipient is checked again when the push is sent: they must still read
-// the channel, want that kind of push, be outside their quiet hours and not be
+// the channel, want that kind of push, not have paused notifications, be outside
+// their quiet hours (unless they are mentioned) and not be
 // looking at the conversation right now. Several messages of one conversation
 // within a short window become one notification on the device.
 package domain
@@ -152,10 +153,7 @@ func (s *Service) recipients(ctx context.Context, msg *pb.Message, mentions []st
 		add(ps, PushDirect)
 	}
 	if len(mentions) > 0 {
-		if len(mentions) > MaxMentionPushes {
-			mentions = mentions[:MaxMentionPushes]
-		}
-		ps, err := s.store.PeopleByID(ctx, mentions)
+		ps, err := s.mentionedPeople(ctx, ch, mentions)
 		if err != nil {
 			return nil, err
 		}
@@ -202,13 +200,49 @@ func (s *Service) recipients(ctx context.Context, msg *pb.Message, mentions []st
 		if err != nil {
 			return nil, err
 		}
-		if !wants(prefs, k) || inQuietHours(prefs, s.pushNow()) {
+		if !wants(prefs, k) || silenced(prefs, s.pushNow(), k == PushMention) {
 			continue
 		}
 		if s.push != nil && s.push.viewing != nil && s.push.viewing.IsViewing(id, ch.ID) {
 			continue
 		}
 		out = append(out, PushRecipient{Person: p, Kind: k})
+	}
+	return out, nil
+}
+
+// mentionedPeople resolves a message's mention list to people. "@Tất cả" stands
+// for every current member of the conversation, so each of them is mentioned as
+// if by name (the sender is dropped by the caller). The cap on pushes from one
+// message holds for the names a sender typed, which can be anyone's id; the
+// members behind "@Tất cả" are bounded by the conversation itself.
+func (s *Service) mentionedPeople(ctx context.Context, ch *store.Channel, mentions []string) ([]store.Person, error) {
+	named := make([]string, 0, len(mentions))
+	all := false
+	for _, m := range mentions {
+		if m == MentionAll {
+			all = true
+			continue
+		}
+		named = append(named, m)
+	}
+	if len(named) > MaxMentionPushes {
+		named = named[:MaxMentionPushes]
+	}
+	var out []store.Person
+	if len(named) > 0 {
+		ps, err := s.store.PeopleByID(ctx, named)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, ps...)
+	}
+	if all && ch.ChannelType != ChannelTypeDM {
+		ps, err := s.store.ChannelPeople(ctx, ch.ID)
+		if err != nil {
+			return nil, fmt.Errorf("expand @Tất cả: %w", err)
+		}
+		out = append(out, ps...)
 	}
 	return out, nil
 }
@@ -238,6 +272,16 @@ func wants(p store.PushPreferences, k PushKind) bool {
 		// The level of this very conversation decides; "off" is the way out.
 		return true
 	}
+}
+
+// silenced reports whether a push to this person is held back now. A pause
+// stops everything. Quiet hours stop everything but a message that mentions
+// them, by name or through "@Tất cả".
+func silenced(p store.PushPreferences, now time.Time, mentioned bool) bool {
+	if p.PauseUntil != nil && now.Before(*p.PauseUntil) {
+		return true
+	}
+	return !mentioned && inQuietHours(p, now)
 }
 
 // inQuietHours reports whether now falls in the user's quiet window, in
@@ -449,7 +493,15 @@ func (s *Service) GetPushPreferences(ctx context.Context, userID string) (store.
 	if userID == "" {
 		return store.PushPreferences{}, fmt.Errorf("%w: a signed-in user is required", ErrAccessDenied)
 	}
-	return s.store.GetPushPreferences(ctx, userID)
+	p, err := s.store.GetPushPreferences(ctx, userID)
+	if err != nil {
+		return p, err
+	}
+	// A pause that has ended reads as not paused.
+	if p.PauseUntil != nil && !p.PauseUntil.After(s.pushNow()) {
+		p.PauseUntil = nil
+	}
+	return p, nil
 }
 
 // SavePushPreferences stores the caller's push preferences.
@@ -459,6 +511,9 @@ func (s *Service) SavePushPreferences(ctx context.Context, userID string, p stor
 	}
 	if p.QuietStart < 0 || p.QuietStart > 1439 || p.QuietEnd < 0 || p.QuietEnd > 1439 {
 		return fmt.Errorf("%w: quiet hours are minutes of the day", ErrInvalidInput)
+	}
+	if p.PauseUntil != nil && !p.PauseUntil.After(s.pushNow()) {
+		p.PauseUntil = nil
 	}
 	if p.TimeZone == "" {
 		p.TimeZone = store.DefaultPushPreferences.TimeZone

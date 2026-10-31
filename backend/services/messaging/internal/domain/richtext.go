@@ -14,9 +14,14 @@ import (
 // maxContentChars bounds a message body, formatting included.
 const maxContentChars = 20000
 
+// mentionAttr is what a mention span's data-mention may hold: the mentioned
+// user's id, or exactly the @Tất cả marker (MentionAll), which an edit reads
+// back to keep the message in everyone's "Được nhắc".
+var mentionAttr = regexp.MustCompile(`^(?:[\w.:-]{1,128}|` + regexp.QuoteMeta(MentionAll) + `)$`)
+
 // richText is the allowlist of the composer's formatting toolbar: text
 // styles, lists, quote, code and links; a mention is a span carrying the
-// mentioned user's id. Everything else — tags, attributes, styles, URL schemes
+// mentioned user's id or the @Tất cả marker. Everything else — tags, attributes, styles, URL schemes
 // other than http(s) and mailto — is dropped. The client filters again when it
 // renders; this is the layer an API caller cannot skip.
 var richText = func() *bluemonday.Policy {
@@ -28,7 +33,7 @@ var richText = func() *bluemonday.Policy {
 	p.AddTargetBlankToFullyQualifiedLinks(true)
 	p.RequireNoReferrerOnLinks(true)
 	p.RequireNoFollowOnLinks(false)
-	p.AllowAttrs("data-mention").Matching(regexp.MustCompile(`^[\w.:-]{1,128}$`)).OnElements("span")
+	p.AllowAttrs("data-mention").Matching(mentionAttr).OnElements("span")
 	return p
 }()
 

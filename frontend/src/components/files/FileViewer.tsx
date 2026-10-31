@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
+import { motion, useTransform } from 'motion/react'
 import { ChevronLeft, ChevronRight, Download, FolderOpen, MoreHorizontal, X } from 'lucide-react'
 import { useFilePreview } from '../../hooks/useFilePreview'
 import { useDownloadFile } from '../../hooks/useDownloadUrl'
+import { useDragToClose } from '../../hooks/useDragToClose'
 import { useModalFocus } from '../../hooks/useModalFocus'
+import { useBottomBarLayout } from '../../hooks/usePhone'
+import { useMotionPresets } from '../../lib/motion'
 import { fileKind } from '../../lib/file-kind'
 import { formatBytes, formatDateTime } from '../../lib/format'
 import { Button, IconButton, PersonChip, Pressable } from '../primitives'
@@ -90,6 +94,12 @@ export function FileViewer({ files, index, onClose, origin = 'chat', onOpenInDri
   const onDownload = useCallback(() => file && void download({ id: file.id, name: file.name }), [download, file])
 
   useModalFocus({ active: true, surfaceRef, onClose, initialFocusRef: closeRef })
+  // On a phone, dragging the viewer down closes it (DESIGN.md §6 "Vuốt", mockup §9); not while a picture is zoomed
+  // (the drag pans it) or the ⋯ sheet is up. The scrim fades with the finger: gone at a full screen's drag.
+  const phone = useBottomBarLayout()
+  const { reduced } = useMotionPresets()
+  const dragY = useDragToClose({ ref: surfaceRef, enabled: phone && zoom === 'fit' && !sheetOpen, reduced, onClose })
+  const scrimOpacity = useTransform(dragY, (y) => 1 - Math.min(1, y / (window.innerHeight || 1)))
 
   const returnTo = useRef(returnFocusRef)
   useEffect(() => {
@@ -200,11 +210,19 @@ export function FileViewer({ files, index, onClose, origin = 'chat', onOpenInDri
 
   return createPortal(
     <div
-      className="fixed inset-0 z-modal bg-scrim md:p-8 animate-fade-in"
+      className="fixed inset-0 z-modal md:p-8 animate-fade-in"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div
+      <motion.div
+        aria-hidden="true"
+        data-testid="viewer-scrim"
+        style={{ opacity: scrimOpacity }}
+        className="absolute inset-0 bg-scrim"
+        onMouseDown={onClose}
+      />
+      <motion.div
         ref={surfaceRef}
+        style={{ y: dragY }}
         role="dialog"
         aria-modal="true"
         {...(denied ? { 'aria-label': 'Trình xem tệp' } : { 'aria-labelledby': titleId })}
@@ -378,7 +396,7 @@ export function FileViewer({ files, index, onClose, origin = 'chat', onOpenInDri
             </div>
           </div>
         )}
-      </div>
+      </motion.div>
     </div>,
     document.body,
   )

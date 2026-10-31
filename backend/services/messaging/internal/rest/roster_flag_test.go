@@ -12,6 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"ngac-platform/ngac"
 	"ngac-platform/pkg/httputil"
@@ -37,13 +39,23 @@ func (readOnlyPolicy) GetChildren(context.Context, *policypb.GetChildrenRequest,
 	return &policypb.NodeList{}, nil
 }
 
+// noManagersWriter is a policy writer whose graph has no Managers UA: owner
+// authority is the only role these groups have.
+type noManagersWriter struct {
+	policypb.PolicyWriteServiceClient
+}
+
+func (noManagersWriter) FindNodeByName(_ context.Context, r *policypb.FindNodeByNameRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+	return nil, status.Errorf(codes.NotFound, "node %s not found", r.Name)
+}
+
 // The members list says, in words a screen can branch on, whether the reader may
 // remove people: the group's creator may, another member may not.
 func TestListChannelMembers_TellsWhoMayRemove(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
-	creator, _ := testutil.CreateUser(t, pool)
-	other, _ := testutil.CreateUser(t, pool)
+	creator, creatorNode := testutil.CreateUser(t, pool)
+	other, otherNode := testutil.CreateUser(t, pool)
 	oa, ua := "oa-"+uuid.NewString(), "ua-"+uuid.NewString()
 	for _, n := range [][2]string{{oa, "OA"}, {ua, "UA"}} {
 		_, err := pool.Exec(ctx, `INSERT INTO ngac_nodes (id, name, node_type) VALUES ($1, $1, $2)`, n[0], n[1])
@@ -52,12 +64,12 @@ func TestListChannelMembers_TellsWhoMayRemove(t *testing.T) {
 	chID := "ch-" + uuid.NewString()
 	st := store.NewStore(pool)
 	ws, _ := testutil.CreateWorkspace(t, pool, creator)
-	require.NoError(t, st.InsertChannelWithMembers(ctx, &store.Channel{ID: chID, Name: "roster-flag", ChannelType: "private", WorkspaceID: ws, NGACOaID: oa, NGACUaID: ua, CreatedBy: creator}, "creator-node"))
+	require.NoError(t, st.InsertChannelWithMembers(ctx, &store.Channel{ID: chID, Name: "roster-flag", ChannelType: "private", WorkspaceID: ws, NGACOaID: oa, NGACUaID: ua, CreatedBy: creator}, creatorNode))
 	t.Cleanup(func() {
 		pool.Exec(ctx, `DELETE FROM channels WHERE id = $1`, chID)
 		pool.Exec(ctx, `DELETE FROM ngac_nodes WHERE id IN ($1, $2)`, oa, ua)
 	})
-	h := NewHandler(domain.NewService(st, readOnlyPolicy{}, nil, nil, nil), nil, nil)
+	h := NewHandler(domain.NewService(st, readOnlyPolicy{}, noManagersWriter{}, nil, nil), nil, nil)
 
 	flag := func(userID, node string) bool {
 		e := httputil.NewEcho("messaging")
@@ -78,6 +90,6 @@ func TestListChannelMembers_TellsWhoMayRemove(t *testing.T) {
 		return *body.CanRemove
 	}
 
-	assert.False(t, flag(other, "other-node"), "a member who did not make the group")
-	assert.True(t, flag(creator, "creator-node"), "the group's creator")
+	assert.False(t, flag(other, otherNode), "a member who did not make the group")
+	assert.True(t, flag(creator, creatorNode), "the group's creator")
 }

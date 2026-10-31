@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
-import { ArrowLeft, CircleAlert, ClipboardCheck, FileText, History, Plus, SearchX, Settings2 } from 'lucide-react'
+import { ArrowLeft, Check, CircleAlert, ClipboardCheck, FileText, History, MoreHorizontal, Plus, SearchX, Settings, Settings2, Undo2 } from 'lucide-react'
+import { useRegisterCreateAction } from '../../hooks/useModuleCreateAction'
+import { useModuleSettings } from '../../hooks/useModuleSettings'
 import type { ApprovalRequest, ApprovalTemplate } from '../../api/approval'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import {
@@ -28,9 +30,15 @@ import { useWebSocketStore } from '../../stores/websocket.store'
 import { Avatar, Button, Heading, IconButton, ScrollFade, TabBar, toast, type TabItem } from '../primitives'
 import { SearchBox } from '../patterns/SearchBox'
 import { SearchSuggestions } from '../patterns/SearchSuggestions'
+import { ModuleHeader } from '../patterns/ModuleHeader'
+import { ScrollTabs } from '../patterns/ScrollTabs'
+import { PullToRefresh } from '../patterns/PullToRefresh'
+import type { SwipeAction } from '../patterns/SwipeRow'
+import { useSettingsNav } from '../settings/settings-nav'
 import { EmptyState } from '../spaces/EmptyState'
 import { ApprovalDetailPanel } from './ApprovalDetailPanel'
 import { ApprovalTable, type RealtimeTag } from './ApprovalTable'
+import { ApproveDialog } from './ApproveDialog'
 import { CreateRequestDialog } from './CreateRequestDialog'
 import { ReturnDialog } from './ReturnDialog'
 import { CountPill } from './StatusPill'
@@ -111,13 +119,29 @@ export function ApprovalScreen() {
   const [ticked, setTicked] = useState<Set<string>>(() => new Set())
   const [creating, setCreating] = useState(false)
   const [returning, setReturning] = useState<ApprovalRequest | null>(null)
+  // Duyệt… revealed by a swipe asks here first: a gesture never approves on its own.
+  const [approving, setApproving] = useState<ApprovalRequest | null>(null)
   // Removing the last row: keep the table up until the row has folded away.
   const [holdTable, setHoldTable] = useState(false)
 
+  // Register the create action for the ModuleBar + button.
+  const createAction = useMemo(() => ({ label: 'Tạo đề nghị', handler: () => setCreating(true) }), [])
+  useRegisterCreateAction('approval', createAction)
+
   // ---- the list of the open tab ----
+  // Below 1024px Chờ tôi duyệt follows Cài đặt Phê duyệt → Sắp xếp (newest first by default); a wide screen keeps
+  // the server's order, oldest first. The other tabs load page by page, newest first, so they keep that order.
+  const orderPending = useBottomBarLayout()
+  const { sort: pendingSort } = useModuleSettings('approval', orderPending ? wsId : '')
+  const pendingRows = useMemo(() => {
+    const list = pending.data?.rows
+    if (!list || !orderPending) return list
+    const dir = pendingSort === 'oldest' ? 1 : -1
+    return [...list].sort((a, b) => dir * (Date.parse(a.request.created_at) - Date.parse(b.request.created_at)))
+  }, [pending.data, orderPending, pendingSort])
   const view = (() => {
     switch (tab) {
-      case 'pending': return { q: pending, rows: pending.data?.rows }
+      case 'pending': return { q: pending, rows: pendingRows }
       case 'mine': return { q: mine, rows: mine.data }
       case 'history': return { q: history, rows: history.data }
       case 'department': return { q: department, rows: department.data }
@@ -216,6 +240,7 @@ export function ApprovalScreen() {
 
   // Before anything is typed: Tìm gần đây, what waits on me and my own requests (DESIGN.md "Gợi ý trong ô tìm").
   const phone = useBottomBarLayout()
+  const settingsNav = useSettingsNav()
   const searchRef = useRef<HTMLInputElement>(null)
   const suggestRequest = (row: ApprovalRow, meta: string, icon: ReactNode) => ({
     key: row.request.id,
@@ -284,9 +309,10 @@ export function ApprovalScreen() {
   }, [panelOpen, closePanel])
 
   // ---- decisions ----
-  const doApprove = async (request: ApprovalRequest) => {
+  const doApprove = async (request: ApprovalRequest, comment?: string) => {
     try {
-      await approve.mutateAsync({ requestId: request.id })
+      await approve.mutateAsync({ requestId: request.id, ...(comment ? { comment } : {}) })
+      setApproving(null)
       toast('Đã duyệt đề nghị')
     } catch {
       // The shared mutation handler has told the user what failed.
@@ -315,6 +341,15 @@ export function ApprovalScreen() {
       /* see above */
     }
   }
+
+  // A swipe on a row of Chờ tôi only reveals Duyệt… and Từ chối…, each asking for confirmation; Thêm opens the request.
+  const swipeOf = (row: ApprovalRow): { start: SwipeAction[]; end: SwipeAction[] } => ({
+    start: [{ key: 'approve', label: 'Duyệt…', tone: 'success', width: 92, icon: <Check size={22} strokeWidth={1.75} />, onAction: () => setApproving(row.request) }],
+    end: [
+      { key: 'return', label: 'Từ chối…', tone: 'danger', icon: <Undo2 size={22} strokeWidth={1.75} />, onAction: () => setReturning(row.request) },
+      { key: 'more', label: 'Thêm', tone: 'ink', icon: <MoreHorizontal size={22} strokeWidth={1.75} />, onAction: () => openRequest(row) },
+    ],
+  })
 
   // ---- what to show ----
   const tabs: TabItem[] = [
@@ -417,6 +452,7 @@ export function ApprovalScreen() {
           versionOf={versionOf}
           tagOf={tagOf}
           onRowsGone={() => setHoldTable(false)}
+          swipe={phone && tab === 'pending' ? swipeOf : undefined}
         />
         {paged?.hasNextPage && (
           <div className="flex justify-center pb-4">
@@ -442,7 +478,20 @@ export function ApprovalScreen() {
         />
       ) : (
         <section className="flex-1 flex flex-col min-w-0 min-h-0 bg-base" aria-label="Phê duyệt">
-          <header className="flex items-center gap-4 px-5 pt-4 pb-1 min-w-0">
+          {/* Mobile header (< 1024px) */}
+          {!covered && (
+            <ModuleHeader moduleId="approval" title="Phê duyệt">
+              <ScrollTabs
+                label="Phê duyệt"
+                tabs={tabs.map((t) => ({ id: t.id, label: t.label }))}
+                activeTab={tab}
+                onTabChange={(id) => go((p) => tabSearch(p, id as ApprovalTab))}
+              />
+            </ModuleHeader>
+          )}
+
+          {/* Desktop header (≥ 1024px) */}
+          <header className="flex items-center gap-4 px-5 pt-4 pb-1 min-w-0 max-lg:hidden">
             <div className="grid gap-0.5 min-w-0">
               <Heading as="h1" look="page" className="truncate">Phê duyệt</Heading>
               <span className="text-sm text-ink-muted truncate">Đề nghị trong {workspaceLabel}</span>
@@ -462,12 +511,17 @@ export function ApprovalScreen() {
               ) : (
                 newRequest
               )}
+              {!phone && (
+                <IconButton size="lg" shape="round" aria-label="Cài đặt Phê duyệt" title="Cài đặt Phê duyệt" onClick={() => settingsNav.open('approval')}>
+                  <Settings size={20} strokeWidth={1.75} />
+                </IconButton>
+              )}
             </div>
           </header>
 
-          {/* While the suggestions cover the list on a phone, a tab would change a list that cannot be seen. */}
+          {/* Desktop tabs (≥ 1024px) — While the suggestions cover the list on a phone, a tab would change a list that cannot be seen. */}
           {!covered && (
-            <ScrollFade className="px-5">
+            <ScrollFade className="px-5 max-lg:hidden">
               <TabBar
                 className="w-max"
                 label="Phê duyệt"
@@ -565,16 +619,18 @@ export function ApprovalScreen() {
                 <SearchSuggestions panel={panel} emptyText={SEARCH_HINT} />
               </div>
             )}
-            <div
+            <PullToRefresh
               role="tabpanel"
               id={`approval-panel-${tab}`}
               aria-labelledby={`approval-tab-${tab}`}
               aria-hidden={covered || undefined}
               inert={covered}
+              enabled={!covered}
+              onRefresh={() => (tab === 'templates' ? templates.refetch() : view.q.refetch())}
               className="h-full overflow-y-auto"
             >
               {body}
-            </div>
+            </PullToRefresh>
           </div>
         </section>
       )}
@@ -604,6 +660,7 @@ export function ApprovalScreen() {
         )}
       </AnimatePresence>
 
+      <ApproveDialog request={approving} pending={approve.isPending} onConfirm={(r, comment) => void doApprove(r, comment)} onClose={() => setApproving(null)} />
       <ReturnDialog request={returning} pending={reject.isPending} onConfirm={(r, why) => void doReturn(r, why)} onClose={() => setReturning(null)} />
       <CreateRequestDialog
         open={creating}

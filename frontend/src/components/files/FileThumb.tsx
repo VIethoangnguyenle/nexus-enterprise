@@ -1,8 +1,15 @@
-import { useEffect, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Play } from 'lucide-react'
 import { driveApi, type ThumbnailSize } from '../../api/drive'
 import { kindOf } from '../drive/drive-model'
+
+/**
+ * Whether the pictures under it may be fetched. A screen turns it off when the person asked not to load previews on
+ * mobile data and the device is on it (Cài đặt Tài liệu → Tải ảnh xem trước); every frame then shows its file-kind
+ * icon and asks the server for nothing. On by default.
+ */
+export const ThumbnailsAllowed = createContext(true)
 
 /** `card` is a grid card or tile (320 wide), `panel` the detail panel's preview (640). */
 export type ThumbSize = 'card' | 'panel'
@@ -60,11 +67,12 @@ export function FileThumb({
   fileId, name, mimeType, version, size = 'card', aspect = '16 / 10', radius = 8, iconSize = 34, className = '',
 }: FileThumbProps) {
   const [frameRef, near] = useNearViewport()
+  const allowed = useContext(ThumbnailsAllowed)
   const px = thumbnailSizeFor(size, typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1)
   const { data: blob, isError } = useQuery({
     queryKey: ['drive-thumbnail', fileId, px, version ?? ''],
     queryFn: ({ signal }) => driveApi.fetchThumbnail(fileId, px, signal),
-    enabled: near,
+    enabled: near && allowed,
     retry: false,
     staleTime: Infinity,
     gcTime: 5 * 60_000,
@@ -83,8 +91,8 @@ export function FileThumb({
   const [broken, setBroken] = useState<string>()
   const kind = kindOf({ item_type: 'file', name, mime_type: mimeType })
   const Icon = kind.icon
-  const showImage = !!src && broken !== src
-  const showFallback = isError || (!!src && broken === src)
+  const showImage = allowed && !!src && broken !== src
+  const showFallback = !allowed || isError || (!!src && broken === src)
   const isVideo = kind.label === 'Video'
 
   return (

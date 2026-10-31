@@ -4,6 +4,7 @@ package domain
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -33,13 +34,13 @@ type WorkspaceStore interface {
 	// ConversionRecord says who converted the workspace and when;
 	// store.ErrWorkspaceNotFound for an unknown workspace.
 	ConversionRecord(ctx context.Context, id string) (*store.ConversionRecord, error)
-	// ConvertToOrganization turns a personal workspace into an organization in one
-	// statement, recording the user behind byNodeID. store.ErrNotPersonal if it
-	// no longer is personal, store.ErrWorkspaceNotFound if there is none.
-	ConvertToOrganization(ctx context.Context, id, byNodeID string) (*store.Conversion, error)
 	// WithOwnerLock runs fn while holding the workspace's owner lock, so checks
 	// of who the owners are and the changes that follow cannot interleave.
 	WithOwnerLock(ctx context.Context, wsID string, fn func(ctx context.Context) error) error
+	// GetUserSettings returns one person's workspace-scope settings that have
+	// been set, by key; PutUserSettings writes the given keys in one transaction.
+	GetUserSettings(ctx context.Context, userID, workspaceID string) (map[string]json.RawMessage, error)
+	PutUserSettings(ctx context.Context, userID, workspaceID string, kv map[string]json.RawMessage) error
 }
 
 // Service orchestrates workspace business logic.

@@ -60,6 +60,18 @@ export interface DriveShare {
   created_at: DriveTimestamp
 }
 
+/** Why a file is offered in Truy cập nhanh; the server only gives a reason on a file the caller can still read. */
+export type QuickAccessReason = 'shared' | 'starred' | 'yours'
+
+export interface QuickAccessEntry {
+  item: DriveItem
+  reason: QuickAccessReason
+  /** Who shared it, when `reason` is `shared` and the person is known. */
+  shared_by_name?: string
+  /** When the reason happened (the share, the star, the last edit). */
+  at: string
+}
+
 /** How much a share lets the grantee do. Mapped to NGAC operations server-side. */
 export type SharePermission = 'read' | 'write'
 
@@ -232,4 +244,41 @@ export const driveApi = {
   // — Quota —
   getQuota: (wsId: string) =>
     apiFetch<DriveQuota>(`/workspaces/${wsId}/drive/quota`),
+
+  // — Stars, quick access, recent (the phone's Tài liệu home) —
+  /** The server checks the item's own workspace and read on it; a star is the caller's alone. */
+  starItem: (itemId: string) =>
+    apiFetch(`/drive/items/${encodeURIComponent(itemId)}/star`, { method: 'POST' }),
+
+  unstarItem: (itemId: string) =>
+    apiFetch(`/drive/items/${encodeURIComponent(itemId)}/star`, { method: 'DELETE' }),
+
+  /** Starred items of the workspace the caller can still read. */
+  listStarred: (wsId: string) =>
+    apiFetch<DriveListing>(`/drive/starred?workspace_id=${encodeURIComponent(wsId)}`),
+
+  /** Files of the workspace the caller can read, last edited first. */
+  recent: (wsId: string) =>
+    apiFetch<DriveListing>(`/drive/recent?workspace_id=${encodeURIComponent(wsId)}`),
+
+  /** Up to six files for Truy cập nhanh, each with why it is offered. */
+  quickAccess: (wsId: string) =>
+    apiFetch<{ entries?: QuickAccessEntry[] | null }>(`/drive/quick-access?workspace_id=${encodeURIComponent(wsId)}`),
+
+  /**
+   * Step 2 with progress: PUT to storage with XMLHttpRequest, the only browser
+   * API that reports upload progress. `onProgress` gets bytes sent and total.
+   */
+  putWithProgress: (uploadUrl: string, file: Blob, onProgress: (sent: number, total: number) => void, signal?: AbortSignal) =>
+    new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      xhr.open('PUT', uploadUrl)
+      xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
+      xhr.upload.onprogress = (e) => onProgress(e.loaded, e.lengthComputable ? e.total : file.size)
+      xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Storage upload failed: ${xhr.status}`)))
+      xhr.onerror = () => reject(new Error('Storage upload failed: network'))
+      xhr.onabort = () => reject(new DOMException('Upload aborted', 'AbortError'))
+      signal?.addEventListener('abort', () => xhr.abort(), { once: true })
+      xhr.send(file)
+    }),
 }

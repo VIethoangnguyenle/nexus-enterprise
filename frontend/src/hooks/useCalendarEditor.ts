@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
-import { keepPreviousData, queryOptions, useMutation, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, queryOptions, useQuery } from '@tanstack/react-query'
 import {
-  calendarApi, type CalendarSettings, type EditScope, type EventDetail, type EventPatch,
+  calendarApi, type EditScope, type EventDetail, type EventPatch,
 } from '../api/calendar'
 import { toast } from '../components/primitives'
 import { notifiesGuests } from '../lib/calendar-editor'
@@ -21,19 +21,6 @@ export const settingsQueryOptions = (wsId: string) =>
 
 export function useCalendarSettings(wsId: string) {
   return useQuery(settingsQueryOptions(wsId))
-}
-
-/** Saves the zone, working hours and default reminder; new events and Tìm giờ read them. */
-export function useUpdateSettings(wsId: string) {
-  return useMutation({
-    mutationFn: (s: CalendarSettings) => calendarApi.updateSettings(wsId, s),
-    onSuccess: (saved) => {
-      queryClient.setQueryData(keys.calendar.settings(wsId), saved)
-      void queryClient.invalidateQueries({ queryKey: keys.calendar.freeBusyAll(wsId) })
-      toast('Đã lưu cài đặt lịch')
-    },
-    onError: (err) => toast.error(explain(err, 'lưu cài đặt lịch')),
-  })
 }
 
 // --- Search -----------------------------------------------------------------------

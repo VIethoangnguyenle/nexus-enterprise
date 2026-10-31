@@ -76,13 +76,19 @@ func (s *Store) InTx(ctx context.Context, fn func(ctx context.Context) error) er
 }
 
 // ProvisionSchema creates an isolated PostgreSQL schema for a tenant
-// by calling the provision_tenant_schema() function in the public schema.
-// Returns the schema name. This runs on the pool directly (no tenant scoping).
+// by calling the provision_tenant_schema() function in the public schema, and
+// the service's own tenant tables with it, in one transaction. Returns the
+// schema name. This runs on the pool directly (no tenant scoping).
 func (s *Store) ProvisionSchema(ctx context.Context, tenantID string) (string, error) {
 	var schema string
-	err := s.db.QueryRow(ctx, `SELECT provision_tenant_schema($1)`, tenantID).Scan(&schema)
+	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, `SELECT provision_tenant_schema($1)`, tenantID).Scan(&schema); err != nil {
+			return fmt.Errorf("provision schema: %w", err)
+		}
+		return ensureTenantTables(ctx, tx, schema)
+	})
 	if err != nil {
-		return "", fmt.Errorf("provision schema: %w", err)
+		return "", err
 	}
 	return schema, nil
 }
@@ -92,7 +98,9 @@ func (s *Store) ProvisionSchema(ctx context.Context, tenantID string) (string, e
 // provisioning) is someone else's state: it is left exactly as it is and
 // domain.ErrSchemaNotActive comes back, where ProvisionSchema would set it active.
 // The check and the creation run under a per-tenant lock, so two first calls at
-// once both end with the one schema.
+// once both end with the one schema. The service's own tenant tables
+// (ensureTenantTables) are made with it, and made again, harmlessly, for an
+// active schema that predates them.
 func (s *Store) EnsureSchema(ctx context.Context, tenantID string) (string, error) {
 	var schema string
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
@@ -103,7 +111,7 @@ func (s *Store) EnsureSchema(ctx context.Context, tenantID string) (string, erro
 		err := tx.QueryRow(ctx, `SELECT schema_name, status FROM tenant_schemas WHERE tenant_id = $1`, tenantID).Scan(&schema, &status)
 		switch {
 		case err == nil && status == "active":
-			return nil
+			return ensureTenantTables(ctx, tx, schema)
 		case err == nil:
 			return domain.ErrSchemaNotActive
 		case !errors.Is(err, pgx.ErrNoRows):
@@ -112,7 +120,7 @@ func (s *Store) EnsureSchema(ctx context.Context, tenantID string) (string, erro
 		if err := tx.QueryRow(ctx, `SELECT provision_tenant_schema($1)`, tenantID).Scan(&schema); err != nil {
 			return fmt.Errorf("provision schema: %w", err)
 		}
-		return nil
+		return ensureTenantTables(ctx, tx, schema)
 	})
 	if err != nil {
 		return "", err

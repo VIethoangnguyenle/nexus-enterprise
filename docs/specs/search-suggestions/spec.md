@@ -131,3 +131,6 @@ Tài sản's "Bạn đang giữ", Phê duyệt's "Đề nghị của bạn") SHA
 - A phone's search layer cannot focus the box inside the tap that opens it (the layer mounts after the tap), so some
   phones raise the keyboard a moment late.
 - Closing the phone layer is instant for Danh bạ, Tài liệu, Tài sản and Phê duyệt; only Chat's runs its opening backwards.
+
+## Planned change (mobile-ux-overhaul, 2026-10-19)
+Phase 08: the search box of every module becomes one search with scopes (module, Tất cả, other modules), per-module filters and actions. See `unified-search`. Plan: `plans/261018-1742-mobile-ux-overhaul`.

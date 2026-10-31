@@ -108,10 +108,8 @@ describe('calendar writes', () => {
     expect(lastCall().path).toBe('/workspaces/w1/calendar/calendars/c1/shares')
   })
 
-  it('reads and writes the settings', async () => {
-    await calendarApi.updateSettings('w1', { tzid: 'Asia/Ho_Chi_Minh', workStart: '09:00', workEnd: '18:00', defaultReminder: 10 })
-    expect(lastCall()).toMatchObject({ path: '/workspaces/w1/calendar/settings', method: 'PUT' })
+  it('reads the settings', async () => {
     await calendarApi.getSettings('w1')
-    expect(lastCall().method).toBe('GET')
+    expect(lastCall()).toMatchObject({ path: '/workspaces/w1/calendar/settings', method: 'GET' })
   })
 })

@@ -50,6 +50,45 @@ describe('SpaceView on a phone', () => {
     renderWithClient(<SpaceView channelId={CH.doisoat} />)
     expect(await screen.findByRole('button', { name: 'Tìm trong nhóm' })).toHaveAttribute('data-module-search')
   })
+
+  it('hides Search and Info on phone, keeps Gọi and Thread (phase 06, mockup §5)', async () => {
+    renderWithClient(<SpaceView channelId={CH.doisoat} />)
+    await screen.findByRole('heading', { name: 'Đối soát giao dịch' })
+    // Search button has max-sm:hidden class
+    const searchBtn = screen.getByRole('button', { name: 'Tìm trong nhóm' })
+    expect(searchBtn.className).toContain('max-sm:hidden')
+    // Info button has max-sm:hidden class
+    const infoBtn = screen.getByRole('button', { name: 'Thông tin nhóm' })
+    expect(infoBtn.className).toContain('max-sm:hidden')
+    // Thread button is always visible (no max-sm:hidden) — find the one with aria-pressed
+    const threadBtns = screen.getAllByRole('button', { name: /Thread/ })
+    const threadToggle = threadBtns.find((b) => b.hasAttribute('aria-pressed'))!
+    expect(threadToggle).toBeDefined()
+    expect(threadToggle.className).not.toContain('max-sm:hidden')
+  })
+
+  it('tapping the name on phone opens the settings panel (phase 06)', async () => {
+    // Simulate phone viewport so ConversationTitleMenu calls onOpenInfo
+    // instead of opening the desktop popover menu.
+    const orig = window.matchMedia
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query.includes('max-width'),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }))
+    try {
+      const user = userEvent.setup()
+      renderWithClient(<SpaceView channelId={CH.doisoat} />)
+      const nameBtn = await screen.findByRole('heading', { name: 'Đối soát giao dịch' })
+      const clickable = nameBtn.querySelector('button')!
+      await user.click(clickable)
+      // On phone, SidePanel becomes a dialog (role="dialog") with the settings label
+      expect(await screen.findByRole('dialog', { name: /Cài đặt/ })).toBeInTheDocument()
+    } finally {
+      vi.stubGlobal('matchMedia', orig)
+    }
+  })
 })
 
 describe('SpaceView tabs', () => {

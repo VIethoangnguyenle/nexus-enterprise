@@ -9,7 +9,7 @@
 
 | # | Email | Role | OTP Code |
 |---|-------|------|----------|
-| U1 | `viethoangnguyenle@gmail.com` | Owner (Admin) | `999999` |
+| U1 | `owner@example.com` | Owner (Admin) | `999999` |
 | U2 | `testuser2@nexus.dev` | Manager | `999999` |
 | U3 | `testuser3@nexus.dev` | Employee | `999999` |
 

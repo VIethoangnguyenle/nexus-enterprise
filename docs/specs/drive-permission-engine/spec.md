@@ -87,3 +87,102 @@ Whether the caller may write comes first: a caller without write on the destinat
 #### Scenario: Two moves of one item
 - **WHEN** two requests move the same item at once
 - **THEN** the loser is told 409 `item_changed` and may retry
+
+### Requirement: A copy takes what an upload to its destination takes
+`POST /api/drive/items/{itemId}/copy` (gRPC `CopyItem`) SHALL copy an active file only when the caller has `read`
+on the source and `write` on the destination, in that order, then room in the quota; the copy is charged to the
+quota when it is published, exactly like a confirmed upload. The destination is a folder of the **same workspace**
+as the source (any of its drives, e.g. a channel drive); an empty `target_folder_id` or a drive root means the top
+level of that drive (no parent, the drive's own context). Where the copy lands — workspace, drive, parent, OA — is
+taken from the destination and never from the request. A name already used in the destination becomes
+"Bản sao của <name>", then "Bản sao của <name> (2)" and on; a name taken by a concurrent request at publish time is
+409. A copy that fails after its object was stored removes the object and the row, even when the client has hung up.
+
+#### Scenario: No write on the destination
+- **WHEN** a member who may read the file but not write the destination folder asks to copy it there
+- **THEN** the answer is 403 and nothing is stored or charged
+
+#### Scenario: Destination in another workspace
+- **WHEN** the destination folder belongs to another workspace, whatever rights the caller holds
+- **THEN** the answer is 400 and nothing lands in that folder
+
+#### Scenario: Request names another workspace
+- **WHEN** a gRPC caller sets `dest_workspace_id` or `dest_drive_context` to something else
+- **THEN** they are ignored and the copy belongs to the destination folder's workspace and drive
+
+#### Scenario: Copy over the quota
+- **WHEN** the copy would take the workspace past its quota
+- **THEN** the answer is 413 `quota_exceeded`, after the rights checks, and nothing is stored
+
+#### Scenario: Copy into the same folder
+- **WHEN** a file is copied into the folder that already holds it
+- **THEN** the copy is called "Bản sao của <name>", and a second copy "Bản sao của <name> (2)"
+
+#### Scenario: Gone or wrong destination and source
+- **WHEN** the destination is trashed or missing, or the source is trashed or still pending
+- **THEN** the answer is 404; a destination that is a file is 400
+
+### Requirement: A star is personal and grants nothing
+`drive_stars` (migration `070_drive_stars.sql`) holds one row per person per starred item. `POST
+/api/drive/items/:itemId/star` stars an active item for the caller only when the caller is an active member of **the
+item's own workspace** and may read the item now; nothing in the request names the workspace. `DELETE` on the same
+route removes the caller's own star and needs only a signed-in caller, so a star on an item that can no longer be
+read can still be taken off. A star never changes who may open the item.
+
+#### Scenario: Star an unreadable item
+- **WHEN** the policy denies read on the item's folder
+- **THEN** the answer is 403 and nothing is written
+
+#### Scenario: Star an item of another workspace
+- **WHEN** the caller is not a member of the workspace the item belongs to, even if the policy would allow read
+- **THEN** the answer is 403 and nothing is written
+
+#### Scenario: Trashed, pending or missing
+- **WHEN** the item is trashed, still uploading or does not exist
+- **THEN** the answer is 404
+
+#### Scenario: Someone else's star
+- **WHEN** a person unstars an item another person also starred
+- **THEN** only their own star goes
+
+### Requirement: Lists built from stars, shares and recency re-check read
+`GET /api/drive/starred?workspace_id=` and `GET /api/drive/quick-access?workspace_id=` answer 403 to a caller who is
+not an active member of `workspace_id`, return only items of that workspace, and re-check read on every item with one
+batch check each time they are read. A failed check fails the request (fail closed, no partial list).
+
+Truy cập nhanh returns up to six active files, each with one reason: **shared** (someone else shared it with the
+caller or a group of theirs; the sharer is named, never sent as an id), **starred**, or **yours** (the caller put it
+there), in that order of strength, newest reason first. Mentions in conversations are not a reason: the drive holds
+no record of them.
+
+#### Scenario: Read taken away
+- **WHEN** an item was starred or shared while readable and read on its folder is later removed
+- **THEN** it is no longer listed, and neither is its reason or who shared it
+
+#### Scenario: Another workspace
+- **WHEN** a starred, shared or owned item belongs to a workspace other than `workspace_id`
+- **THEN** it is never listed, even if readable
+
+#### Scenario: Unrelated file
+- **WHEN** a readable file was neither shared with, starred by nor put there by the caller
+- **THEN** it is not in Truy cập nhanh
+
+#### Scenario: A share I made
+- **WHEN** the caller is the one who created the share
+- **THEN** the file is not offered as "shared"
+
+### Requirement: Multi-select acts only where every item allows it
+On a phone the selection bar enables an action only when every chosen item allows it, from the same batch answers as
+the rows: Chia sẻ needs exactly one item with share; Chuyển and Xoá need write on every item; Tải xuống needs only
+files; Gắn sao is always offered. A refused action stays dimmed and says why when tapped; each item's change is still
+checked by the server.
+
+### Requirement: Stale pending uploads are removed
+An upload row left `pending` more than 24 hours after it was started (the client never confirmed it) is removed by the
+drive service at start and then hourly, at most 500 a pass, together with its stored object. The row is deleted only
+while still pending, so an upload confirmed meanwhile is kept. The object is deleted on behalf of the person who
+started the upload; a pending row was never charged to the quota.
+
+#### Scenario: Stale and fresh
+- **WHEN** one upload has been pending for 25 hours and another for a minute
+- **THEN** the first row and its object are removed, the second is left

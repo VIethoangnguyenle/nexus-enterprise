@@ -67,6 +67,17 @@ describe('auth store logout', () => {
     expect(s.accessToken).toBeNull()
     expect(s.user).toBeNull()
   })
+
+  // A stray 401 on the sign-in screen (nobody signed in) used to empty the cache,
+  // taking the sign-in methods with it: the Google button vanished.
+  it('keeps what the sign-in screen fetched when nobody was signed in', () => {
+    useAuthStore.setState({ accessToken: null, user: null })
+    queryClient.setQueryData(keys.auth.providers(), { google: true, otp: true })
+
+    useAuthStore.getState().logout()
+
+    expect(queryClient.getQueryData(keys.auth.providers())).toEqual({ google: true, otp: true })
+  })
 })
 
 const jwt = (payload: object) => `h.${btoa(JSON.stringify(payload)).replace(/\+/g, '-').replace(/\//g, '_')}.s`

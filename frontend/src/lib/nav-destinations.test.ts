@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
-  chatTabOf, footDestinations, footNavItems, isChatListPath, isPhoneDetailPath, mainDestinations, moduleOfPath, phoneNameOf,
-  searchHintOf, validateChannelsSearch, chatOverlayOf,
+  barModules, chatTabOf, defaultBar, footDestinations, footNavItems, isModuleBarPath, isPhoneDetailPath, mainDestinations,
+  moduleOfPath, phoneNameOf, resolveBar, searchHintOf, validateChannelsSearch, chatOverlayOf,
 } from './nav-destinations'
+import { SETTINGS_SECTIONS } from '../components/settings/settings-nav'
 
 describe('destinations by workspace type', () => {
   it('offers the six main destinations to an organization, Lịch right after Tin nhắn', () => {
@@ -60,6 +61,18 @@ describe('moduleOfPath', () => {
   it('knows nothing of a path outside the modules', () => {
     expect(moduleOfPath('/workspace-select')).toBeUndefined()
   })
+
+  // A module's settings page lives under Cài đặt, so the menu marks Cài đặt, not the module it configures.
+  it.each(SETTINGS_SECTIONS.map((s) => `/settings/${s}`))('%s belongs to Cài đặt', (path) => {
+    expect(moduleOfPath(path)).toBe('settings')
+  })
+
+  it('keeps a module path that is not under Cài đặt with its module', () => {
+    expect(moduleOfPath('/settings/')).toBe('settings')
+    expect(moduleOfPath('/calendar')).toBe('calendar')
+    expect(moduleOfPath('/drive/folder/settings')).toBe('drive')
+    expect(moduleOfPath('/admin/settings')).toBe('admin')
+  })
 })
 
 describe('the search bar hint', () => {
@@ -75,13 +88,18 @@ describe('the search bar hint', () => {
 })
 
 describe('where the phone shell steps aside', () => {
-  it('shows the Chat bottom bar on the conversation list only', () => {
-    expect(isChatListPath('/channels')).toBe(true)
-    expect(isChatListPath('/channels/')).toBe(true)
-    expect(isChatListPath('/channels/c-1')).toBe(false)
-    expect(isChatListPath('/channels/mentions')).toBe(false)
-    expect(isChatListPath('/drive')).toBe(false)
-  })
+  it.each(['/channels', '/channels/', '/drive', '/approval', '/assets', '/contacts', '/calendar', '/documents'])(
+    'shows the bottom bar on the list screen %s',
+    (path) => expect(isModuleBarPath(path)).toBe(true),
+  )
+
+  it.each([
+    '/channels/c-1', '/channels/mentions', '/channels/starred', '/documents/d-1', '/calendar/new', '/settings',
+    '/settings/calendar', '/admin', '/admin/users',
+  ])(
+    'hides the bottom bar on the detail, settings or administration screen %s',
+    (path) => expect(isModuleBarPath(path)).toBe(false),
+  )
 
   it('hides the search bar inside a conversation or a document, not on their lists', () => {
     expect(isPhoneDetailPath('/channels/c-1')).toBe(true)
@@ -92,24 +110,69 @@ describe('where the phone shell steps aside', () => {
   })
 })
 
-describe('the Chat tab in the address', () => {
-  it('opens Trang chủ when the address names no tab', () => {
-    expect(chatTabOf(validateChannelsSearch({}))).toBe('home')
+describe('the Chat chip in the address', () => {
+  it('uses the remembered chip, Tất cả by default, when the address names none', () => {
+    expect(chatTabOf(validateChannelsSearch({}))).toBe('all')
+    expect(chatTabOf(validateChannelsSearch({}), 'sections')).toBe('sections')
   })
 
-  it.each(['direct', 'sections', 'more'] as const)('keeps %s', (tab) => {
-    expect(chatTabOf(validateChannelsSearch({ tab }))).toBe(tab)
+  it.each(['all', 'sections', 'unread', 'mentions', 'direct', 'spaces'] as const)('keeps %s and lets it win over the remembered chip', (tab) => {
+    expect(chatTabOf(validateChannelsSearch({ tab }), 'direct')).toBe(tab)
   })
 
-  it('falls back to Trang chủ for a value it does not know, without keeping it', () => {
+  it('reads an old link to Thêm as Được nhắc', () => {
+    expect(validateChannelsSearch({ tab: 'more' }).tab).toBe('mentions')
+    expect(chatTabOf({ tab: 'more' })).toBe('mentions')
+  })
+
+  it('falls back to the remembered chip for a value it does not know, without keeping it', () => {
     const search = validateChannelsSearch({ tab: 'nope' })
     expect(search.tab).toBeUndefined()
-    expect(chatTabOf(search)).toBe('home')
-    expect(chatTabOf({ tab: 42 })).toBe('home')
+    expect(chatTabOf(search, 'unread')).toBe('unread')
+    expect(chatTabOf({ tab: 42 })).toBe('all')
   })
 
-  it('does not write the default into the address, and keeps the workspace', () => {
+  it('does not write Trang chủ, the name of the old default, into the address, and keeps the workspace', () => {
     expect(validateChannelsSearch({ tab: 'home', ws: 'w1' })).toEqual({ ws: 'w1' })
+  })
+})
+
+describe('the bottom bar', () => {
+  it('offers every main destination and Thông báo in an organization', () => {
+    expect(barModules(false).map((m) => m.id)).toEqual(['chat', 'calendar', 'drive', 'approval', 'assets', 'contacts', 'notifications'])
+  })
+
+  it('never offers Phê duyệt or Tài sản in a personal workspace', () => {
+    expect(barModules(true).map((m) => m.id)).toEqual(['chat', 'calendar', 'drive', 'contacts', 'notifications'])
+  })
+
+  it('never offers Quản trị anywhere', () => {
+    for (const personal of [false, true]) expect(barModules(personal).map((m) => m.id)).not.toContain('admin')
+  })
+
+  it('defaults to Chat · Lịch · Tài liệu · Phê duyệt, with Danh bạ for Phê duyệt in a personal workspace', () => {
+    expect(defaultBar(false)).toEqual(['chat', 'calendar', 'drive', 'approval'])
+    expect(defaultBar(true)).toEqual(['chat', 'calendar', 'drive', 'contacts'])
+  })
+
+  it('keeps the stored choice, in its order, when it is four different modules the workspace offers', () => {
+    expect(resolveBar(['assets', 'chat', 'notifications', 'drive'], false)).toEqual(['assets', 'chat', 'notifications', 'drive'])
+  })
+
+  it.each([
+    ['unset', undefined],
+    ['not a list', 'chat'],
+    ['three slots', ['chat', 'calendar', 'drive']],
+    ['five slots', ['chat', 'calendar', 'drive', 'approval', 'assets']],
+    ['a repeat', ['chat', 'chat', 'drive', 'approval']],
+    ['an unknown module', ['chat', 'calendar', 'drive', 'admin']],
+  ])('falls back to the defaults for %s', (_name, stored) => {
+    expect(resolveBar(stored, false)).toEqual(defaultBar(false))
+  })
+
+  it('falls back to the defaults when a stored slot is not offered in a personal workspace', () => {
+    expect(resolveBar(['chat', 'calendar', 'drive', 'approval'], true)).toEqual(defaultBar(true))
+    expect(resolveBar(['chat', 'calendar', 'assets', 'contacts'], true)).toEqual(defaultBar(true))
   })
 })
 
@@ -144,7 +207,7 @@ describe('the full-screen layers of the Chat list in the address', () => {
   })
 
   it('keeps the tab and the workspace beside a layer', () => {
-    expect(validateChannelsSearch({ tab: 'more', ws: 'w1', threads: 'followed' }))
-      .toEqual({ tab: 'more', ws: 'w1', threads: 'followed' })
+    expect(validateChannelsSearch({ tab: 'direct', ws: 'w1', threads: 'followed' }))
+      .toEqual({ tab: 'direct', ws: 'w1', threads: 'followed' })
   })
 })

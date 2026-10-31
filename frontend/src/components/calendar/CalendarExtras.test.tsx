@@ -5,14 +5,17 @@ import {
   RouterProvider, createMemoryHistory, createRootRoute, createRoute, createRouter,
 } from '@tanstack/react-router'
 import { renderWithClient, resetClient } from '../../test/render'
+import { touchSwipe } from '../../test/gesture-events'
 import {
-  CAL, E, NOW, OCCURRENCES, PEOPLE, UUID_RE, calendarFixtureApi, calls, enableGroupCalendar, resetFixtures,
+  CAL, E, NOW, OCCURRENCES, PEOPLE, UUID_RE, WS_ID, calendarFixtureApi, calls, enableGroupCalendar, resetFixtures,
 } from '../../test/calendar-fixtures'
 import { CH } from '../../test/chat-fixtures'
 import { validateCalendarSearch, validateEditEventSearch, validateNewEventSearch } from '../../lib/calendar-search'
 import { apiFetch } from '../../api/client'
 import type { CalendarSummary } from '../../api/calendar'
 import { useToastStore } from '../primitives'
+import { CreateActionFab } from '../patterns/ModuleBar'
+import { clearCreateActions } from '../../hooks/useModuleCreateAction'
 import { CalendarScreen } from './CalendarScreen'
 import { EventDetailBody } from './EventPopover'
 
@@ -25,7 +28,7 @@ const api = vi.mocked(apiFetch)
 configure({ asyncUtilTimeout: 4000 })
 vi.setConfig({ testTimeout: 15_000 })
 
-async function renderCalendar(url = '/calendar', ui = <CalendarScreen />) {
+async function renderCalendar(url = '/calendar', ui = <><CalendarScreen /><CreateActionFab /></>) {
   const root = createRootRoute()
   const page = (path: string, component: () => React.ReactNode, validateSearch?: (s: Record<string, unknown>) => object) =>
     createRoute({ getParentRoute: () => root, path, component, ...(validateSearch ? { validateSearch } : {}) })
@@ -36,6 +39,7 @@ async function renderCalendar(url = '/calendar', ui = <CalendarScreen />) {
       page('/calendar/event/$eventId', () => <p>Trình soạn</p>, validateEditEventSearch),
       page('/calls/$callId', () => <p>Cuộc gọi</p>),
       page('/channels/$channelId', () => <p>Cuộc trò chuyện</p>),
+      page('/settings/$section', () => <p>Trang cài đặt</p>),
     ]),
     history: createMemoryHistory({ initialEntries: [url] }),
   })
@@ -73,6 +77,7 @@ afterEach(() => {
   vi.restoreAllMocks()
   resetClient()
   useToastStore.getState().clear()
+  clearCreateActions()
 })
 
 describe('the ways to the editor', () => {
@@ -230,36 +235,15 @@ describe('search', () => {
 })
 
 describe('settings', () => {
-  it('saves the zone, the working hours and the default reminder', async () => {
+  it('the ⚙ opens Cài đặt Lịch, keeping the workspace; Lịch has no settings dialog of its own', async () => {
     const user = setup()
-    await renderCalendar()
+    const router = await renderCalendar(`/calendar?ws=${WS_ID}`)
     await block(/^Báo cáo tuần/)
     await user.click(screen.getByRole('button', { name: 'Cài đặt lịch' }))
-    const dialog = await screen.findByRole('dialog', { name: 'Cài đặt lịch' })
-    await waitFor(() => expect(within(dialog).getByLabelText('Kết thúc làm việc')).toHaveValue('17:00'))
-    const end = within(dialog).getByLabelText('Kết thúc làm việc')
-    await user.clear(end)
-    await user.type(end, '18:30')
-    await user.selectOptions(within(dialog).getByLabelText('Lời nhắc mặc định'), '30')
-    await user.click(within(dialog).getByRole('button', { name: 'Lưu' }))
-    await waitFor(() => expect(writes('PUT').some((c) => c.path.endsWith('/calendar/settings'))).toBe(true))
-    expect(writes('PUT').find((c) => c.path.endsWith('/calendar/settings'))!.body).toEqual({
-      tzid: 'Asia/Ho_Chi_Minh', workStart: '08:00', workEnd: '18:30', defaultReminder: 30,
-    })
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Cài đặt lịch' })).toBeNull())
-  })
-
-  it('refuses working hours that end before they start', async () => {
-    const user = setup()
-    await renderCalendar()
-    await user.click(await screen.findByRole('button', { name: 'Cài đặt lịch' }))
-    const dialog = await screen.findByRole('dialog', { name: 'Cài đặt lịch' })
-    await waitFor(() => expect(within(dialog).getByLabelText('Kết thúc làm việc')).toHaveValue('17:00'))
-    const end = within(dialog).getByLabelText('Kết thúc làm việc')
-    await user.clear(end)
-    await user.type(end, '07:00')
-    expect(within(dialog).getByRole('alert')).toHaveTextContent('Giờ kết thúc phải sau giờ bắt đầu')
-    expect(within(dialog).getByRole('button', { name: 'Lưu' })).toBeDisabled()
+    await waitFor(() => expect(router.state.location.pathname).toBe('/settings/calendar'))
+    expect(router.state.location.search).toEqual({ ws: WS_ID })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(writes('PUT').filter((c) => c.path.endsWith('/calendar/settings'))).toEqual([])
   })
 })
 
@@ -336,7 +320,7 @@ describe('on a phone', () => {
     expect(await screen.findByTestId('agenda')).toBeInTheDocument()
     expect(screen.getByTestId('week-strip')).toBeInTheDocument()
     expect(screen.queryByRole('complementary', { name: 'Lịch' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Tạo sự kiện' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Sự kiện mới' })).toBeInTheDocument()
     expect(within(screen.getByTestId('week-strip')).getByRole('button', { name: 'Chọn ngày 14 tháng 10' })).toHaveAttribute('aria-current', 'date')
   })
 
@@ -384,6 +368,19 @@ describe('on a phone', () => {
     expect(await screen.findByTestId('time-grid')).toBeInTheDocument()
   })
 
+  it('opens Cài đặt Lịch from the first row of the ⋯ sheet', async () => {
+    viewport('phone')
+    const user = setup()
+    const router = await renderCalendar()
+    await screen.findByTestId('agenda')
+    await user.click(screen.getByRole('button', { name: 'Kiểu xem' }))
+    const sheet = await screen.findByRole('dialog', { name: 'Kiểu xem' })
+    const first = within(sheet).getAllByRole('button')[0]!
+    expect(first).toHaveTextContent('Cài đặt Lịch')
+    await user.click(first)
+    await waitFor(() => expect(router.state.location.pathname).toBe('/settings/calendar'))
+  })
+
   it('folds the month open from the month name', async () => {
     viewport('phone')
     const user = setup()
@@ -391,6 +388,33 @@ describe('on a phone', () => {
     await screen.findByTestId('agenda')
     await user.click(screen.getByRole('button', { name: /^Tháng 10 năm 2026/ }))
     expect(await screen.findByTestId('month-fold')).toBeInTheDocument()
+  })
+
+  it('a swipe across the week strip changes the week (DESIGN.md §6 "Vuốt")', async () => {
+    viewport('phone')
+    const router = await renderCalendar()
+    await screen.findByTestId('agenda')
+    touchSwipe(screen.getByTestId('week-strip'), [{ x: 300, t: 0 }, { x: 285, t: 16 }, { x: 180, t: 400 }])
+    await waitFor(() => expect((router.state.location.search as { date?: string }).date).toBe('2026-10-21'))
+  })
+
+  it('a swipe across the month grid changes the month; a vertical one does not', async () => {
+    viewport('phone')
+    const router = await renderCalendar('/calendar?mode=month')
+    const grid = await screen.findByTestId('month-grid')
+    touchSwipe(grid, [{ x: 200, y: 100, t: 0 }, { x: 202, y: 120, t: 16 }, { x: 100, y: 300, t: 400 }])
+    touchSwipe(grid, [{ x: 100, t: 1000 }, { x: 115, t: 1016 }, { x: 260, t: 1400 }])
+    await waitFor(() => expect((router.state.location.search as { date?: string }).date).toMatch(/^2026-09-/))
+  })
+
+  it('a swipe across the folded month changes the month', async () => {
+    viewport('phone')
+    const user = setup()
+    const router = await renderCalendar()
+    await screen.findByTestId('agenda')
+    await user.click(screen.getByRole('button', { name: /^Tháng 10 năm 2026/ }))
+    touchSwipe(await screen.findByTestId('month-fold'), [{ x: 300, t: 0 }, { x: 285, t: 16 }, { x: 180, t: 400 }])
+    await waitFor(() => expect((router.state.location.search as { date?: string }).date).toMatch(/^2026-11-/))
   })
 
   it('opens the editor from the floating + and the phone search from the bar pill', async () => {
@@ -402,7 +426,7 @@ describe('on a phone', () => {
     pill.click()
     expect(await screen.findByRole('searchbox', { name: 'Tìm sự kiện' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Đóng tìm kiếm' }))
-    await user.click(screen.getByRole('button', { name: 'Tạo sự kiện' }))
+    await user.click(screen.getByRole('button', { name: 'Sự kiện mới' }))
     await waitFor(() => expect(router.state.location.pathname).toBe('/calendar/new'))
   })
 })

@@ -1,10 +1,11 @@
 import { useId, useState, type DragEvent, type ReactNode } from 'react'
 import { Link, useParams, useRouterState } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
-import { AtSign, ChevronDown, Ellipsis, House, Plus, Star } from 'lucide-react'
+import { AtSign, ChevronDown, Ellipsis, House, Plus, Settings, Star } from 'lucide-react'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useChatNavigation } from '../../hooks/useChatNavigation'
 import { usePeople } from '../../hooks/usePeople'
+import { useBottomBarLayout } from '../../hooks/usePhone'
 import { useMentionsUnreadCount } from '../../hooks/useShortcuts'
 import { useWebSocketStore } from '../../stores/websocket.store'
 import { collapseKey, useNavCollapseStore } from '../../stores/nav-collapse.store'
@@ -12,6 +13,7 @@ import { useMotionPresets } from '../../lib/motion'
 import { formatCount } from '../../lib/format'
 import { totalUnread, type Conversation } from '../../lib/conversations'
 import { Button, IconButton, Pressable } from '../primitives'
+import { useSettingsNav } from '../settings/settings-nav'
 import { ChatSearchBox } from './ChatSearchBox'
 import { NewChatMenu } from './NewChatMenu'
 import { ConversationIcon } from './ConversationIcon'
@@ -41,6 +43,8 @@ export function ChatNavigator() {
   const onHome = /^\/channels\/?$/.test(pathname)
   const mentionsUnread = useMentionsUnreadCount(workspaceId).data ?? 0
   const m = useMotionPresets()
+  const phone = useBottomBarLayout()
+  const settingsNav = useSettingsNav()
 
   const [dialog, setDialog] = useState<'space' | 'dm' | null>(null)
   const [dragging, setDragging] = useState<Conversation | null>(null)
@@ -73,12 +77,18 @@ export function ChatNavigator() {
       <div className="px-3 pt-3 pb-2">
         <ChatSearchBox conversations={nav.conversations} people={people} />
       </div>
-      <div className="px-3 pb-2">
+      <div className="flex items-center justify-between gap-2 px-3 pb-2">
         <NewChatMenu
           onNewSection={(el) => overlays.openCreate(el)}
           className="press inline-flex items-center gap-2.5 h-11 pl-3.5 pr-4.5 rounded-xl bg-accent-wash
             text-section text-ink hover:bg-hover"
         />
+        {/* Chat has no page header on a desktop, so its way into Cài đặt sits beside "Mới"; a phone has the ⋯. */}
+        {!phone && (
+          <IconButton size="lg" shape="round" aria-label="Cài đặt Chat" title="Cài đặt Chat" onClick={() => settingsNav.open('chat')}>
+            <Settings size={20} strokeWidth={1.75} />
+          </IconButton>
+        )}
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-4">

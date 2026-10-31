@@ -94,3 +94,44 @@ read. A direct message is only on (`main`) or `off`: `all` on a DM is 400. Web p
 #### Scenario: Not a reader
 - **WHEN** someone who cannot read a conversation asks for or sets its level
 - **THEN** the answer is 403 and nothing is stored
+
+### Requirement: Approval notifications reach the people an event names
+The messaging service's Kafka consumer (`events/consumer.go`) SHALL handle `approval.events` records and deliver
+notifications to the people an approval event concerns:
+
+**Pending notification (`approval_pending`):** when a request is created (`action = "created"`) or an approval moves it
+to the next step (`action = "approved"`), each approver in `AssigneeNodeIDs` whose node ID is not the actor's and is not
+in `PendingNotifyOff` SHALL receive an `approval_pending` notification (title "Approval request: \<template_name\>",
+body "An approval request is waiting for you", entity_type `approval`, entity_id the request ID). Duplicates within one
+event are suppressed. An approver who turned "đề nghị chờ bạn" off (listed in `pending_notify_off`) is not notified.
+The approval service sets `step_advanced` on every approved event: false when the approval left the request on the step
+the actor decided (a co-approver of a step that needs several approvals). Such an event SHALL notify no approver: those
+still pending were told when the step began. An event without the field (an older producer) notifies as before.
+
+**Result notification (`approval_approved` / `approval_rejected`):** the requester (`CreatedBy`) SHALL be notified when
+someone else approves or rejects their request, unless the requester's `notify_result` switch is off. When `NotifyResult`
+is absent (an older producer) the default is on. A rejection MAY include the actor's comment appended to the body.
+
+**Node ID addressing:** `AssigneeNodeIDs`, `ActorNodeID` and `CreatedBy` are NGAC user node IDs. The `notify` helper
+stores notifications keyed by these IDs (resolution to user IDs is the notification service's responsibility when it
+delivers). The WebSocket broadcast (`ApprovalNotice`) lists `RecipientNodeIDs` — the union of actor, requester and
+assignees, deduplicated — so real-time cache invalidation reaches only the people the event names.
+
+#### Scenario: An approval reaches the next step
+- **WHEN** an approver approves a request with two assignees on the next step, one of whom turned pending notifications off
+- **THEN** one `approval_pending` notification is created for the assignee who did not turn it off; none for the one who
+  did; and the requester gets an `approval_approved` notification (unless `notify_result` is off)
+
+#### Scenario: A co-approver approves a step that needs everyone
+- **WHEN** one of three approvers of a step that needs all three approves
+- **THEN** the event carries `step_advanced: false` and the other two get no second `approval_pending`
+
+#### Scenario: Requester opts out of result notifications
+- **WHEN** a request whose `notify_result` is false is approved
+- **THEN** no `approval_approved` notification is created for the requester; the next step's approvers still get
+  `approval_pending`
+
+### Requirement: Push preferences gate message notifications
+Every push path reads the recipient's push switch and `pause_until` (a pause blocks every push, mentions included), and
+quiet hours let a mention through for message pushes only (`silenced` in `push.go`). See `user-settings` and
+`web-push/spec.md`.

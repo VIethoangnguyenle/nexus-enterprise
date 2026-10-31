@@ -251,14 +251,9 @@ func dmPaths() []dmPath {
 		{"send a message", func(t *testing.T, w *dmWorld, dm *pb.Channel) func(int) error {
 			return func(int) error { _, err := w.send(w.creator, dm.Id, "hello"); return err }
 		}},
-		{"send a message typed as a system line", func(t *testing.T, w *dmWorld, dm *pb.Channel) func(int) error {
-			return func(int) error {
-				_, err := w.svc.SendMessage(w.as(w.creator), domain.SendMessageInput{
-					ChannelID: dm.Id, SenderID: w.creator.id, SenderNodeID: w.creator.node, Content: "hello", MessageType: "system",
-				})
-				return err
-			}
-		}},
+		// "send a message typed as a system line" is no longer a valid write path:
+		// a person's system-type message is refused whatever the relationship
+		// (TestSendMessage_SystemMessageTypeFromUserDenied).
 		{"create a poll", func(t *testing.T, w *dmWorld, dm *pb.Channel) func(int) error {
 			return func(int) error {
 				_, err := w.svc.CreatePoll(w.as(w.creator), domain.CreatePollInput{

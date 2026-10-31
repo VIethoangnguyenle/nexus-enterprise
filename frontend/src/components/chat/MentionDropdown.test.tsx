@@ -28,3 +28,29 @@ describe('MentionDropdown: a member of the group the directory does not list', (
     expect(screen.queryByText('Nguyễn Hữu Thành')).toBeNull()
   })
 })
+
+describe('MentionDropdown: @Tất cả', () => {
+  it('is offered first where the caller allows it, and picked with Enter', async () => {
+    const onSelectAll = vi.fn()
+    render(<MentionDropdown members={members} people={people} query="" onSelect={() => {}} onSelectAll={onSelectAll} onClose={() => {}} />)
+    const options = screen.getAllByRole('option')
+    expect(options[0]).toHaveTextContent('@Tất cả')
+    expect(options[0]).toHaveAttribute('aria-selected', 'true')
+    await userEvent.keyboard('{Enter}')
+    expect(onSelectAll).toHaveBeenCalledTimes(1)
+  })
+
+  it('answers to "tat" and "all" as typed', () => {
+    const { rerender } = render(<MentionDropdown members={members} query="tat" onSelect={() => {}} onSelectAll={() => {}} onClose={() => {}} />)
+    expect(screen.getByText('@Tất cả')).toBeInTheDocument()
+    rerender(<MentionDropdown members={members} query="all" onSelect={() => {}} onSelectAll={() => {}} onClose={() => {}} />)
+    expect(screen.getByText('@Tất cả')).toBeInTheDocument()
+    rerender(<MentionDropdown members={members} query="thanh" onSelect={() => {}} onSelectAll={() => {}} onClose={() => {}} />)
+    expect(screen.queryByText('@Tất cả')).toBeNull()
+  })
+
+  it('is not offered where the caller does not allow it', () => {
+    render(<MentionDropdown members={members} people={people} query="" onSelect={() => {}} onClose={() => {}} />)
+    expect(screen.queryByText('@Tất cả')).toBeNull()
+  })
+})

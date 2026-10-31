@@ -198,7 +198,7 @@ func main() {
 	pb.RegisterNotificationServiceServer(srv, mgrpc.NewNotificationServer(notifications))
 
 	// Start Kafka consumer for asset events → notifications
-	consumer, err := events.NewConsumer(strings.Split(kafkaBrokers, ","), notifications, hub)
+	consumer, err := events.NewConsumer(strings.Split(kafkaBrokers, ","), notifications, hub, msgStore)
 	if err != nil {
 		slog.Warn("kafka consumer unavailable, notifications from asset events disabled", "error", err)
 	}

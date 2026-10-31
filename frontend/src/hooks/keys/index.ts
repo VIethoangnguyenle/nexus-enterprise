@@ -12,6 +12,7 @@ import { messagingKeys } from './messaging'
 import { notificationKeys } from './notifications'
 import { notificationLevelKeys } from './notification-levels'
 import { permissionKeys } from './permissions'
+import { settingsKeys } from './settings'
 import { shortcutKeys } from './shortcuts'
 import { workspaceKeys } from './workspaces'
 
@@ -38,6 +39,7 @@ export const keys = {
   notifications: notificationKeys,
   notificationLevels: notificationLevelKeys,
   permissions: permissionKeys,
+  settings: settingsKeys,
   shortcuts: shortcutKeys,
   workspaces: workspaceKeys,
 }

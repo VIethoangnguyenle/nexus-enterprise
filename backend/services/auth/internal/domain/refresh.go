@@ -62,6 +62,9 @@ type RefreshIdentity struct {
 	// rotation, and is what a user-wide revocation compares against. Records
 	// written before this field existed read as 0 — older than any cutoff.
 	StartedAt int64 `json:"started_at,omitempty"`
+	// Device is the coarse "browser · system" label of the sign-in (DeviceLabel),
+	// shown in the person's list of sessions. Empty when unknown.
+	Device string `json:"device,omitempty"`
 }
 
 // refreshRecord is what a refresh token resolves to in Redis.
@@ -155,6 +158,12 @@ func (s *RefreshStore) mintAs(ctx context.Context, token string, id RefreshIdent
 	pipe.Set(ctx, refreshKey(token), payload, s.ttl)
 	pipe.SAdd(ctx, sessionKey(id.SessionID), token)
 	pipe.Expire(ctx, sessionKey(id.SessionID), s.ttl)
+	// Index the session under its user for ListUserSessions, in the same
+	// transaction, and keep the index alive as long as its newest token.
+	if id.UserID != "" {
+		pipe.ZAdd(ctx, userSessionsKey(id.UserID), redis.Z{Score: float64(id.StartedAt), Member: id.SessionID})
+		pipe.Expire(ctx, userSessionsKey(id.UserID), s.ttl)
+	}
 	if _, err := pipe.Exec(ctx); err != nil {
 		return fmt.Errorf("%w: store refresh token: %v", ErrUnavailable, err)
 	}
@@ -489,11 +498,24 @@ func (s *RefreshStore) RevokeSession(ctx context.Context, sessionID string) erro
 		return fmt.Errorf("read session family: %w", err)
 	}
 
+	// Discover the user behind this session so the session can be removed from
+	// the user_sessions index. Any token in the family carries the identity.
+	var userID string
+	for _, t := range tokens {
+		if rec, err := s.read(ctx, t); err == nil {
+			userID = rec.UserID
+			break
+		}
+	}
+
 	pipe := s.rdb.TxPipeline()
 	for _, t := range tokens {
 		pipe.Del(ctx, refreshKey(t))
 	}
 	pipe.Del(ctx, sessionKey(sessionID))
+	if userID != "" {
+		pipe.ZRem(ctx, userSessionsKey(userID), sessionID)
+	}
 	if _, err := pipe.Exec(ctx); err != nil && !errors.Is(err, redis.Nil) {
 		return fmt.Errorf("revoke session: %w", err)
 	}
@@ -531,6 +553,8 @@ func (s *RefreshStore) RevokeAllForUserExcept(ctx context.Context, userID, keepS
 	} else {
 		pipe.Del(ctx, userKeepKey(userID))
 	}
+	// The session index is left alone: ListUserSessions applies the cutoff, so
+	// the spared session stays listed and the others drop out.
 	if _, err := pipe.Exec(ctx); err != nil {
 		return fmt.Errorf("revoke user sessions: %w", err)
 	}

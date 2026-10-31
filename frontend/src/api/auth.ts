@@ -55,6 +55,8 @@ export interface MeResponse {
     avatar_url: string
     email_verified: boolean
     needs_profile: boolean
+    /** The language the person chose for the account (every workspace); "" or absent is not chosen. */
+    language?: AccountLanguage | ''
   }
   /**
    * The workspace asked about (the token's, or `?workspace=`), present only for
@@ -73,7 +75,12 @@ export interface ProfilePatch {
   display_name?: string
   title?: string
   location?: string
+  /** "" clears the choice. */
+  language?: AccountLanguage | ''
 }
+
+/** The languages an account can choose. */
+export type AccountLanguage = 'vi' | 'en'
 
 /** A workspace the signed-in person belongs to, with their own role and the headcount. */
 export interface MyWorkspace {
@@ -94,6 +101,18 @@ export interface MyWorkspace {
  */
 export function sessionUser(u: { id: string; username: string; ngac_node_id?: string }) {
   return { id: u.id, username: u.username, ngac_node_id: u.ngac_node_id }
+}
+
+/** One of the caller's signed-in sessions. */
+export interface Session {
+  /** Opaque handle for ending the session; never shown. */
+  session_id: string
+  /** "Safari · iPhone"; empty when the browser was not recognised. */
+  device: string
+  /** RFC 3339. */
+  started_at: string
+  /** The session this request came from. */
+  current: boolean
 }
 
 export const authApi = {
@@ -136,6 +155,12 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ tenant_id: tenantId }),
     }),
+
+  /** The caller's own active sessions. */
+  listSessions: () => apiFetch<{ sessions: Session[] }>('/auth/sessions'),
+  /** Ends another of the caller's sessions. Someone else's, or the one in use, is refused. */
+  revokeSession: (sessionId: string) =>
+    apiFetch<{ status: string }>(`/auth/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' }),
 }
 
 /** Where a sign-in QR code stands, as the computer that shows it sees it. */

@@ -5,6 +5,7 @@ import type { Occurrence } from '../../api/calendar'
 import { colorStyle } from '../../lib/calendar-color'
 import { eventAriaLabel, formatClock, formatDayShort, responseWord, spanOf, toneOf } from '../../lib/calendar-format'
 import { Button, Heading, Pressable } from '../primitives'
+import { PullToRefresh } from '../patterns/PullToRefresh'
 import type { BlockRealtime } from './EventBlock'
 import { personStyle } from '../../lib/person-hue'
 
@@ -22,6 +23,8 @@ interface AgendaListProps {
   onOpen: (o: Occurrence, el: HTMLElement) => void
   /** Absent for a fixed list, such as search results. */
   onLoadMore?: () => void
+  /** Pull down from the top to reload (the phone and tablet). */
+  onRefresh?: () => Promise<unknown>
 }
 
 /** The red line between the events that are over and those to come, in today's list. */
@@ -39,7 +42,7 @@ function NowRow() {
  * title, and on the right the video and the unanswered state. A new month gets its heading.
  */
 export function AgendaList({
-  from, days, occurrences, now, selectedKey, realtime, keyOf, colorOf, onOpen, onLoadMore,
+  from, days, occurrences, now, selectedKey, realtime, keyOf, colorOf, onOpen, onLoadMore, onRefresh,
 }: AgendaListProps) {
   const groups = useMemo(() => {
     const rows = occurrences.map((o) => ({ o, key: keyOf(o), ...spanOf(o) })).sort((a, b) => a.start.getTime() - b.start.getTime())
@@ -54,7 +57,7 @@ export function AgendaList({
   }, [occurrences, from, days, keyOf])
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-5" data-testid="agenda">
+    <PullToRefresh enabled={!!onRefresh} onRefresh={onRefresh ?? noRefresh} className="flex-1 min-h-0 overflow-y-auto px-5 pb-5" data-testid="agenda">
       {groups.map(({ day, rows }, gi) => {
         const today = isSameDay(day, now)
         const newMonth = gi === 0 || !isSameMonth(groups[gi - 1]!.day, day)
@@ -125,6 +128,8 @@ export function AgendaList({
           <Button variant="soft" size="sm" className="rounded-full" onClick={onLoadMore}>Tải thêm 30 ngày</Button>
         </div>
       )}
-    </div>
+    </PullToRefresh>
   )
 }
+
+const noRefresh = () => Promise.resolve()

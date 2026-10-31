@@ -70,7 +70,8 @@ func scanChannel(row pgx.Row) (*Channel, error) {
 	ch := &Channel{}
 	var ca time.Time
 	err := row.Scan(&ch.ID, &ch.Name, &ch.ChannelType, &ch.WorkspaceID,
-		&ch.NGACOaID, &ch.NGACUaID, &ch.CreatedBy, &ca, &ch.MemberCount, &ch.AvatarURL)
+		&ch.NGACOaID, &ch.NGACUaID, &ch.CreatedBy, &ca, &ch.MemberCount, &ch.AvatarURL,
+		&ch.PostPolicy, &ch.InvitePolicy, &ch.MentionAllPolicy)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +82,8 @@ func scanChannel(row pgx.Row) (*Channel, error) {
 const channelCols = `c.id, c.name, c.channel_type, c.workspace_id,
 	COALESCE(c.ngac_oa_id,''), COALESCE(c.ngac_ua_id,''), COALESCE(c.created_by,''), c.created_at,
 	COALESCE((SELECT COUNT(*)::int FROM channel_members cm WHERE cm.channel_id = c.id), 0),
-	c.avatar_url`
+	c.avatar_url,
+	COALESCE(c.post_policy, 'everyone'), COALESCE(c.invite_policy, 'everyone'), COALESCE(c.mention_all_policy, 'everyone')`
 
 // GetChannel retrieves a single channel by ID.
 func (s *Store) GetChannel(ctx context.Context, id string) (*Channel, error) {
@@ -195,7 +197,8 @@ func collectChannels(rows pgx.Rows) ([]*Channel, error) {
 		ch := &Channel{}
 		var ca time.Time
 		if err := rows.Scan(&ch.ID, &ch.Name, &ch.ChannelType, &ch.WorkspaceID,
-			&ch.NGACOaID, &ch.NGACUaID, &ch.CreatedBy, &ca, &ch.MemberCount, &ch.AvatarURL); err != nil {
+			&ch.NGACOaID, &ch.NGACUaID, &ch.CreatedBy, &ca, &ch.MemberCount, &ch.AvatarURL,
+			&ch.PostPolicy, &ch.InvitePolicy, &ch.MentionAllPolicy); err != nil {
 			return nil, err
 		}
 		ch.CreatedAt = ca

@@ -20,10 +20,9 @@ export interface WorkspaceDetails {
   converted_at?: string
 }
 
-export interface ConvertToOrganizationResponse {
-  type: 'organization'
-  converted_by_name?: string
-  converted_at: string
+/** Workspace-level rules that administrators can lock. */
+export interface WorkspaceLocks {
+  group_creation: 'everyone' | 'admins'
 }
 
 export const workspaceApi = {
@@ -34,8 +33,11 @@ export const workspaceApi = {
   details: (id: string) => apiFetch<WorkspaceDetails>(`/workspaces/${id}/details`),
   updateDetails: (id: string, body: { name?: string; description?: string }) =>
     apiFetch<WorkspaceDetails>(`/workspaces/${id}/details`, { method: 'PATCH', body: JSON.stringify(body) }),
-  convertToOrganization: (id: string) =>
-    apiFetch<ConvertToOrganizationResponse>(`/workspaces/${id}/convert-to-organization`, { method: 'POST' }),
   listMembers: (wsId: string) =>
     apiFetch<{ members: WorkspaceMember[] }>(`/workspaces/${wsId}/members`),
+  /** The workspace's rules: who may create groups, etc. */
+  getLocks: (wsId: string) => apiFetch<WorkspaceLocks>(`/workspaces/${encodeURIComponent(wsId)}/locks`),
+  /** Only workspace administrators may change a rule. */
+  putLocks: (wsId: string, body: WorkspaceLocks) =>
+    apiFetch<WorkspaceLocks>(`/workspaces/${encodeURIComponent(wsId)}/locks`, { method: 'PUT', body: JSON.stringify(body) }),
 }

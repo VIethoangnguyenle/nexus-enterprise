@@ -1,8 +1,12 @@
-import { ArrowLeft, Building2, ChevronRight, Copy, Mail, MapPin, MessageSquare, Pencil, Phone, Shield, X } from 'lucide-react'
-import { useEffect, useRef, type ReactNode } from 'react'
+import {
+  ArrowLeft, Building2, CalendarDays, CalendarPlus, ChevronRight, Copy, Mail, MapPin, MessageSquare, MoreHorizontal, Pencil, Phone,
+  Shield, UserPlus, X,
+} from 'lucide-react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Contact } from '../../hooks/useContacts'
 import { personStyle } from '../../lib/person-hue'
 import { Avatar, IconButton, Pressable, toast } from '../primitives'
+import { NavSheet, SheetItem } from '../spaces/NavSheet'
 import { OWNERS_LABEL, nameOf, type PathSegment } from './contacts-model'
 
 /**
@@ -33,6 +37,14 @@ interface ContactProfileProps {
   onClose: () => void
   onOpenDept: (id: string) => void
   onOpenRole: (id: string) => void
+  /** A phone's Lịch action: Lịch opens with the person's calendar over the viewer's. */
+  onCalendar?: () => void
+  /** A phone's ⋯ › Thêm vào nhóm…. */
+  onAddToGroup?: () => void
+  /** A phone's ⋯ › Mời vào cuộc họp. */
+  onInviteToMeeting?: () => void
+  /** What the screen adds at the end of the card (a phone's "Đã cùng làm việc"). */
+  children?: ReactNode
 }
 
 const SURFACE: Record<ProfileMode, string> = {
@@ -42,18 +54,29 @@ const MAX_FACES = 4
 
 const ACTION = `press grid justify-items-center content-center gap-1.5 h-16 rounded-lg border-none text-small-ui font-semibold
   no-underline cursor-pointer focus-ring transition-colors duration-quick disabled:opacity-50 disabled:cursor-not-allowed`
+/** A phone's action tile: 16 radius on the raised surface (mockup §12 `.acts4`). */
+const PHONE_ACTION = `press grid justify-items-center content-center gap-1.5 h-16 rounded-2xl border-none text-small-ui font-semibold
+  cursor-pointer focus-ring transition-colors duration-quick disabled:opacity-50 disabled:cursor-not-allowed`
+
+const mailtoOf = (email: string) => `mailto:${encodeURIComponent(email).replace('%40', '@')}`
 
 /**
  * A person's profile card (DESIGN.md "Danh bạ", mockup §1): a cover in their own hue, avatar 64 over
  * it, name, title and status in words; Nhắn tin, Gọi and Gửi email, or Sửa hồ sơ on one's own; then
  * the details that exist and who works with them. A detail that is empty is left out, not shown as a
  * dash; no id, username or node appears.
+ *
+ * On a phone (mockup `mobile-shell.html` §12): a 120 cover with ← and ⋯ over it, avatar 80, the name at 22/700, four
+ * equal actions Nhắn tin · Gọi · Lịch · Email (the address, to copy or mail), the details grouped with their labels
+ * above the values, and ⋯ for Sao chép email · Thêm vào nhóm… · Mời vào cuộc họp.
  */
 export function ContactProfile({
   contact, online, isMe, isPersonal, path, colleagues, mode, focusHeading, busy, onMessage, onCall, onEdit, onClose, onOpenDept, onOpenRole,
+  onCalendar, onAddToGroup, onInviteToMeeting, children,
 }: ContactProfileProps) {
   const name = nameOf(contact)
   const headingRef = useRef<HTMLHeadingElement>(null)
+  const [sheet, setSheet] = useState<'email' | 'more' | null>(null)
   useEffect(() => {
     if (focusHeading) headingRef.current?.focus()
   }, [focusHeading, contact.user_id])
@@ -61,6 +84,7 @@ export function ContactProfile({
   const roles = isPersonal ? [] : contact.roles.filter((r) => r.kind !== 'members')
     .map((r) => ({ id: r.id, name: r.kind === 'owners' ? OWNERS_LABEL : r.name }))
   const faces = colleagues.slice(0, MAX_FACES)
+  const hasMenu = screen && !isMe && (!!onAddToGroup || !!onInviteToMeeting || !!contact.email)
 
   const copyEmail = () => {
     const write = navigator.clipboard?.writeText(contact.email)
@@ -131,20 +155,81 @@ export function ContactProfile({
     })
   }
 
+  // --- the actions ---
+  const phoneActions = screen && !isMe && onCalendar
+  const actions = isMe ? (
+    <div className="p-4">
+      <Pressable onClick={onEdit} className={`${ACTION} w-full bg-hover text-ink hover:bg-line`}>
+        <Pencil size={20} strokeWidth={1.75} aria-hidden="true" />
+        Sửa hồ sơ
+      </Pressable>
+    </div>
+  ) : phoneActions ? (
+    <div role="group" aria-label="Thao tác" className={`grid gap-2 px-4 pt-3.5 pb-2 ${contact.email ? 'grid-cols-4' : 'grid-cols-3'}`}>
+      <Pressable disabled={busy !== null} aria-busy={busy === 'message' || undefined} onClick={onMessage}
+        className={`${PHONE_ACTION} bg-accent text-on-accent hover:bg-accent-hover`}>
+        <MessageSquare size={20} strokeWidth={1.75} aria-hidden="true" />
+        Nhắn tin
+      </Pressable>
+      <Pressable disabled={busy !== null} aria-busy={busy === 'call' || undefined} onClick={onCall}
+        className={`${PHONE_ACTION} bg-raised text-ink hover:bg-hover`}>
+        <Phone size={20} strokeWidth={1.75} aria-hidden="true" />
+        Gọi
+      </Pressable>
+      <Pressable onClick={onCalendar} className={`${PHONE_ACTION} bg-raised text-ink hover:bg-hover`}>
+        <CalendarDays size={20} strokeWidth={1.75} aria-hidden="true" />
+        Lịch
+      </Pressable>
+      {contact.email && (
+        <Pressable onClick={() => setSheet('email')} aria-haspopup="dialog" className={`${PHONE_ACTION} bg-raised text-ink hover:bg-hover`}>
+          <Mail size={20} strokeWidth={1.75} aria-hidden="true" />
+          Email
+        </Pressable>
+      )}
+    </div>
+  ) : (
+    <div className={`grid gap-2 p-4 ${contact.email ? 'grid-cols-3' : 'grid-cols-2'}`}>
+      <Pressable disabled={busy !== null} aria-busy={busy === 'message' || undefined} onClick={onMessage}
+        className={`${ACTION} bg-accent text-on-accent hover:bg-accent-hover`}>
+        <MessageSquare size={20} strokeWidth={1.75} aria-hidden="true" />
+        Nhắn tin
+      </Pressable>
+      <Pressable disabled={busy !== null} aria-busy={busy === 'call' || undefined} onClick={onCall}
+        className={`${ACTION} bg-hover text-ink hover:bg-line`}>
+        <Phone size={20} strokeWidth={1.75} aria-hidden="true" />
+        Gọi
+      </Pressable>
+      {contact.email && (
+        <a href={mailtoOf(contact.email)} className={`${ACTION} bg-hover text-ink hover:bg-line`}>
+          <Mail size={20} strokeWidth={1.75} aria-hidden="true" />
+          Gửi email
+        </a>
+      )}
+    </div>
+  )
+
   return (
     <div className="grid content-start min-w-0" style={{ ['--profile-bg' as string]: SURFACE[mode] }}>
       <div
-        className={`relative ${screen ? 'h-28' : 'h-22'}`}
+        className={`relative ${screen ? 'h-30' : 'h-22'}`}
         style={{
           ...personStyle(contact.user_id),
           background: 'linear-gradient(135deg, var(--pw) 0%, var(--pw) 45%, var(--color-accent-wash) 100%)',
         }}
       >
         {screen ? (
-          <IconButton aria-label="Quay lại" title="Quay lại" shape="round" variant="filled" size="lg"
-            onClick={onClose} className="absolute top-2 left-2 w-11 h-11 !bg-raised !text-ink">
-            <ArrowLeft size={20} strokeWidth={1.75} aria-hidden="true" />
-          </IconButton>
+          <>
+            <IconButton aria-label="Quay lại" title="Quay lại" shape="round" variant="filled" size="lg"
+              onClick={onClose} className="absolute top-2 left-2 w-11 h-11 !bg-overlay !text-ink">
+              <ArrowLeft size={20} strokeWidth={1.75} aria-hidden="true" />
+            </IconButton>
+            {hasMenu && (
+              <IconButton aria-label="Thêm tuỳ chọn" title="Thêm tuỳ chọn" shape="round" variant="filled" size="lg" aria-haspopup="dialog"
+                onClick={() => setSheet('more')} className="absolute top-2 right-2 w-11 h-11 !bg-overlay !text-ink">
+                <MoreHorizontal size={20} strokeWidth={1.75} aria-hidden="true" />
+              </IconButton>
+            )}
+          </>
         ) : (
           <IconButton aria-label="Đóng hồ sơ" title="Đóng" onClick={onClose} className="absolute top-2 right-2 !text-ink">
             <X size={18} strokeWidth={1.75} aria-hidden="true" />
@@ -155,9 +240,15 @@ export function ContactProfile({
       <div className="grid justify-items-start gap-1 px-4">
         <Avatar
           name={name} hueKey={contact.user_id} src={contact.avatar_url || undefined} size={64} online={online}
-          className="-mt-8 ring-4 ring-(--profile-bg)"
+          className={screen ? '!w-20 !h-20 !text-2xl -mt-10 ring-4 ring-(--profile-bg)' : '-mt-8 ring-4 ring-(--profile-bg)'}
         />
-        <h2 ref={headingRef} tabIndex={-1} className={`m-0 mt-1.5 outline-none font-display font-bold text-ink ${screen ? 'text-xl' : 'text-lg'}`}>{name}</h2>
+        <h2
+          ref={headingRef}
+          tabIndex={-1}
+          className={`m-0 mt-1.5 outline-none font-display font-bold text-ink ${screen ? 'text-[1.375rem] leading-tight' : 'text-lg'}`}
+        >
+          {name}
+        </h2>
         {contact.title && <span className="text-ink-muted">{contact.title}</span>}
         <span
           className={`mt-1 inline-flex items-center h-5.5 px-2 rounded-full text-xs font-semibold
@@ -167,36 +258,10 @@ export function ContactProfile({
         </span>
       </div>
 
-      {isMe ? (
-        <div className="p-4">
-          <Pressable onClick={onEdit} className={`${ACTION} w-full bg-hover text-ink hover:bg-line`}>
-            <Pencil size={20} strokeWidth={1.75} aria-hidden="true" />
-            Sửa hồ sơ
-          </Pressable>
-        </div>
-      ) : (
-        <div className={`grid gap-2 p-4 ${contact.email ? 'grid-cols-3' : 'grid-cols-2'}`}>
-          <Pressable disabled={busy !== null} aria-busy={busy === 'message' || undefined} onClick={onMessage}
-            className={`${ACTION} bg-accent text-on-accent hover:bg-accent-hover`}>
-            <MessageSquare size={20} strokeWidth={1.75} aria-hidden="true" />
-            Nhắn tin
-          </Pressable>
-          <Pressable disabled={busy !== null} aria-busy={busy === 'call' || undefined} onClick={onCall}
-            className={`${ACTION} bg-hover text-ink hover:bg-line`}>
-            <Phone size={20} strokeWidth={1.75} aria-hidden="true" />
-            Gọi
-          </Pressable>
-          {contact.email && (
-            <a href={`mailto:${encodeURIComponent(contact.email).replace('%40', '@')}`} className={`${ACTION} bg-hover text-ink hover:bg-line`}>
-              <Mail size={20} strokeWidth={1.75} aria-hidden="true" />
-              Gửi email
-            </a>
-          )}
-        </div>
-      )}
+      {actions}
 
       {rows.length > 0 && (
-        <dl className="m-0 grid px-4 pt-1 pb-2">
+        <dl className={`m-0 grid ${screen ? 'mx-4 mt-1 mb-2 px-4 rounded-2xl bg-raised' : 'px-4 pt-1 pb-2'}`}>
           {rows.map((r) => (
             <div
               key={r.key}
@@ -233,6 +298,39 @@ export function ContactProfile({
             </span>
           </Pressable>
         </section>
+      )}
+
+      {children}
+
+      {sheet === 'email' && contact.email && (
+        <NavSheet label="Email" onClose={() => setSheet(null)}>
+          <p className="m-0 px-3.5 py-2 text-16 text-ink break-all">{contact.email}</p>
+          <SheetItem icon={<Copy size={18} strokeWidth={1.75} />} onClick={() => { setSheet(null); copyEmail() }}>Sao chép email</SheetItem>
+          <a
+            href={mailtoOf(contact.email)}
+            onClick={() => setSheet(null)}
+            className="flex items-center gap-3.5 w-full min-h-13 px-3.5 rounded-lg text-16 font-medium text-ink no-underline
+              hover:bg-hover active:bg-hover transition-colors duration-quick focus-ring"
+          >
+            <Mail size={18} strokeWidth={1.75} aria-hidden="true" className="text-ink-muted" />
+            Gửi email
+          </a>
+        </NavSheet>
+      )}
+      {sheet === 'more' && (
+        <NavSheet label={name} onClose={() => setSheet(null)}>
+          {contact.email && (
+            <SheetItem icon={<Copy size={18} strokeWidth={1.75} />} onClick={() => { setSheet(null); copyEmail() }}>Sao chép email</SheetItem>
+          )}
+          {onAddToGroup && (
+            <SheetItem icon={<UserPlus size={18} strokeWidth={1.75} />} onClick={() => { setSheet(null); onAddToGroup() }}>Thêm vào nhóm…</SheetItem>
+          )}
+          {onInviteToMeeting && (
+            <SheetItem icon={<CalendarPlus size={18} strokeWidth={1.75} />} onClick={() => { setSheet(null); onInviteToMeeting() }}>
+              Mời vào cuộc họp
+            </SheetItem>
+          )}
+        </NavSheet>
       )}
     </div>
   )

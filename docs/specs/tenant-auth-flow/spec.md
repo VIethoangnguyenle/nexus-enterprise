@@ -261,7 +261,7 @@ The system SHALL include `tenant_id` and `session_id` in all JWTs. All downstrea
 - **THEN** the service SHALL accept it and treat `tenant_id` as empty string
 
 ### Requirement: Account state tells the client what is still owed
-`GET /api/me` and the OTP verification response SHALL report `email_verified` (the address has been proved, see "Email addresses are normalised, unique and proved") and `needs_profile` (the person has not yet saved the name colleagues will see). `users.profile_completed_at` (migration 032) is NULL for an account created by any route (code, Google, signup) and is set the first time `PATCH /api/me/profile` saves something; accounts that existed when the column was added are marked done. The sign-in flow asks for the profile exactly when `needs_profile` is true, whichever route the account came in by.
+`GET /api/me` and the OTP verification response SHALL report `email_verified` (the address has been proved, see "Email addresses are normalised, unique and proved") and `needs_profile` (the person has not yet saved the name colleagues will see). `users.profile_completed_at` (migration 032) is NULL for an account created by any route (code, Google, signup) and is set the first time `PATCH /api/me/profile` saves a profile field (name, title or location; the language alone does not count); accounts that existed when the column was added are marked done. The sign-in flow asks for the profile exactly when `needs_profile` is true, whichever route the account came in by.
 
 #### Scenario: New account owes a profile
 - **WHEN** an account has just been created by a code or by Google

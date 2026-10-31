@@ -66,7 +66,7 @@ func (s *Service) pushCallChange(ctx context.Context, c CallChange) {
 // conversation open (where the app rings).
 func (s *Service) wantsCallPush(ctx context.Context, userID, channelID string) bool {
 	prefs, err := s.store.GetPushPreferences(ctx, userID)
-	if err != nil || !prefs.IncomingCall || inQuietHours(prefs, s.pushNow()) {
+	if err != nil || !prefs.IncomingCall || silenced(prefs, s.pushNow(), false) {
 		return false
 	}
 	return s.push.viewing == nil || !s.push.viewing.IsViewing(userID, channelID)
@@ -121,7 +121,7 @@ func (s *Service) InviteToCall(ctx context.Context, callID, userID, userNodeID s
 	s.later(ctx, func(ctx context.Context) {
 		for _, id := range invited {
 			prefs, err := s.store.GetPushPreferences(ctx, id)
-			if err != nil || !prefs.Mention || inQuietHours(prefs, s.pushNow()) {
+			if err != nil || !prefs.Mention || silenced(prefs, s.pushNow(), false) {
 				continue
 			}
 			s.send(ctx, callInvitePush(ch, call.ID, inviter, id))

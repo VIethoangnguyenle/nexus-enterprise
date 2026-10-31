@@ -98,14 +98,24 @@ func TestRealPolicy_RemovingAGroupMember(t *testing.T) {
 	assert.False(t, w.inChannel(w.latecomer, g))
 	assert.False(t, w.cached(w.latecomer, g.Id))
 
-	// Allow: the creator may leave their own group.
+	// Refused: the owner leaves only after handing the group over.
+	err = w.svc.RemoveMember(ctx, g.Id, w.creator.node, w.creator.node)
+	assert.ErrorIs(t, err, domain.ErrAlreadyExists, "the owner must transfer before leaving")
+	assert.True(t, w.inChannel(w.creator, g))
+
+	// Allow: once someone else owns it, the former owner leaves, Managers edge and all.
+	require.NoError(t, w.svc.AddMember(ctx, g.Id, w.creator.node, bystander.node))
+	require.NoError(t, w.svc.TransferOwnership(ctx, g.Id, w.creator.node, bystander.node))
 	require.NoError(t, w.svc.RemoveMember(ctx, g.Id, w.creator.node, w.creator.node))
 	assert.False(t, w.inChannel(w.creator, g))
+	assert.False(t, w.assigned(w.creator.node, w.managersUA(g.Id)), "no Managers edge left behind")
 }
 
-// A group's creator is protected from other members, not from a manage holder:
-// the same fixture, the same target.
-func TestRealPolicy_OnlyAManagerRemovesTheCreator(t *testing.T) {
+// A group's owner is protected from other members (403) and from a manage
+// holder too (409: transfer ownership first), since a group without its owner
+// could never be handed over or disbanded. Once the group is handed over, the
+// workspace owner may remove the former owner: the same fixture, the same target.
+func TestRealPolicy_NobodyRemovesTheGroupsOwner(t *testing.T) {
 	w := newRPWorld(t)
 	g := w.createGroup(w.creator, "rp-remove-creator")
 	require.NoError(t, w.svc.AddMember(w.as(w.creator), g.Id, w.creator.node, w.member.node))
@@ -114,6 +124,13 @@ func TestRealPolicy_OnlyAManagerRemovesTheCreator(t *testing.T) {
 	assert.ErrorIs(t, err, domain.ErrAccessDenied)
 	assert.True(t, w.inChannel(w.creator, g))
 
+	err = w.svc.RemoveMember(w.as(w.owner), g.Id, w.owner.node, w.creator.node)
+	assert.ErrorIs(t, err, domain.ErrAlreadyExists, "a workspace owner is told to have ownership transferred first")
+	assert.True(t, w.inChannel(w.creator, g))
+	assert.True(t, w.cached(w.creator, g.Id))
+	assert.True(t, w.assigned(w.creator.node, w.managersUA(g.Id)), "the owner keeps the Managers edge")
+
+	require.NoError(t, w.svc.TransferOwnership(w.as(w.creator), g.Id, w.creator.node, w.member.node))
 	require.NoError(t, w.svc.RemoveMember(w.as(w.owner), g.Id, w.owner.node, w.creator.node))
 	assert.False(t, w.inChannel(w.creator, g))
 	assert.False(t, w.cached(w.creator, g.Id))

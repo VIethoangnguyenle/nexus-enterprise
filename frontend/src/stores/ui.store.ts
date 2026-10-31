@@ -17,7 +17,7 @@ interface UiState {
   resetListPanelWidth: () => void
   starredChannels: string[]
   toggleStarChannel: (channelId: string) => void
-  /** True while the phone's Chat bottom bar is on screen; what floats above the bottom edge makes room for it. */
+  /** True while the phone's bottom bar of modules is on screen; what floats above the bottom edge makes room for it. */
   chatBarShown: boolean
   setChatBarShown: (shown: boolean) => void
 }

@@ -332,6 +332,20 @@ func (s *Service) ListShares(ctx context.Context, req *pb.ListSharesRequest) (*p
 
 // GetSharedWithMe returns items shared with the current user.
 func (s *Service) GetSharedWithMe(ctx context.Context, req *pb.GetSharedWithMeRequest) (*pb.DriveItemList, error) {
+	shared, err := s.sharedWithCaller(ctx)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]*pb.DriveItem, 0, len(shared))
+	for _, item := range shared {
+		items = append(items, itemToProto(item))
+	}
+	return &pb.DriveItemList{Items: items}, nil
+}
+
+// sharedWithCaller loads the live items shared with the caller, directly, with a
+// group they are in, or publicly, each once, latest share first.
+func (s *Service) sharedWithCaller(ctx context.Context) ([]*store.DriveItem, error) {
 	// Find all UAs the user belongs to
 	ancestors, err := s.policyRead.GetAncestors(ctx, &policypb.GetAncestorsRequest{
 		NodeId: grpcauth.CallerFrom(ctx).NGACNodeID,
@@ -356,7 +370,7 @@ func (s *Service) GetSharedWithMe(ctx context.Context, req *pb.GetSharedWithMeRe
 	}
 
 	seen := make(map[string]bool)
-	var items []*pb.DriveItem
+	var items []*store.DriveItem
 	for _, sh := range shares {
 		if seen[sh.DriveItemID] {
 			continue
@@ -367,8 +381,8 @@ func (s *Service) GetSharedWithMe(ctx context.Context, req *pb.GetSharedWithMeRe
 			return nil, fmt.Errorf("load shared item: %w", err)
 		}
 		if item != nil {
-			items = append(items, itemToProto(item))
+			items = append(items, item)
 		}
 	}
-	return &pb.DriveItemList{Items: items}, nil
+	return items, nil
 }

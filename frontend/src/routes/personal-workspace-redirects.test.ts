@@ -4,6 +4,7 @@ import { QueryClient } from '@tanstack/react-query'
 import { routeTree } from '../routeTree.gen'
 import { keys } from '../hooks/keys'
 import { apiFetch } from '../api/client'
+import { useAuthStore } from '../stores/auth.store'
 
 const areaRendered = vi.fn()
 vi.mock('../api/client', async (orig) => ({ ...(await orig<typeof import('../api/client')>()), apiFetch: vi.fn() }))
@@ -13,6 +14,8 @@ vi.mock('../components/approval/ApprovalScreen', () => ({ ApprovalScreen: () => 
 beforeEach(() => {
   areaRendered.mockClear()
   vi.mocked(apiFetch).mockReset()
+  // The workspace turns a signed-out person away before it loads; these are a signed-in person's links.
+  useAuthStore.setState({ user: { id: 'u1', username: 'hoa.le' } })
 })
 
 /** Nothing is cached: a reload, a bookmark, a notification link or a workspace switch. */

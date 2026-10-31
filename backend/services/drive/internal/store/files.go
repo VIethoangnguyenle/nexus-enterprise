@@ -6,11 +6,16 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // ErrNotPending is returned when a file is confirmed that is no longer pending:
 // it was already confirmed, or removed, since the caller looked.
 var ErrNotPending = errors.New("file is not pending")
+
+// ErrNameTaken is returned when a file is published into a folder that already
+// holds an active item of the same name (idx_drive_items_unique_name).
+var ErrNameTaken = errors.New("an item with that name already exists")
 
 // ActivateFile publishes a pending upload and charges it to the workspace's
 // quota in one transaction: a file is never active without being counted, and a
@@ -21,6 +26,10 @@ func (s *Store) ActivateFile(ctx context.Context, id, workspaceID string, sizeBy
 		tag, err := tx.Exec(ctx,
 			`UPDATE drive_items SET size_bytes = $2, status = 'active', trashed_at = NULL, updated_at = NOW()
 			 WHERE id = $1 AND status = 'pending'`, id, sizeBytes)
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "idx_drive_items_unique_name" {
+			return ErrNameTaken
+		}
 		if err != nil {
 			return fmt.Errorf("publish file: %w", err)
 		}

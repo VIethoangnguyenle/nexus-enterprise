@@ -11,19 +11,22 @@ import { useUnreadCounts } from '../hooks/useMessaging'
 import { useChatState } from '../hooks/useChatState'
 import { useDeviceBack } from '../hooks/useDeviceBack'
 import { validateWorkspaceSearch, workspaceDisplayName } from '../lib/workspace'
-import { isChatListPath } from '../lib/nav-destinations'
+import { isModuleBarPath } from '../lib/nav-destinations'
 import { unreadByLevel } from '../lib/conversations'
 import { useResizable } from '../hooks/useResizable'
 import { useBottomBarLayout } from '../hooks/usePhone'
+import { useKeyboardOpen } from '../hooks/useKeyboardOpen'
 import { AppSidebar } from '../components/patterns/AppSidebar'
 import { ListPanel } from '../components/patterns/ListPanel'
-import { MobileNav } from '../components/patterns/MobileNav'
+import { ModuleBar } from '../components/patterns/ModuleBar'
 import { PhoneSearchBar } from '../components/patterns/PhoneSearchBar'
+import { PhoneEdgeBack } from '../components/patterns/EdgeBackLayer'
 import { OfflineBar } from '../components/app/OfflineBar'
 import { UpdateBar } from '../components/app/UpdateBar'
 import { UpdatingBar } from '../components/app/UpdatingBar'
 import { Button, Spinner, Text } from '../components/primitives'
 import { ErrorBoundary } from '../components/ErrorBoundary'
+import { requireSignedInToWorkspace } from '../lib/auth-guards'
 import { CallProvider } from '../components/calls/CallProvider'
 import { IncomingCallLayer } from '../components/calls/IncomingCallLayer'
 import { apiFetch, logoutSession } from '../api/client'
@@ -33,6 +36,7 @@ export const Route = createFileRoute('/_workspace')({
   // Keep the chosen workspace across in-app navigation; a link that names no
   // `ws` would otherwise drop the user back into their first workspace.
   search: { middlewares: [retainSearchParams(['ws'])] },
+  beforeLoad: requireSignedInToWorkspace,
   component: WorkspaceLayout,
 })
 
@@ -153,8 +157,9 @@ function WorkspaceShell() {
     }
   }, [currentPath])
 
-  // The floating Chat bar sits over the bottom of the list; only then does the screen keep room under its last row.
-  const chatBarShown = useBottomBarLayout() && isChatListPath(currentPath)
+  // The floating bottom bar sits over the bottom of every list screen; only then does the screen keep room under its last row.
+  const keyboardOpen = useKeyboardOpen()
+  const barShown = useBottomBarLayout() && isModuleBarPath(currentPath) && !keyboardOpen
 
   const { size, isDragging, handleProps } = useResizable({
     direction: 'horizontal',
@@ -197,20 +202,23 @@ function WorkspaceShell() {
 
         {/* Column 3: Content */}
         {/* 108px: the bar's 64, its 22 off the edge and 22 of air; the safe-area inset comes on top. */}
-        <main className={`flex-1 flex flex-col min-w-0 ${chatBarShown ? 'pb-[calc(6.75rem+env(safe-area-inset-bottom,0px))]' : ''} lg:pb-0 isolate overflow-hidden`}>
+        <main className={`flex-1 flex flex-col min-w-0 ${barShown ? 'pb-[calc(6.75rem+env(safe-area-inset-bottom,0px))]' : ''} lg:pb-0 isolate overflow-hidden`}>
           <PhoneSearchBar scope={screenEl} />
           <OfflineBar />
           <UpdatingBar />
           <div ref={setScreenEl} className="flex-1 flex flex-col min-h-0 min-w-0">
-            <ErrorBoundary moduleName="workspace-content">
-              <Outlet />
-            </ErrorBoundary>
+            {/* Phone, installed app: a swipe from the left edge of a detail screen goes back (DESIGN.md §6 "Vuốt"). */}
+            <PhoneEdgeBack pathname={currentPath}>
+              <ErrorBoundary moduleName="workspace-content">
+                <Outlet />
+              </ErrorBoundary>
+            </PhoneEdgeBack>
           </div>
         </main>
       </div>
 
-      {/* Phone: Chat's bottom bar and the + beside it, on the conversation list only */}
-      <MobileNav />
+      {/* Phone: the bottom bar of modules, and the + beside it, on every list screen */}
+      <ModuleBar scope={screenEl} />
       <UpdateBar />
       {/* A call ringing this person, on every screen of the workspace */}
       <IncomingCallLayer />

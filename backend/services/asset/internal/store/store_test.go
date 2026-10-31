@@ -862,3 +862,161 @@ func TestListRequests_VisibilityRestrictsRowsAndTotal(t *testing.T) {
 	assert.Empty(t, requests)
 	assert.Zero(t, total)
 }
+
+func createAssetWithProps(t *testing.T, s *store.Store, wsID, typeID, userID, name, state string, createdAt, updatedAt time.Time) *store.Asset {
+	t.Helper()
+	a := &store.Asset{
+		ID:           fmt.Sprintf("ta-%s-%d", name, time.Now().UnixNano()),
+		Name:         name,
+		TypeID:       typeID,
+		WorkspaceID:  wsID,
+		State:        state,
+		CustomFields: json.RawMessage(`{}`),
+		CreatedBy:    userID,
+		CreatedAt:    createdAt,
+		UpdatedAt:    updatedAt,
+	}
+	_, err := s.DB().Exec(context.Background(),
+		`INSERT INTO assets (id, name, type_id, workspace_id, state, custom_fields, created_by, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		a.ID, a.Name, a.TypeID, a.WorkspaceID, a.State,
+		a.CustomFields, a.CreatedBy, a.CreatedAt, a.UpdatedAt,
+	)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		s.DB().Exec(context.Background(), "DELETE FROM assets WHERE id = $1", a.ID)
+	})
+	return a
+}
+
+func TestListAssets_Sort(t *testing.T) {
+	s := setupStore(t)
+	wsID := getTestWorkspaceID(t, s.DB())
+	userID := getTestUserID(t, s.DB())
+	at := createTestType(t, s, wsID)
+
+	now := time.Now().Truncate(time.Second)
+	aCharlie := createAssetWithProps(t, s, wsID, at.ID, userID, "Charlie", "available", now.Add(-10*time.Second), now.Add(-1*time.Second))
+	aAlice := createAssetWithProps(t, s, wsID, at.ID, userID, "Alice", "maintenance", now.Add(-20*time.Second), now.Add(-5*time.Second))
+	aBob := createAssetWithProps(t, s, wsID, at.ID, userID, "Bob", "assigned", now.Add(-30*time.Second), now.Add(-3*time.Second))
+
+	t.Run("SortByName", func(t *testing.T) {
+		res, total, err := s.ListAssets(context.Background(), store.ListAssetsFilter{
+			WorkspaceID: wsID,
+			Sort:        "name",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, int32(3), total)
+		require.Len(t, res, 3)
+		assert.Equal(t, aAlice.ID, res[0].ID)
+		assert.Equal(t, aBob.ID, res[1].ID)
+		assert.Equal(t, aCharlie.ID, res[2].ID)
+	})
+
+	t.Run("SortByCreated", func(t *testing.T) {
+		res, total, err := s.ListAssets(context.Background(), store.ListAssetsFilter{
+			WorkspaceID: wsID,
+			Sort:        "created",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, int32(3), total)
+		require.Len(t, res, 3)
+		assert.Equal(t, aCharlie.ID, res[0].ID)
+		assert.Equal(t, aAlice.ID, res[1].ID)
+		assert.Equal(t, aBob.ID, res[2].ID)
+	})
+
+	t.Run("SortByUpdated", func(t *testing.T) {
+		res, total, err := s.ListAssets(context.Background(), store.ListAssetsFilter{
+			WorkspaceID: wsID,
+			Sort:        "updated",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, int32(3), total)
+		require.Len(t, res, 3)
+		assert.Equal(t, aCharlie.ID, res[0].ID)
+		assert.Equal(t, aBob.ID, res[1].ID)
+		assert.Equal(t, aAlice.ID, res[2].ID)
+	})
+
+	t.Run("SortDefaultWhenAbsent", func(t *testing.T) {
+		res, total, err := s.ListAssets(context.Background(), store.ListAssetsFilter{
+			WorkspaceID: wsID,
+			Sort:        "",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, int32(3), total)
+		require.Len(t, res, 3)
+		assert.Equal(t, aCharlie.ID, res[0].ID)
+		assert.Equal(t, aBob.ID, res[1].ID)
+		assert.Equal(t, aAlice.ID, res[2].ID)
+	})
+
+	t.Run("SortByStatus", func(t *testing.T) {
+		res, total, err := s.ListAssets(context.Background(), store.ListAssetsFilter{
+			WorkspaceID: wsID,
+			Sort:        "status",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, int32(3), total)
+		require.Len(t, res, 3)
+		assert.Equal(t, aBob.ID, res[0].ID)
+		assert.Equal(t, aCharlie.ID, res[1].ID)
+		assert.Equal(t, aAlice.ID, res[2].ID)
+	})
+
+	t.Run("PagingAcrossPages", func(t *testing.T) {
+		p1, total, err := s.ListAssets(context.Background(), store.ListAssetsFilter{
+			WorkspaceID: wsID,
+			Sort:        "name",
+			Limit:       2,
+			Offset:      0,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, int32(3), total)
+		require.Len(t, p1, 2)
+		assert.Equal(t, aAlice.ID, p1[0].ID)
+		assert.Equal(t, aBob.ID, p1[1].ID)
+
+		p2, total2, err := s.ListAssets(context.Background(), store.ListAssetsFilter{
+			WorkspaceID: wsID,
+			Sort:        "name",
+			Limit:       2,
+			Offset:      2,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, int32(3), total2)
+		require.Len(t, p2, 1)
+		assert.Equal(t, aCharlie.ID, p2[0].ID)
+	})
+
+	t.Run("SortStableTiebreakByID", func(t *testing.T) {
+		d1 := createAssetWithProps(t, s, wsID, at.ID, userID, "Duplicate", "available", now, now)
+		d2 := createAssetWithProps(t, s, wsID, at.ID, userID, "Duplicate", "available", now, now)
+		res, _, err := s.ListAssets(context.Background(), store.ListAssetsFilter{
+			WorkspaceID: wsID,
+			Sort:        "name",
+			Search:      "Duplicate",
+		})
+		require.NoError(t, err)
+		require.Len(t, res, 2)
+		expectedFirst, expectedSecond := d1.ID, d2.ID
+		if d2.ID < d1.ID {
+			expectedFirst, expectedSecond = d2.ID, d1.ID
+		}
+		assert.Equal(t, expectedFirst, res[0].ID)
+		assert.Equal(t, expectedSecond, res[1].ID)
+	})
+
+	t.Run("SortPreservesFilters", func(t *testing.T) {
+		res, total, err := s.ListAssets(context.Background(), store.ListAssetsFilter{
+			WorkspaceID: wsID,
+			Sort:        "name",
+			State:       "maintenance",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, int32(1), total)
+		require.Len(t, res, 1)
+		assert.Equal(t, aAlice.ID, res[0].ID)
+	})
+}

@@ -265,6 +265,27 @@ Every graph read that feeds an authorization or write decision in the workspace 
 - **WHEN** the read side shows a role granting nothing and the writer shows it granting write
 - **THEN** a caller who lacks write cannot hand the role out
 
+### Requirement: Administrators lock who creates groups; the roles screen honours the lock
+`GET /api/workspaces/:id/locks` SHALL answer `{"group_creation": "everyone" | "admins"}` to any member (403 to anyone else), read from the graph (`user-settings`, `tenant-ngac-init`). `PUT /api/workspaces/:id/locks` with `{"group_creation": ...}` SHALL require `manage` on the Mgmt OA, like every other change to the workspace as a whole: 403 to anyone else with the graph untouched, 400 for a personal workspace (it has no locks) or any other value, and it answers the rule read back from the graph. Locking removes `create_channel` from Members and every custom role on Channels; unlocking restores it on Members only (`tenant-ngac-init`).
+
+While the lock is on, `PUT /api/workspaces/:id/roles/:roleId/permissions/channels` SHALL refuse a set that includes `create_channel` with 409 and `reason: "group_creation_locked"` and write nothing (emptying the area stays possible). The check and the write run under the workspace's advisory lock, so a role edited while the lock is turned on cannot keep the right. `GET /api/workspaces/:id/roles/:roleId` SHALL carry `locks.group_creation` so the Channels area can show the lock instead of offering the operation.
+
+#### Scenario: Non-admin sets the lock
+- **WHEN** a member who does not hold `manage` calls `PUT .../locks`
+- **THEN** it is 403 and the graph is unchanged
+
+#### Scenario: Personal workspace
+- **WHEN** the owner of a personal workspace calls `PUT .../locks`
+- **THEN** it is 400 and nothing is written
+
+#### Scenario: Granting while locked
+- **WHEN** group creation is locked and an administrator sets a custom role's channels permissions to `create_channel`
+- **THEN** it is 409 with reason `group_creation_locked`, and the role holds nothing new
+
+#### Scenario: Unlocking
+- **WHEN** an administrator unlocks group creation
+- **THEN** Members hold `create_channel` on Channels again and the custom roles that lost it do not
+
 ## Status
 Known gaps, recorded rather than resolved:
 - The email is a notice, not the offer: the offer is what the invitee finds on their next verified sign-in, on the workspace selection screen (`sign-in-screens`), which lists the offers and answers them. Mail may be late, filtered or never sent (SMTP off or down), and the offer is the same. An address with no account can be invited, and the offer waits for it. The email link carries no token: it is the sign-in page.

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useAuthStore } from '../stores/auth.store'
-import { redirectIfSignedIn, requireSignedIn } from './auth-guards'
+import { redirectIfSignedIn, requireSignedIn, requireSignedInToWorkspace } from './auth-guards'
 
 const signedIn = () => useAuthStore.setState({ user: { id: 'u1', username: 'hoa.le' }, accessToken: 't', bootstrapping: false })
 const signedOut = () => useAuthStore.setState({ user: null, accessToken: null, bootstrapping: false })
@@ -33,5 +33,20 @@ describe('sign-in route guards', () => {
   it('the pages after sign-in let a signed-in person through', () => {
     signedIn()
     expect(destination(requireSignedIn)).toBeNull()
+  })
+
+  it('the workspace sends a signed-out person to the login page before anything of it loads, keeping a workspace link', () => {
+    const redirectOf = (search: Record<string, unknown>) => {
+      try {
+        requireSignedInToWorkspace({ search })
+        return null
+      } catch (e) {
+        return (e as { options?: { to?: string; search?: unknown } }).options ?? null
+      }
+    }
+    expect(redirectOf({ ws: 'w1' })).toMatchObject({ to: '/login', search: { ws: 'w1' } })
+    expect(redirectOf({})).toMatchObject({ to: '/login', search: {} })
+    signedIn()
+    expect(redirectOf({ ws: 'w1' })).toBeNull()
   })
 })

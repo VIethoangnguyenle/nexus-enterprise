@@ -14,11 +14,13 @@ type ProfileChanges struct {
 	DisplayName *string
 	Title       *string
 	Location    *string
+	Language    *string
 }
 
 // UpdateProfile writes only the fields in ch and marks the profile as
-// completed the first time anything is saved. It returns ErrNoSuchUser when
-// the account does not exist.
+// completed the first time a profile field (name, title, location) is saved.
+// The language alone is a preference, not a profile: saving only it completes
+// nothing. It returns ErrNoSuchUser when the account does not exist.
 func (s *Store) UpdateProfile(ctx context.Context, userID string, ch ProfileChanges) error {
 	// The personal workspaces this person owns that still carry their previous
 	// name follow the new one, in the same statement: the one made at sign-up
@@ -35,7 +37,11 @@ func (s *Store) UpdateProfile(ctx context.Context, userID string, ch ProfileChan
 		         display_name = COALESCE($2, display_name),
 		         title        = COALESCE($3, title),
 		         location     = COALESCE($4, location),
-		         profile_completed_at = COALESCE(profile_completed_at, NOW())
+		         language     = COALESCE($5, language),
+		         profile_completed_at = CASE
+		             WHEN $2::text IS NULL AND $3::text IS NULL AND $4::text IS NULL THEN profile_completed_at
+		             ELSE COALESCE(profile_completed_at, NOW())
+		         END
 		     WHERE id = $1
 		     RETURNING id
 		 ), ws AS (
@@ -45,7 +51,7 @@ func (s *Store) UpdateProfile(ctx context.Context, userID string, ch ProfileChan
 		        AND w.name = old.display_name AND old.display_name IS DISTINCT FROM $2
 		 )
 		 SELECT EXISTS (SELECT 1 FROM upd)`,
-		userID, ch.DisplayName, ch.Title, ch.Location).Scan(&updated)
+		userID, ch.DisplayName, ch.Title, ch.Location, ch.Language).Scan(&updated)
 	if err != nil {
 		return fmt.Errorf("update profile: %w", err)
 	}

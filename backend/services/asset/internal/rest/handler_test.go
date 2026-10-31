@@ -29,12 +29,16 @@ type captureSvc struct {
 	AssetTypeService
 	ctx         context.Context
 	listAssets  *pb.ListAssetsRequest
+	listSort    string
 	updateType  *pb.UpdateTypeSchemaRequest
 	getTypeSeen bool
 }
 
-func (c *captureSvc) ListAssets(ctx context.Context, req *pb.ListAssetsRequest) (*pb.AssetList, error) {
+func (c *captureSvc) ListAssets(ctx context.Context, req *pb.ListAssetsRequest, sort ...string) (*pb.AssetList, error) {
 	c.ctx, c.listAssets = ctx, req
+	if len(sort) > 0 {
+		c.listSort = sort[0]
+	}
 	return &pb.AssetList{}, nil
 }
 
@@ -155,6 +159,62 @@ func TestListAssets_PutsCallerOnContext(t *testing.T) {
 	call(t, http.MethodGet, "", map[string]string{"id": "ws-1"}, h.ListAssets)
 	require.NotNil(t, svc.listAssets)
 	assert.Equal(t, wantCaller, grpcauth.CallerFrom(svc.ctx))
+}
+
+func TestListAssets_InvalidSortReturnsBadRequest(t *testing.T) {
+	svc := &captureSvc{}
+	h := NewHandler(svc, svc, nil)
+
+	for _, invalidSort := range []string{"unknown", "foo", "123", "NAME", "id"} {
+		t.Run(invalidSort, func(t *testing.T) {
+			e := echo.New()
+			req := httptest.NewRequest(http.MethodGet, "/?sort="+invalidSort, nil)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+			c.SetParamNames("id")
+			c.SetParamValues("ws-1")
+			httputil.SetClaims(c, testClaims)
+
+			err := h.ListAssets(c)
+			var he *echo.HTTPError
+			require.ErrorAs(t, err, &he)
+			assert.Equal(t, http.StatusBadRequest, he.Code)
+		})
+	}
+}
+
+func TestListAssets_ValidSortPassedToService(t *testing.T) {
+	for _, tc := range []struct {
+		param string
+		want  string
+	}{
+		{"name", "name"},
+		{"created", "created"},
+		{"updated", "updated"},
+		{"status", "status"},
+		{"", ""},
+	} {
+		t.Run("sort="+tc.param, func(t *testing.T) {
+			svc := &captureSvc{}
+			h := NewHandler(svc, svc, nil)
+			url := "/"
+			if tc.param != "" {
+				url = "/?sort=" + tc.param
+			}
+			e := echo.New()
+			req := httptest.NewRequest(http.MethodGet, url, nil)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+			c.SetParamNames("id")
+			c.SetParamValues("ws-1")
+			httputil.SetClaims(c, testClaims)
+
+			require.NoError(t, h.ListAssets(c))
+			assert.Equal(t, http.StatusOK, rec.Code)
+			assert.Equal(t, tc.want, svc.listSort)
+			assert.Equal(t, wantCaller, grpcauth.CallerFrom(svc.ctx))
+		})
+	}
 }
 
 func TestListAssetTypes_PutsCallerOnContext(t *testing.T) {

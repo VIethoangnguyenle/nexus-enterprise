@@ -4,7 +4,7 @@ import type { Occurrence } from '../../api/calendar'
 import { colorStyle, colorTokens } from '../../lib/calendar-color'
 import { personStyle } from '../../lib/person-hue'
 import {
-  eventAriaLabel, formatClock, formatDayMonth, monthWeeks, spanOf, toneOf, weekdayShort,
+  eventAriaLabel, formatClock, formatDayMonth, monthWeeks, spanOf, toneOf, weekdayShort, type WeekStart,
 } from '../../lib/calendar-format'
 import { layoutSpans, moveByDays, spansDays } from '../../lib/calendar-layout'
 import { MenuItem, Popover, Pressable, Text } from '../primitives'
@@ -39,6 +39,8 @@ interface MonthGridProps {
   onMove: (o: Occurrence, start: Date, end: Date) => void
   onOpenDay: (day: Date) => void
   onSelectDay: (day: Date) => void
+  /** The first column: Monday unless the person chose Sunday. */
+  weekStart?: WeekStart
 }
 
 /** One chip: a dot, the time and the title; a bar when the event is all-day or crosses days. */
@@ -54,9 +56,9 @@ function chipTone(o: Occurrence, end: Date, now: Date) {
  * another day to move it there at the same time.
  */
 export function MonthGrid({
-  date, occurrences, now, selectedKey, draftDay, draftRef, realtime, keyOf, colorOf, onOpen, onMove, onOpenDay, onSelectDay,
+  date, occurrences, now, selectedKey, draftDay, draftRef, realtime, keyOf, colorOf, onOpen, onMove, onOpenDay, onSelectDay, weekStart = 1,
 }: MonthGridProps) {
-  const weeks = useMemo(() => monthWeeks(date), [date])
+  const weeks = useMemo(() => monthWeeks(date, weekStart), [date, weekStart])
   const body = useRef<HTMLDivElement>(null)
   const [rowHeight, setRowHeight] = useState(0)
   const [more, setMore] = useState<{ day: Date; el: HTMLElement } | null>(null)

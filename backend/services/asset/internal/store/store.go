@@ -139,6 +139,10 @@ type ListAssetsFilter struct {
 	// layer sets it to the types the caller may read; the store itself makes
 	// no authorization decision.
 	VisibleTypeIDs []string
+
+	// Sort orders the results: name, created, updated, status.
+	// Empty defaults to updated (most recently changed first).
+	Sort string
 }
 
 // ListAssets returns filtered assets with total count, most recently changed first.
@@ -185,7 +189,21 @@ func (s *Store) ListAssets(ctx context.Context, f ListAssetsFilter) ([]*Asset, i
 		limit = 25
 	}
 
-	query := assetQuery(fmt.Sprintf("%s ORDER BY a.updated_at DESC, a.id LIMIT $%d OFFSET $%d", baseWhere, argIdx, argIdx+1))
+	orderClause := "ORDER BY a.updated_at DESC, a.id"
+	switch f.Sort {
+	case "name":
+		orderClause = "ORDER BY a.name ASC, a.id"
+	case "created":
+		orderClause = "ORDER BY a.created_at DESC, a.id"
+	case "updated", "":
+		orderClause = "ORDER BY a.updated_at DESC, a.id"
+	case "status":
+		orderClause = "ORDER BY a.state ASC, a.id"
+	default:
+		return nil, 0, fmt.Errorf("invalid sort: %s", f.Sort)
+	}
+
+	query := assetQuery(fmt.Sprintf("%s %s LIMIT $%d OFFSET $%d", baseWhere, orderClause, argIdx, argIdx+1))
 	args = append(args, limit, f.Offset)
 
 	rows, err := s.pool.Query(ctx, query, args...)

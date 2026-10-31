@@ -52,6 +52,12 @@ func (a answerPolicy) BatchCheckAccess(_ context.Context, req *policypb.BatchChe
 	return &policypb.BatchAccessResult{Results: results}, nil
 }
 
+// GetChildren returns an empty list so findChildByName (used by group
+// management) does not panic on the embedded nil interface.
+func (answerPolicy) GetChildren(context.Context, *policypb.GetChildrenRequest, ...grpc.CallOption) (*policypb.NodeList, error) {
+	return &policypb.NodeList{}, nil
+}
+
 // IsAssigned says the caller already holds the edge to the workspace-wide channel,
 // so listing channels has nothing to repair.
 func (answerPolicy) IsAssigned(context.Context, *policypb.IsAssignedRequest, ...grpc.CallOption) (*policypb.BoolResponse, error) {

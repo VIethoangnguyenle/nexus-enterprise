@@ -130,6 +130,11 @@ func (m *mockPolicyWriteClient) IsAssigned(_ context.Context, _ *policypb.IsAssi
 	return &policypb.BoolResponse{Value: true}, nil
 }
 
+// FindNodeByName knows no names: the channels these tests make have no Managers UA.
+func (m *mockPolicyWriteClient) FindNodeByName(_ context.Context, req *policypb.FindNodeByNameRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+	return nil, status.Errorf(codes.NotFound, "node %s not found", req.Name)
+}
+
 func (m *mockPolicyWriteClient) CreateAssignment(_ context.Context, _ *policypb.CreateAssignmentRequest, _ ...grpc.CallOption) (*policypb.Assignment, error) {
 	return &policypb.Assignment{Id: "assign-1"}, nil
 }

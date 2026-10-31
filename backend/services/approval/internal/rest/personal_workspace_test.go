@@ -145,8 +145,8 @@ func TestPersonalWorkspace_EveryRouteAnswers403(t *testing.T) {
 		t.Run(fmt.Sprintf("schema=%v", withSchema), func(t *testing.T) {
 			env := newWorkspaceEnv(t, "personal", withSchema)
 			routes := env.routes()
-			if len(routes) != 16 {
-				t.Fatalf("the approval service has 16 routes, found %d; update this when it changes", len(routes))
+			if len(routes) != 19 {
+				t.Fatalf("the approval service has 19 routes, found %d; update this when it changes", len(routes))
 			}
 			for _, r := range routes {
 				t.Run(r.route, func(t *testing.T) {

@@ -16,6 +16,12 @@ type Channel struct {
 	Description string
 	MemberCount int32
 	AvatarURL   string // the group's picture, "" when it has none
+
+	// Group management settings (069_channel_management.sql).
+	// Each is "everyone" (the default) or "managers".
+	PostPolicy       string // who may send top-level messages
+	InvitePolicy     string // who may add people
+	MentionAllPolicy string // who may use @Tất cả
 }
 
 // Message represents a row in the messages table.

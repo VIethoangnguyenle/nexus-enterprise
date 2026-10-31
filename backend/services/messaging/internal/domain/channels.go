@@ -111,6 +111,11 @@ func (s *Service) createChannel(ctx context.Context, in CreateChannelInput, pcID
 	if err := s.grantChannelAccess(ctx, prov, membersUA.Id, contentOA.Id, in.UserNodeID); err != nil {
 		return nil, prov.Fail(ctx, err)
 	}
+	if in.ChannelType == ChannelTypePrivate && pcID != "" {
+		if err := s.createGroupManagers(ctx, prov, chID, pcID, contentOA.Id, in.UserNodeID); err != nil {
+			return nil, prov.Fail(ctx, err)
+		}
+	}
 	for _, nodeID := range extraMemberNodeIDs {
 		if err := prov.Assign(ctx, nodeID, membersUA.Id); err != nil {
 			return nil, prov.Fail(ctx, fmt.Errorf("assign member to channel members UA: %w", err))
@@ -137,6 +142,11 @@ func (s *Service) createChannel(ctx context.Context, in CreateChannelInput, pcID
 		return nil, prov.Fail(ctx, fmt.Errorf("create channel: %w", err))
 	}
 	prov.Done()
+
+	// A group starts at the level its maker chose as their default.
+	if in.ChannelType == ChannelTypePrivate {
+		s.seedNotificationLevel(ctx, in.UserID, in.WorkspaceID, chID)
+	}
 
 	// A DM has no drive: its nodes are not under the workspace the drive's OA
 	// would hang from.
@@ -230,6 +240,28 @@ func (s *Service) grantChannelAccess(ctx context.Context, prov *provision.Creato
 	return nil
 }
 
+// createGroupManagers gives a new group its Managers UA: beside the Members UA
+// under the workspace's PC, holding the managers' operations on the content OA,
+// with the creator in it, since the owner is always a manager.
+func (s *Service) createGroupManagers(ctx context.Context, prov *provision.Creator, chID, pcID, contentOAID, ownerNodeID string) error {
+	managers, err := prov.Node(ctx, &policypb.CreateNodeRequest{
+		Name: ngac.ChannelManagersUAName(ngac.ChannelID(chID)), NodeType: ngac.TypeUA,
+	})
+	if err != nil {
+		return fmt.Errorf("create group managers UA: %w", err)
+	}
+	if err := prov.Assign(ctx, managers.Id, pcID); err != nil {
+		return fmt.Errorf("assign group managers UA under workspace PC: %w", err)
+	}
+	if err := prov.Associate(ctx, managers.Id, contentOAID, ngac.ChannelManagerOps()); err != nil {
+		return fmt.Errorf("grant group managers on content: %w", err)
+	}
+	if err := prov.Assign(ctx, ownerNodeID, managers.Id); err != nil {
+		return fmt.Errorf("assign group owner to managers UA: %w", err)
+	}
+	return nil
+}
+
 // createChannelDrive creates a drive folder for the channel (non-fatal on error).
 func (s *Service) createChannelDrive(ctx context.Context, workspaceID, chID, chName, oaID, uaID string) {
 	if s.driveClient == nil || workspaceID == "" {
@@ -278,18 +310,28 @@ func (s *Service) ListChannels(ctx context.Context, workspaceID, userNodeID stri
 //
 // Renaming changes what every member sees, so it takes manage on the channel's
 // content OA — held by workspace owners through the Channels OA, not by plain
-// channel members.
+// channel members — or being the group's owner or a manager.
 func (s *Service) UpdateChannel(ctx context.Context, channelID, userNodeID, name string) (*pb.Channel, error) {
 	if name == "" {
 		return nil, fmt.Errorf("%w: channel name cannot be empty", ErrInvalidInput)
 	}
-	if _, err := s.authorizeChannel(ctx, channelID, userNodeID, ngac.OpManage); err != nil {
-		return nil, err
+	// Workspace owners hold manage on the Channels OA (no read when not a member).
+	// Group owners and managers hold read through membership. Try manage first
+	// (backward-compatible), then fall back to read + owner/manager.
+	ch, err := s.authorizeChannel(ctx, channelID, userNodeID, ngac.OpManage)
+	if err != nil {
+		ch, err = s.authorizeChannel(ctx, channelID, userNodeID, ngac.OpRead)
+		if err != nil {
+			return nil, err
+		}
+		if !s.isGroupOwnerOrManager(ctx, ch, userNodeID) {
+			return nil, fmt.Errorf("%w: only the owner, a manager or a workspace administrator may rename a channel", ErrAccessDenied)
+		}
 	}
 	if err := s.store.UpdateChannelName(ctx, channelID, name); err != nil {
 		return nil, fmt.Errorf("update channel: %w", err)
 	}
-	ch, err := s.loadChannel(ctx, channelID)
+	ch, err = s.loadChannel(ctx, channelID)
 	if err != nil {
 		return nil, fmt.Errorf("get updated channel: %w", err)
 	}

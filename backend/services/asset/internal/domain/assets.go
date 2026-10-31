@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -136,7 +137,15 @@ func (s *AssetService) GetAsset(ctx context.Context, req *pb.GetAssetRequest) (*
 // readable types are resolved in one batch call and pushed into the query, so
 // pagination and the total count cover only what the caller can see — a
 // post-query filter would still report how many hidden assets exist.
-func (s *AssetService) ListAssets(ctx context.Context, req *pb.ListAssetsRequest) (*pb.AssetList, error) {
+func (s *AssetService) ListAssets(ctx context.Context, req *pb.ListAssetsRequest, sort ...string) (*pb.AssetList, error) {
+	var sortKey string
+	if len(sort) > 0 {
+		sortKey = sort[0]
+	}
+	if sortKey != "" && !slices.Contains(ValidAssetSorts, sortKey) {
+		return nil, invalid("sort must be one of: name, created, updated, status")
+	}
+
 	if err := requireOrganization(ctx, s.store, req.WorkspaceId); err != nil {
 		return nil, err
 	}
@@ -171,6 +180,7 @@ func (s *AssetService) ListAssets(ctx context.Context, req *pb.ListAssetsRequest
 		Limit:          req.Limit,
 		Offset:         req.Offset,
 		VisibleTypeIDs: readable,
+		Sort:           sortKey,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("list assets: %w", err)

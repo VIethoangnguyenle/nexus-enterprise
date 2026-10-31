@@ -11,9 +11,11 @@ import { useMotionPresets } from '../../lib/motion'
 import { formatCount } from '../../lib/format'
 import { totalUnread, unreadOf, type Conversation } from '../../lib/conversations'
 import { Pressable } from '../primitives'
+import { SwipeRow, SwipeRowGroup } from '../patterns/SwipeRow'
+import { useChatRowSwipe } from './chat-row-swipe'
 import { ConversationIcon } from './ConversationIcon'
 import { MentionPill, MutedMark } from './ConversationBadges'
-import { PhoneListTitle, UnreadToggle } from './PhoneListControls'
+import { UnreadToggle } from './PhoneListControls'
 import { PressableRow, useMenuPress } from './PressableRow'
 import { STARRED_SECTION, rowTargetOf, type SectionOverlays } from './SectionOverlays'
 
@@ -37,39 +39,41 @@ export function PhoneSectionsList({ nav, workspaceId, overlays }: {
 }) {
   const { arranged } = nav
 
+  // One open row across every section: opening a row in Nhóm closes the one open in Đã gắn sao.
   return (
-    <div className="grid">
-      <PhoneListTitle title="Mục" />
-      {arranged.starred.length > 0 && (
-        <Group id={STARRED_SECTION} workspaceId={workspaceId} title="Đã gắn sao" items={arranged.starred} overlays={overlays} />
-      )}
-      {arranged.sections.map((s) => (
-        <Group
-          key={s.id}
-          id={s.id}
-          workspaceId={workspaceId}
-          title={s.name}
-          items={s.items}
-          overlays={overlays}
-          own
-          empty="Chưa có cuộc trò chuyện. Nhấn giữ một cuộc trò chuyện để chuyển vào đây."
-        />
-      ))}
-      {arranged.directs.length > 0 && (
-        <Group id="dm" workspaceId={workspaceId} title="Tin nhắn trực tiếp" items={arranged.directs} overlays={overlays} />
-      )}
-      {arranged.spaces.length > 0 && (
-        <Group id="spaces" workspaceId={workspaceId} title="Nhóm" items={arranged.spaces} overlays={overlays} />
-      )}
-      <Pressable
-        onClick={(e) => overlays.openCreate(e.currentTarget, undefined, 'bottom-end')}
-        aria-haspopup="dialog"
-        className="flex items-center gap-3.5 min-h-13 mt-2 px-5 text-md font-semibold text-accent"
-      >
-        <FolderPlus size={20} strokeWidth={1.75} aria-hidden="true" />
-        Mục mới
-      </Pressable>
-    </div>
+    <SwipeRowGroup>
+      <div className="grid">
+        {arranged.starred.length > 0 && (
+          <Group id={STARRED_SECTION} workspaceId={workspaceId} title="Đã gắn sao" items={arranged.starred} overlays={overlays} />
+        )}
+        {arranged.sections.map((s) => (
+          <Group
+            key={s.id}
+            id={s.id}
+            workspaceId={workspaceId}
+            title={s.name}
+            items={s.items}
+            overlays={overlays}
+            own
+            empty="Chưa có cuộc trò chuyện. Nhấn giữ một cuộc trò chuyện để chuyển vào đây."
+          />
+        ))}
+        {arranged.directs.length > 0 && (
+          <Group id="dm" workspaceId={workspaceId} title="Tin nhắn trực tiếp" items={arranged.directs} overlays={overlays} />
+        )}
+        {arranged.spaces.length > 0 && (
+          <Group id="spaces" workspaceId={workspaceId} title="Nhóm" items={arranged.spaces} overlays={overlays} />
+        )}
+        <Pressable
+          onClick={(e) => overlays.openCreate(e.currentTarget, undefined, 'bottom-end')}
+          aria-haspopup="dialog"
+          className="flex items-center gap-3.5 min-h-13 mt-2 px-5 text-md font-semibold text-accent"
+        >
+          <FolderPlus size={20} strokeWidth={1.75} aria-hidden="true" />
+          Mục mới
+        </Pressable>
+      </div>
+    </SwipeRowGroup>
   )
 }
 
@@ -94,6 +98,7 @@ function Group({ id, workspaceId, title, items, overlays, own = false, empty }: 
   const unread = totalUnread(items)
   const shown = unreadOnly ? items.filter((c) => unreadOf(c) > 0) : items
   const { ref, props } = useMenuPress<HTMLDivElement>((el) => own && overlays.openSectionMenu(id, el), OWN_PRESS)
+  const swipeOf = useChatRowSwipe(overlays)
 
   return (
     <section>
@@ -145,7 +150,9 @@ function Group({ id, workspaceId, title, items, overlays, own = false, empty }: 
                     slide={c.level !== 'off'}
                     onMenu={(el) => overlays.openRowMenu(rowTargetOf(c), el)}
                   >
-                    <SectionRow conversation={c} />
+                    <SwipeRow id={`${id}:${c.id}`} fullSwipe {...swipeOf(c)}>
+                      <SectionRow conversation={c} />
+                    </SwipeRow>
                   </PressableRow>
                 ))}
               </ul>

@@ -4,7 +4,7 @@ import { useToastStore } from '../components/primitives'
 import { addRecent, readRecent } from '../lib/recent-searches'
 import { useAuthStore } from '../stores/auth.store'
 import { ME } from '../test/chat-fixtures'
-import { useRecentSearches } from './useRecentSearches'
+import { useRecentSearches, type RecentScope } from './useRecentSearches'
 
 beforeEach(() => {
   localStorage.clear()
@@ -45,5 +45,23 @@ describe('useRecentSearches', () => {
     act(() => useToastStore.getState().toasts[0]!.action!.onClick())
     expect(result.current.list).toEqual(['ba', 'hai', 'một'])
     expect(readRecent('chat', ME.id)).toEqual(['ba', 'hai', 'một'])
+  })
+
+  it('keeps a list of its own for every scope of the search, Tất cả and Lịch included, and follows a change of scope', () => {
+    seed('chat cũ')
+    const { result, rerender } = renderHook(({ scope }: { scope: RecentScope }) => useRecentSearches(scope), {
+      initialProps: { scope: 'all' as RecentScope },
+    })
+    expect(result.current.list).toEqual([])
+    act(() => result.current.add('đối soát'))
+    rerender({ scope: 'calendar' })
+    expect(result.current.list).toEqual([])
+    act(() => result.current.add('họp quý'))
+    rerender({ scope: 'chat' })
+    expect(result.current.list).toEqual(['chat cũ'])
+    rerender({ scope: 'all' })
+    expect(result.current.list).toEqual(['đối soát'])
+    rerender({ scope: 'calendar' })
+    expect(result.current.list).toEqual(['họp quý'])
   })
 })

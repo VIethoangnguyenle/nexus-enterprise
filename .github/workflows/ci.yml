@@ -1,17 +1,18 @@
 name: CI
 
+# Only a merge to main runs CI: its success is what starts the deploy
+# (deploy.yml). Pushes to other branches and pull requests run nothing.
 on:
   push:
     branches: [main]
-  pull_request:
 
 permissions:
   contents: read
 
 concurrency:
   group: ci-${{ github.ref }}
-  # Superseded PR runs are cancelled; every commit on main keeps its own result.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # Every commit on main keeps its own result: the deploy reads it.
+  cancel-in-progress: false
 
 jobs:
   go:

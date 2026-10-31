@@ -35,6 +35,12 @@ export const server = {
   mentionsUnread: 0,
   personal: false,
   notifications: [] as Array<Record<string, unknown>>,
+  /** The `mobile.bar` setting of each workspace; absent = unset. */
+  bars: {} as Record<string, string[]>,
+  /** Set to make the settings read and write fail. */
+  settingsDown: false,
+  /** Every PUT of the settings: the workspace and the body. */
+  settingsPuts: [] as Array<{ workspaceId: string; body: Record<string, unknown> }>,
 }
 
 export function resetServer() {
@@ -47,6 +53,9 @@ export function resetServer() {
   server.mentionsUnread = 0
   server.personal = false
   server.notifications = []
+  server.bars = {}
+  server.settingsDown = false
+  server.settingsPuts = []
 }
 
 export const unreadRow = (channel_id: string, unread_count: number, over: Partial<UnreadRow> = {}): UnreadRow =>
@@ -72,6 +81,18 @@ export function answer(path: string, init?: RequestInit): Promise<unknown> {
   if (p === '/notifications/unread-count') return ok({ count: server.notificationsUnread })
   if (p === '/notifications') {
     return ok({ notifications: server.notifications, total: server.notifications.length, unread_count: server.notificationsUnread })
+  }
+  const settings = /^\/workspaces\/([^/]+)\/settings$/.exec(p)
+  if (settings) {
+    const workspaceId = settings[1]!
+    if (server.settingsDown) return Promise.reject(new Error('settings down'))
+    // The workspace service takes and answers {"settings": {key: value}}.
+    if (init?.method === 'PUT') {
+      const body = (JSON.parse(String(init.body)) as { settings?: Record<string, unknown> }).settings ?? {}
+      server.settingsPuts.push({ workspaceId, body })
+      if (Array.isArray(body['mobile.bar'])) server.bars[workspaceId] = body['mobile.bar'] as string[]
+    }
+    return ok({ settings: server.bars[workspaceId] ? { 'mobile.bar': server.bars[workspaceId] } : {} })
   }
   if (p === '/messages/mentions/unread-count') return ok({ count: server.mentionsUnread })
   // The graph can reach more workspaces than the person may enter.
@@ -121,6 +142,8 @@ export async function renderShell(ui: ReactNode, url = '/channels') {
     page('/channels/$channelId'),
     page('/drive'), page('/approval'), page('/assets'), page('/contacts'), page('/admin'),
     page('/settings', validateSettingsSearch),
+    page('/settings/$section', validateSettingsSearch),
+    page('/admin/$section'), page('/calendar'),
     page('/documents/$docId'), page('/workspace-select'), page('/onboarding'),
   ]
   const router = createRouter({ routeTree: root.addChildren(pages), history: createMemoryHistory({ initialEntries: [url] }) })

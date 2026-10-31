@@ -180,13 +180,6 @@ func (f *fakeDeptService) UpdateWorkspaceDetails(_ context.Context, caller, wsID
 	return &domain.WorkspaceDetails{}, f.rec(caller, wsID)
 }
 
-func (f *fakeDeptService) ConvertToOrganization(_ context.Context, caller, wsID string) (*domain.Conversion, error) {
-	if err := f.rec(caller, wsID); err != nil {
-		return nil, err
-	}
-	return &domain.Conversion{ConvertedByName: "Lê Thị Hoa", ConvertedAt: time.Date(2026, 10, 11, 9, 0, 0, 0, time.UTC)}, nil
-}
-
 func (f *fakeDeptService) LeaveWorkspace(_ context.Context, caller, wsID string) error {
 	return f.rec(caller, wsID)
 }
@@ -278,7 +271,6 @@ func adminRoutes() []adminRoute {
 		{"UpdateMemberDepartment", http.MethodPut, `{"department_id":"d"}`, []string{"id", "nodeId"}, func(h *AdminHandler) echo.HandlerFunc { return h.UpdateMemberDepartment }},
 		{"ListPermissionAreas", http.MethodGet, "", []string{"id"}, func(h *AdminHandler) echo.HandlerFunc { return h.ListPermissionAreas }},
 		{"LeaveWorkspace", http.MethodPost, `{"nodeId":"u-victim",` + spoof + `}`, []string{"id"}, func(h *AdminHandler) echo.HandlerFunc { return h.LeaveWorkspace }},
-		{"ConvertToOrganization", http.MethodPost, `{"requester_ngac_node_id":"u-attacker"}`, []string{"id"}, func(h *AdminHandler) echo.HandlerFunc { return h.ConvertToOrganization }},
 		{"GetWorkspaceDetails", http.MethodGet, "", []string{"id"}, func(h *AdminHandler) echo.HandlerFunc { return h.GetWorkspaceDetails }},
 		{"UpdateWorkspaceDetails", http.MethodPatch, `{"name":"Ops",` + spoof + `}`, []string{"id"}, func(h *AdminHandler) echo.HandlerFunc { return h.UpdateWorkspaceDetails }},
 		{"ListRoles", http.MethodGet, "", []string{"id"}, func(h *AdminHandler) echo.HandlerFunc { return h.ListRoles }},
@@ -630,36 +622,6 @@ func TestLeaveRoute_TakesTheCallerFromClaimsAndMapsTheLastOwner(t *testing.T) {
 	require.NoError(t, r.handler(NewAdminHandler(last))(c))
 	assert.Equal(t, http.StatusConflict, rec.Code)
 	assert.Contains(t, rec.Body.String(), `"reason":"last_owner"`)
-}
-
-func TestAdminHandler_ConvertToOrganizationWireShapeAndErrors(t *testing.T) {
-	r := find("ConvertToOrganization")
-
-	code, body := call(t, &fakeDeptService{}, "convert", r)
-	assert.Equal(t, http.StatusOK, code)
-	assert.JSONEq(t, `{"type":"organization","converted_by_name":"Lê Thị Hoa","converted_at":"2026-10-11T09:00:00Z"}`, body)
-
-	code, body = call(t, &fakeDeptService{err: fmt.Errorf("%w", domain.ErrAlreadyOrganization)}, "again", r)
-	assert.Equal(t, http.StatusConflict, code)
-	assert.JSONEq(t, `{"reason":"already_organization"}`, body)
-
-	for name, tc := range map[string]struct {
-		err  error
-		want int
-	}{
-		"not the owner": {domain.ErrAccessDenied, http.StatusForbidden},
-		"unknown":       {domain.ErrNotFound, http.StatusNotFound},
-		"database":      {errors.New("pq: relation workspaces is gone"), http.StatusInternalServerError},
-	} {
-		t.Run(name, func(t *testing.T) {
-			c, _ := newCtx(t, route2(r), true)
-			err := r.handler(NewAdminHandler(&fakeDeptService{err: tc.err}))(c)
-			var he *echo.HTTPError
-			require.True(t, errors.As(err, &he), "err = %v", err)
-			assert.Equal(t, tc.want, he.Code)
-			assert.NotContains(t, fmt.Sprint(he.Message), "relation", "database text never reaches a client")
-		})
-	}
 }
 
 func TestAdminHandler_DetailsCarryTypeOwnerAndConversion(t *testing.T) {

@@ -207,6 +207,11 @@ export function SpaceInfoPanel({ channelId, kind, title, memberCount, avatarUrl,
 }
 
 /** The first row of the phone's info screen: the level in force, and a tap to change it. */
+// Phase 06: ConversationSettings replaces this panel's content for both phone
+// and desktop. The old export stays so existing callers keep building until they
+// migrate (risk: renaming a widely used component).
+export { ConversationSettings } from './ConversationSettings'
+
 function NotificationRow({ kind, notification, onOpen }: {
   kind: 'dm' | 'space'
   notification: InfoNotification

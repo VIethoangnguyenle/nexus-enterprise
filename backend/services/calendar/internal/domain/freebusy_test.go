@@ -162,9 +162,10 @@ func TestWorkingHoursComeFromTheSettings(t *testing.T) {
 
 	def, err := f.svc.GetSettings(ctx, ws)
 	require.NoError(t, err)
-	assert.Equal(t, SettingsView{TZID: "Asia/Ho_Chi_Minh", WorkStart: "08:00", WorkEnd: "17:30", DefaultReminder: 10}, *def)
+	assert.Equal(t, SettingsView{TZID: "Asia/Ho_Chi_Minh", WorkStart: "08:00", WorkEnd: "17:30", DefaultReminder: 10,
+		DefaultView: "agenda", WeekStart: 1, DefaultDuration: 30, NotifyInvites: true, NotifyChanges: true, NotifyReminders: true}, *def)
 
-	saved, err := f.svc.UpdateSettings(ctx, ws, SettingsView{TZID: "Asia/Bangkok", WorkStart: "09:30", WorkEnd: "18:00", DefaultReminder: 0})
+	saved, err := f.svc.UpdateSettings(ctx, ws, full(SettingsView{TZID: "Asia/Bangkok", WorkStart: "09:30", WorkEnd: "18:00", DefaultReminder: 0}))
 	require.NoError(t, err)
 	assert.Equal(t, "09:30", saved.WorkStart)
 	got := f.freeBusy(t, "n-bob", "n-alice")[0]
@@ -183,10 +184,10 @@ func TestWorkingHoursComeFromTheSettings(t *testing.T) {
 		"empty day": {TZID: "Asia/Bangkok", WorkStart: "08:00", WorkEnd: "08:00"},
 		"reminder":  {TZID: "Asia/Bangkok", WorkStart: "08:00", WorkEnd: "17:00", DefaultReminder: -1},
 	} {
-		_, err := f.svc.UpdateSettings(ctx, ws, bad)
+		_, err := f.svc.UpdateSettings(ctx, ws, full(bad))
 		assert.ErrorIs(t, err, ErrInvalidInput, name)
 	}
-	_, err = f.svc.UpdateSettings(callerCtx("n-gus"), ws, *saved)
+	_, err = f.svc.UpdateSettings(callerCtx("n-gus"), ws, full(*saved))
 	requireKind(t, err, ErrAccessDenied)
 	_, err = f.svc.GetSettings(callerCtx("n-gus"), ws)
 	requireKind(t, err, ErrAccessDenied)
@@ -236,7 +237,7 @@ func TestSuggestedTimesStayInsideEveryonesWorkingHours(t *testing.T) {
 	f := newFixture(t)
 	f.calOf(t, "n-alice", store.KindPersonal)
 	f.calOf(t, "n-bob", store.KindPersonal)
-	_, err := f.svc.UpdateSettings(callerCtx("n-bob"), ws, SettingsView{TZID: "Asia/Ho_Chi_Minh", WorkStart: "10:15", WorkEnd: "11:00", DefaultReminder: 10})
+	_, err := f.svc.UpdateSettings(callerCtx("n-bob"), ws, full(SettingsView{TZID: "Asia/Ho_Chi_Minh", WorkStart: "10:15", WorkEnd: "11:00", DefaultReminder: 10}))
 	require.NoError(t, err)
 
 	got, err := f.svc.SuggestSlots(callerCtx("n-alice"), ws, []string{"n-alice", "n-bob"}, 30, "2026-11-02")
@@ -244,7 +245,7 @@ func TestSuggestedTimesStayInsideEveryonesWorkingHours(t *testing.T) {
 	assert.Equal(t, []string{"10:30-11:00"}, slotsOf(got), "Bob works from 10:15; the grid is the half hour")
 
 	// Different zones: Bob's 08:00-17:30 in Berlin is the middle of the night in Saigon.
-	_, err = f.svc.UpdateSettings(callerCtx("n-bob"), ws, SettingsView{TZID: "Europe/Berlin", WorkStart: "08:00", WorkEnd: "17:30", DefaultReminder: 10})
+	_, err = f.svc.UpdateSettings(callerCtx("n-bob"), ws, full(SettingsView{TZID: "Europe/Berlin", WorkStart: "08:00", WorkEnd: "17:30", DefaultReminder: 10}))
 	require.NoError(t, err)
 	got, err = f.svc.SuggestSlots(callerCtx("n-alice"), ws, []string{"n-alice", "n-bob"}, 30, "2026-11-02")
 	require.NoError(t, err)

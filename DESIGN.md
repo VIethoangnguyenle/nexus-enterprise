@@ -191,8 +191,8 @@ mã backend, email và tài liệu kỹ thuật không đổi.
     khoản: tên, vai trò, trạng thái, Cài đặt tài khoản, Đăng xuất.
   - *Phiên bản (2026-10-18):* để người dùng biết máy mình đã nhận bản mới sau một lần triển khai. Dạng
     `2026.10.18 · 6368e8e` (ngày build giờ Việt Nam · 7 ký tự commit), chạy máy dev ghi `dev`. Một dòng "Phiên bản …"
-    `text-xs` `--color-ink-muted`, chọn chép được, ở cuối màn Cài đặt (mọi tab), cuối menu tài khoản (máy tính, sau
-    divider) và cuối sheet tài khoản (điện thoại, dưới Đăng xuất). Thanh "Có bản mới" không đổi.
+    `text-xs` `--color-ink-muted`, chọn chép được, ở cuối danh mục Cài đặt (máy tính), cuối menu tài khoản (máy tính, sau
+    divider) và dòng Giới thiệu của trang Tôi (điện thoại). Thanh "Có bản mới" không đổi.
   - *Đổi workspace:* bấm ô chữ cái (hay tên khi mở rộng) mở cùng một menu; đầu menu ghi đầy đủ tên workspace
     đang mở (xuống dòng, không cắt) + dòng phụ ("Workspace cá nhân" hoặc tên tổ chức) · vai trò; danh sách
     "Chuyển sang" cũng xuống dòng thay vì cắt. Workspace cá nhân không có Tài sản, Phê duyệt, Quản trị; vẫn có Lịch (chỉ lịch cá nhân).
@@ -203,7 +203,7 @@ mã backend, email và tài liệu kỹ thuật không đổi.
     Tooltip không bao giờ là nguồn tên duy nhất.
   - *Chuyển trạng thái:* nội dung cột fade ra 100ms `--ease-in`, bề rộng cột 280ms `--ease-out-expo`, nội dung
     fade vào 120ms; giảm chuyển động thì đổi ngay. Không còn "xem tạm" khi trỏ chuột vào dải.
-  - Dưới 1024 không có menu này: vỏ điện thoại (ô tìm có ☰, menu ☰, thanh đáy Chat) như dưới đây.
+  - Dưới 1024 không có menu này: vỏ điện thoại (ô tìm viên thuốc, thanh đáy phân hệ, trang Tôi) như dưới đây.
 - **List panel** chỉ ở Tin nhắn, Tài liệu và Danh bạ: rộng 280, nền `--color-base`, hàng 40 chữ 15px như cột điều
   hướng của Chat, mục đang chọn theo NavRow (nền `--color-raised`, chữ 600). **Detail panel** mở bằng chọn mục, đóng bằng Esc.
   - *Danh bạ* (§6 "Danh bạ"): list panel **chỉ có danh mục** (Phòng ban · Vai trò · Nhóm của tôi + lối tắt Phòng của
@@ -212,43 +212,53 @@ mã backend, email và tài liệu kỹ thuật không đổi.
     màn đầu là chồng ô danh mục (tầng 1), rồi danh mục / phòng (tầng 2), rồi hồ sơ toàn màn (tầng 3).
 - **Breakpoints:** ≥ 1280 đủ 4 cột · 1024–1279 detail panel thành overlay bên phải ·
   768–1023 sidebar thành rail, list panel thành cột thay thế content (rail chưa làm: dưới 1024 dùng vỏ điện thoại
-  bên dưới) · < 768 vỏ điện thoại: ô tìm viên thuốc có ☰, mỗi màn một cột, detail panel thành sheet từ dưới lên.
-- **Điều hướng di động (dưới 1024; mockup `design/mockups/chat-mobile-home.html`, duyệt 2026-10-12, thay thanh đáy
-  module cũ):** điều hướng giữa các phần của Nexus nằm ở **menu ☰**; thanh đáy chỉ thuộc về Chat.
-  - *Thanh trên (mọi màn danh sách của mọi module):* ô tìm dạng viên thuốc cao 52, radius full, `--color-sunk`, cách mép
-    12, dưới `env(safe-area-inset-top)`. Trái: IconButton ☰ 44 (`aria-label` "Mở menu chính", `aria-haspopup="dialog"`;
-    chấm 8px `--color-accent` viền 2px `--color-sunk` khi có việc mới ở phần khác: đề nghị chờ bạn, thông báo chưa
-    đọc). Giữa: nút chữ gợi ý theo module ("Tìm trong chat", "Tìm tài liệu", "Tìm đề nghị"…, 16px mờ), chạm thì tới
-    ô tìm của chính màn đó (`[data-module-search]`; Chat: màn tìm toàn màn). Phải: avatar 32 trong vùng chạm 44 mở
-    sheet tài khoản. Tiêu đề màn ngay dưới: font display 700 26px, nút phụ của màn ở bên phải tiêu đề. Màn chi tiết
-    (một cuộc trò chuyện, một tài liệu, một đề nghị) dùng thanh có nút quay lại như cũ, không có ô tìm này.
-  - *Menu ☰ (ngăn kéo):* trượt từ trái, rộng `min(316px, 84%)`, `--color-overlay`, radius 24 hai góc phải,
-    `--shadow-overlay`, nền sau `--color-scrim`. Từ trên: logo N 28 + **Nexus** · khối workspace (ô chữ cái 40,
-    tên, dòng mờ "Workspace tổ chức · N thành viên" / "Workspace cá nhân · chỉ bạn", chevron; nền `--color-sunk`,
-    radius 16; chạm mở danh sách workspace ngay dưới: dấu ✓ ở workspace đang mở, số chưa đọc của workspace khác,
-    "Tạo workspace" cuối) · **Chat · Lịch · Tài liệu · Phê duyệt · Tài sản · Danh bạ** · divider · **Thông báo · Quản trị ·
-    Cài đặt** · cuối ngăn: tên hiển thị · vai trò (mờ). Hàng 52, radius full, icon lucide 20 + nhãn 15px/500; đang ở:
-    nền `--color-accent-wash`, icon accent, `aria-current="page"`. Chat có pill số chưa đọc (theo mức thông báo),
-    Phê duyệt có chữ "N chờ bạn", Thông báo có pill số chưa đọc. Workspace cá nhân: không Tài sản, Phê duyệt, Quản
-    trị (vẫn có Lịch); Quản trị chỉ hiện cho người có quyền. Chọn một mục: đóng ngăn kéo rồi chuyển màn; chọn workspace khác: gắn
-    lại phiên, về Trang chủ Chat của workspace đó.
-  - *Sheet tài khoản (chạm avatar):* avatar 52, tên, chức danh · workspace, pill trạng thái; Tạm dừng thông báo ·
-    Cài đặt tài khoản · Cài đặt · divider · Đăng xuất (`--color-danger`). Hàng 56, ô icon 40 radius 12 `--color-sunk`.
-  - *Hành vi ngăn kéo và sheet:* modal đầy đủ (focus trap, focus vào khối workspace / hàng đầu khi mở, trả focus về nút
-    đã mở, nền sau inert). Đóng bằng Esc, chạm scrim, nút quay lại của hệ điều hành, vuốt ngăn kéo sang trái / kéo
-    sheet xuống quá 25% hay vuốt nhanh. Chuyển động §7: scrim fade 220ms; ngăn kéo `translateX(-100%)` → 0 và sheet
-    `translateY(100%)` → 0 trong 280ms expo, ra 210ms ease-in. Giảm chuyển động: chỉ fade ≤ 120ms.
-  - *Thanh đáy Chat* (chỉ ở các tab danh sách của Chat; ẩn trong một cuộc trò chuyện và ở mọi module khác): viên
-    thuốc nổi cao 64, cách trái 14, đáy 22 + safe-area, phải chừa chỗ nút +; nền `--color-overlay` 90% + blur 16,
-    `--shadow-overlay` + viền trong `--color-line`, `--z-sticky`. 4 ô đều, **chỉ icon** lucide 24 (không nhãn chữ,
-    tên trong `aria-label`): **Trang chủ · Trực tiếp · Mục · Thêm**. Đang chọn: icon trong pill `--color-accent-wash`
-    60×44, icon accent stroke 2.1, `aria-current="page"`. Báo hiệu: Trang chủ chấm 9px khi có gì chưa đọc; Trực tiếp
-    pill số tin trực tiếp chưa đọc; Mục pill số cuộc nhóm chưa đọc (theo mức thông báo); Thêm chấm khi có lượt nhắc
-    mới; pill `99+` khi quá 99, ẩn khi 0; `aria-label` đọc cả số ("Trực tiếp, 2 chưa đọc").
-  - *Nút + (Trò chuyện mới):* 64×64, radius 20, `--color-accent-wash`, icon + 28 accent, cạnh phải thanh đáy, cùng
-    đáy; mở sheet Nhắn tin trực tiếp · Tạo nhóm · Duyệt nhóm · Tạo mục (ô icon 40 + nhãn + một dòng mờ). "Duyệt nhóm" chỉ hiện khi có tính năng duyệt và tham gia nhóm (việc sau, cần backend + spec NGAC riêng).
+  bên dưới) · < 768 vỏ điện thoại: ô tìm viên thuốc, thanh đáy phân hệ, mỗi màn một cột, detail panel thành sheet từ dưới lên.
+- **Điều hướng di động (dưới 1024; mockup `design/mockups/mobile-shell.html` §1, §1b, §2, §8, duyệt 2026-10-19; thay
+  menu ☰ và thanh đáy chỉ-của-Chat của `chat-mobile-home.html`):** Lark cho cấu trúc (thanh đáy chứa phân hệ, người
+  dùng tự chọn, Thêm dạng lưới), Google Chat cho hình thức (viên thuốc nổi + nút + tách riêng, ô tìm viên thuốc).
+  - *Thanh trên (mọi màn danh sách của mọi phân hệ):* ô tìm dạng viên thuốc cao 52, radius full, `--color-sunk`, cách mép
+    12, dưới `env(safe-area-inset-top)`. Trái: **ô chữ cái workspace** 32 (radius 9) trong vùng chạm 44 — nền `--color-accent`
+    ở workspace tổ chức, hue của chính người dùng ở workspace cá nhân; chấm 9px `--color-accent` viền 2px `--color-sunk`
+    khi workspace khác có tin chưa đọc; `aria-label` "Đổi workspace, đang ở <tên>"; chạm mở sheet chọn workspace. Giữa:
+    nút chữ "Tìm …" của phân hệ (16px mờ) mở ô tìm của §6 "Tìm cho mọi tác vụ". Phải: avatar 32 trong vùng chạm 44 mở
+    trang **Tôi** (§6 "Cài đặt"). Không có ☰. Màn chi tiết (một cuộc trò chuyện, một tài liệu, một đề nghị, trang cài
+    đặt) dùng thanh có nút quay lại, không có ô tìm này.
+  - *Hàng tiêu đề của phân hệ:* tên font display 700 26px; tối đa một nút phụ (Thread, đổi kiểu xem) rồi **⋯**; không dòng
+    phụ đề (tên workspace đã ở ô chữ cái). ⋯ mở menu nổi rộng 240, hàng 48, dòng đầu luôn là **Cài đặt <phân hệ>** (trừ
+    Danh bạ), sau đó lối tắt riêng (Thùng rác, Đã gắn sao, Mục mới…). Hàng tab/chip cuộn ngang với `mask-image` mờ 15% mép
+    phải khi còn tab bị che; tab đang chọn luôn cuộn vào khung; không bao giờ cắt chữ giữa từ. Trên điện thoại không có ô
+    tìm thứ hai trong trang.
+  - *Thanh đáy (mọi phân hệ):* viên thuốc nổi cao 64, cách trái 12, đáy 22 + safe-area, phải chừa nút +; nền
+    `--color-overlay` 90% + blur 16, `--shadow-overlay` + viền trong `--color-line`, `--z-sticky`, `nav aria-label="Phân hệ"`.
+    5 ô đều: **4 phân hệ người dùng chọn + Thêm**; mỗi ô icon lucide 24 trong pill 48×30 + nhãn 11px (luôn có chữ). Đang ở:
+    pill `--color-accent-wash`, icon accent, nhãn 600, `aria-current="page"`. Số chưa đọc: pill góc trên phải icon, `99+`,
+    ẩn khi 0, đọc trong `aria-label`; Thêm có chấm khi phân hệ trong đó có việc mới. Mặc định **Chat · Lịch · Tài liệu · Phê
+    duyệt** ở workspace tổ chức, **Chat · Lịch · Tài liệu · Danh bạ** ở workspace cá nhân; lựa chọn lưu theo người, riêng
+    từng workspace. Có ở mọi màn danh sách; ẩn ở màn chi tiết, trang cài đặt và khi bàn phím mở.
+  - *Nút + của phân hệ:* 64×64, radius 20, `--color-accent-wash`, icon + 28 accent, cạnh phải thanh đáy, cùng đáy. Là hành
+    động tạo của phân hệ: Trò chuyện mới (sheet Nhắn tin trực tiếp · Tạo nhóm · Tạo mục) · Tạo/Tải lên · Sự kiện mới · Tạo đề
+    nghị · Thêm tài sản; Danh bạ không có +, ô đó để trống.
+  - *Cuộn:* cuộn xuống quá 24px thì nhãn gập và thanh cao 52 (240ms `--ease-out-expo`), tiêu đề và chip cuộn đi, viên thuốc
+    tìm dính trên; cuộn lên một chút là mở lại. Chạm ô đang ở: về đầu danh sách (rồi về màn gốc của phân hệ; ở Chat, chạm
+    lần nữa bỏ lọc về Tất cả).
+  - *Đi nhanh trong Chat:* nhấn giữ ô Chat 400ms mở menu nổi rộng 230 trên thanh đáy: Trực tiếp · Được nhắc · Thread đang theo
+    dõi · Đã gắn sao, mỗi dòng 48 có pill số.
+  - *Thêm (sheet):* khối workspace (ô chữ cái 40, tên, dòng mờ "Workspace tổ chức · N thành viên" / "Workspace cá nhân · chỉ
+    bạn", chevron mở danh sách workspace: ✓ ở workspace đang mở, số chưa đọc của workspace khác, "Tạo workspace" cuối) ·
+    "Tất cả phân hệ" + link "Sửa thanh đáy" · lưới 4 cột ô 52 radius 16 (viền trong 2px accent = đang ở thanh đáy): Chat ·
+    Lịch · Tài liệu · Phê duyệt · Tài sản · Danh bạ · Thông báo. Workspace cá nhân: không Phê duyệt, Tài sản, Quản
+    trị; Quản trị nằm trong Cài đặt workspace (nút ⚙ trên khối workspace).
+  - *Sửa thanh đáy (trang):* "Ở thanh đáy (4/4)" — 4 hàng kéo được (nút ↑/↓ cho bàn phím) — rồi "Trong Thêm" với "Đưa lên";
+    "Về mặc định"; Xong ở thanh trên. Mở từ Thêm, từ Tôi → Thanh đáy, nhấn giữ ô Thêm, hoặc nhấn giữ vùng trống của thanh. Quản trị không đưa
+    lên được.
+  - *Hành vi sheet và trang:* modal đầy đủ (focus trap, focus vào hàng đầu khi mở, trả focus về nút đã mở, nền sau inert).
+    Đóng bằng Esc, chạm scrim, vuốt mép trái (trang) hoặc kéo sheet xuống quá 25% / vuốt nhanh. Chuyển động §7: scrim fade
+    220ms; sheet `translateY(100%)` → 0 và trang `translateX(100%)` → 0 trong 280ms expo, ra 210ms ease-in. Giảm chuyển
+    động: chỉ fade ≤ 120ms.
   - Danh sách phía trên thanh đáy đệm đáy 108 + safe-area để hàng cuối không bị che. Toast nổi trên thanh đáy (cách
     16), ở màn không có thanh đáy thì cách đáy 16 + safe-area.
+  - *Đổi workspace* đổi luôn thanh đáy, Thêm, Tôi và phạm vi tìm theo loại workspace mới. **Loại workspace cố định khi
+    tạo**: không có chuyển cá nhân ↔ tổ chức theo chiều nào; làm việc nhóm thì tạo một workspace tổ chức mới.
 
 ## 6. Components
 
@@ -303,7 +313,7 @@ nằm ở `accept` và câu báo lỗi). Máy không có chuột không có hove
 - **NotificationPanel** (mockup `design/mockups/notifications.html`): desktop là popover lớn cạnh
   sidebar, rộng 380, cách mép 12, cao trọn khung, `--color-overlay`, radius 12, `--shadow-overlay`;
   không scrim, Esc / bấm ngoài / Đóng thì đóng, trả focus về NavRow. Dưới 1024 là màn toàn màn mở từ
-  menu ☰ → Thông báo (§5), có Quay lại. Đầu: tiêu đề `text-lg` + "N chưa đọc" mờ + Button `ghost sm` "Đánh dấu tất cả đã đọc"
+  Thêm → Thông báo hoặc ô Thông báo ở thanh đáy (§5), có Quay lại. Đầu: tiêu đề `text-lg` + "N chưa đọc" mờ + Button `ghost sm` "Đánh dấu tất cả đã đọc"
   (disabled khi 0). Nhóm "Hôm nay" / "Trước đó" bằng divider ngày của chat. 25 mỗi trang, cuối là
   "Tải thêm" + "Đã hiện X trong Y". Có Skeleton, Empty ("Chưa có thông báo nào…" + "Xem đề nghị của
   bạn") và Error ("Không tải được thông báo…" + "Thử lại").
@@ -348,10 +358,10 @@ người dùng chốt 2026-10-11.)
   chuyển … vào “…”".
 - **Xoá mục:** không hỏi xác nhận vì không mất dữ liệu: các cuộc trò chuyện trở về Tin nhắn trực tiếp hoặc
   Nhóm, toast "Đã xoá mục “…”" có **Hoàn tác** (5s) khôi phục mục, vị trí và các cuộc trò chuyện.
-- **Mobile:** tab Mục dùng cùng thứ tự và cùng mục; menu ⋯ thành sheet đáy (xem "Chat trên điện thoại").
+- **Mobile:** chip Mục dùng cùng thứ tự và cùng mục; menu ⋯ thành sheet đáy (xem "Chat trên điện thoại").
 - **Lối tắt Được nhắc tới / Đã gắn sao** (mockup `design/mockups/shortcuts.html`): "Được nhắc tới" có pill đếm = số tin nhắc tên bạn chưa đọc (99+); là tập con của Trang chủ, không cộng vào số trên thanh đáy. Màn Được nhắc tới: mọi tin (tin chính và trả lời trong thread) nhắc tên bạn ở các cuộc trò chuyện bạn đọc được, mới nhất trên, chia theo vạch ngày; mỗi mục là liên kết: icon cuộc trò chuyện 24 + tên 13px · (trả lời) "Trả lời trong thread của X: “tin gốc…”" 12px mờ · Avatar 32 + tên + giờ · bong bóng rút gọn 3 dòng; @tên bạn là chữ accent 600 trên `--color-accent-wash` bo 4 (cả trong luồng). Chưa đọc: chữ `--color-ink`, tên 600, chấm 8 accent + chữ ẩn; đã đọc: `--color-ink-muted`. Xem danh sách không đánh dấu đã đọc. Bấm: mở cuộc trò chuyện, tin vào giữa, bong bóng loé viền accent 2,4s; trả lời thì mở thêm panel thread và loé trong panel. 25 mỗi trang + "Tải thêm"; Skeleton 4; Rỗng "Chưa ai nhắc tên bạn…" + "Về Trang chủ"; Lỗi + "Thử lại"; tin nhắc mới chèn đầu với lớp phủ màu người.
 - **Đã gắn sao**: gắn sao là của riêng bạn, áp cho cuộc trò chuyện và từng tin. Cột điều hướng có mục hệ thống **Đã gắn sao** ngay dưới lối tắt (ẩn khi trống, thu gọn được, không ⋯/+); cuộc trò chuyện đã gắn sao chỉ hiện ở đó (người dùng chốt 2026-10-11), vẫn nhớ mục cũ và về lại khi bỏ sao; menu ⋯ của nó chỉ có Bỏ gắn sao · Tắt thông báo. Gắn/bỏ sao cuộc trò chuyện: menu ⋯, menu tên ở đầu cuộc trò chuyện (đã gắn thì sao 16 accent sau tên), sheet nhấn giữ. Gắn sao tin: menu Thêm (sau Theo dõi thread) và sheet nhấn giữ; tin đã gắn có sao 12 accent sau giờ. Màn Đã gắn sao: phần Cuộc trò chuyện (hàng như cột điều hướng + IconButton sao `aria-pressed`) và phần Tin nhắn (thẻ như Được nhắc tới, xếp theo lúc gắn sao), mỗi phần có trạng thái rỗng riêng. Mọi thao tác lạc quan; toast "Đã gắn sao “…”"/"Đã bỏ gắn sao …" + Hoàn tác, gắn sao tin + "Xem"; lỗi hoàn lại + toast lỗi + Thử lại.
-- **Điện thoại**: hai lối tắt nằm ở tab Thêm (Được nhắc tới có pill đếm; Thêm trên thanh đáy mang chấm khi có lượt nhắc mới); hai màn mở toàn màn có Quay lại.
+- **Điện thoại**: hai lối tắt mở từ Đi nhanh (nhấn giữ ô Chat, §5; Được nhắc có pill đếm) và từ Cài đặt Chat (§6 "Cài đặt"); hai màn mở toàn màn có Quay lại.
 
 ### Chat: luồng in-line, thread, ô soạn (mockup `design/mockups/spaces.html` §2–§5; §2 là tin nhắn trực tiếp với tin hai bên)
 
@@ -364,7 +374,7 @@ này thì cái kia đóng.
 - **Rời nhóm** (mockup `design/mockups/leave-group.html`, 2026-10-18): thành viên tự rời một nhóm. Không có ở tin
   trực tiếp và #general (người của #general là người của workspace). Ba lối vào, cùng một hộp xác nhận:
   menu tên ở đầu cuộc trò chuyện (máy tính) có MenuSeparator rồi MenuItem "Rời nhóm" (icon LogOut, chữ
-  `--color-danger`) sau "Thông tin nhóm"; đáy panel Thành viên (máy tính và màn Thông tin nhóm trên điện thoại)
+  `--color-danger`) sau "Thông tin nhóm"; đáy panel Thành viên (máy tính và Cài đặt nhóm trên điện thoại)
   có hàng "Rời nhóm" (icon LogOut, `--color-danger`, cao 44), tách khỏi danh sách bằng đường kẻ `--color-line`;
   sheet nhấn giữ hàng trong cột điều hướng trên điện thoại có "Rời nhóm" cuối, chữ danger.
   Hộp xác nhận (ConfirmDialog; điện thoại hiện dạng sheet đáy như mọi ConfirmDialog): tiêu đề "Rời “{tên nhóm}”?",
@@ -531,13 +541,16 @@ này thì cái kia đóng.
   - **Bàn phím:** Esc (sheet trước), ←/→ (trừ khi đang ở media/ô số trang), + − 0. Focus trap, trang sau `inert`, mở thì focus vào Đóng, đóng thì trả focus về chỗ đã bấm.
   - **Giới hạn (người dùng chốt 2026-10-11):** đổi Office tối đa 50 MB nguồn, 45 giây, PDF ≤ 80 MB; trong lúc máy chủ đổi, request chờ và thân hiện "Đang chuẩn bị bản xem trước…". 403 giữ ẩn tên tệp, chưa có "Xin quyền xem".
 
-### Chat trên điện thoại (mockup `design/mockups/chat-mobile-home.html` cho các tab, `chat-mobile.html` cho màn trong cuộc trò chuyện)
+### Chat trên điện thoại (mockup `design/mockups/mobile-shell.html` §1, §1b, §7, §9; hàng danh sách và luồng theo `chat-mobile-home.html`, `chat-mobile.html`)
 
-Bản 390px của Chat; hành vi theo các mục "Chat: …" ở trên, chỉ khác cách chạm. Vỏ (ô tìm, menu ☰, thanh đáy, nút +)
-theo §5 "Điều hướng di động".
-- **Trang chủ:** mọi cuộc trò chuyện (nhóm và trực tiếp) xếp theo hoạt động mới nhất. Tiêu đề "Trang chủ" + nút
-  **Thread** (pill 40, icon thread, pill số thread đang theo dõi có tin mới; mở danh sách Thread) + nút **chỉ chưa đọc**
-  (pill 52×40, icon bong bóng có chấm, `aria-pressed`, nhớ trên thiết bị; bật mà hết thì "Bạn đã đọc hết"). Hàng: avatar
+Bản 390px của Chat; hành vi theo các mục "Chat: …" ở trên, chỉ khác cách chạm. Vỏ (ô tìm, thanh đáy phân hệ, nút +)
+theo §5 "Điều hướng di động". Tiêu đề "Chat" + nút **Thread** + ⋯ (Cài đặt Chat · Mục mới). Dưới tiêu đề là hàng chip lọc
+cuộn ngang (cao 36): **Tất cả · Mục · Chưa đọc · Được nhắc · Trực tiếp · Nhóm** (thay bốn tab Trang chủ · Trực tiếp · Mục ·
+Thêm của bản trước). Chip đang chọn nhớ trên thiết bị; Cài đặt Chat chọn được màn mở đầu (Tất cả hoặc Mục). Trên máy tính các
+màn Được nhắc và Đã gắn sao giữ nguyên route của chúng.
+- **Tất cả** (trước là Trang chủ): mọi cuộc trò chuyện (nhóm và trực tiếp) xếp theo hoạt động mới nhất. Nút **Thread** nằm
+  ở hàng tiêu đề (pill số thread đang theo dõi có tin mới; mở danh sách Thread); lọc chưa đọc là chip **Chưa đọc** (bật mà
+  hết thì "Bạn đã đọc hết"). Hàng: avatar
   44 (nhóm vuông bo 12, người tròn + chấm đang hoạt động) · tên 16px + giờ tương đối (1 phút, 09:02, Hôm qua) · dòng
   "Người gửi: đoạn đầu" của tin mới nhất ở luồng chính ("Bạn:" cho tin của mình; 2 dòng nếu không có dòng thread) ·
   nếu trả lời thread mới hơn tin luồng chính: dòng thụt có nét cong `--color-line` 12×12 bo 8, "Người trả lời: đoạn
@@ -547,20 +560,22 @@ theo §5 "Điều hướng di động".
   600, pill số (hoặc "@" khi được nhắc trong cuộc đã tắt thông báo) cuối dòng. Tắt thông báo: hàng mờ 66%. Chạm hàng mở
   cuộc trò chuyện; chạm dòng thread mở thẳng thread đó. Nhấn giữ hàng: sheet Chuyển tới mục / Mục mới… / Bỏ khỏi mục /
   Gắn sao / Tắt thông báo / Đánh dấu đã đọc. Kéo xuống để tải lại.
-- **Trực tiếp:** như Trang chủ nhưng chỉ tin nhắn trực tiếp; tiêu đề + nút chỉ chưa đọc.
-- **Mục:** tiêu đề "Mục"; cùng thứ tự cột điều hướng máy tính (Đã gắn sao, mục của bạn, Tin nhắn trực tiếp, Nhóm).
+- **Trực tiếp / Nhóm / Chưa đọc / Được nhắc:** như Tất cả nhưng chỉ phần đó; Được nhắc liệt kê các lần bạn được nhắc tên.
+- **Mục** (section kiểu Google Chat, giữ nguyên cơ chế): cùng thứ tự cột điều hướng máy tính (Đã gắn sao, mục của bạn, Tin nhắn trực tiếp, Nhóm).
   Tiêu đề mục: nút gập/mở (chevron + tên 16/600, cao 44; gập thì pill tổng chưa đọc) + nút chỉ chưa đọc của riêng mục
   (pill 52×36). Hàng 56, avatar 36 (nhóm vuông bo 10), tên 16px (700 khi chưa đọc), phải: pill số, "@", icon tắt thông
-  báo. Nhấn giữ hàng như Trang chủ; nhấn giữ tiêu đề mục của bạn: Đổi tên, Lên/Xuống, Xoá mục. "Mục mới" (accent) cuối
+  báo. Nhấn giữ hàng như Tất cả; nhấn giữ tiêu đề mục của bạn: Đổi tên, Lên/Xuống, Xoá mục. "Mục mới" (accent) cuối
   danh sách. Gập/mở dùng chung trạng thái với cột điều hướng máy tính.
-- **Thêm:** tiêu đề "Thêm"; hàng 60: Được nhắc tới (pill số) · Tin đã gắn sao · Thread đang theo dõi ("N có tin mới") ·
-  Duyệt nhóm (chỉ khi tính năng có, xem nút +) · divider · Thông báo của Chat. Module khác không lặp ở đây (đã ở menu ☰).
-- **Tìm trong chat:** chạm viên thuốc thì nó đứng yên và thành ô tìm (☰ xoay thành ←, viền accent 2px, danh sách mờ đi,
+- **Đã gắn sao, Thread đang theo dõi:** qua "Đi nhanh" (nhấn giữ ô Chat, §5) và mục Đã gắn sao; thông báo của Chat ở Cài
+  đặt Chat (§6 "Cài đặt").
+- **Đưa vào mục:** nhấn giữ hàng, vuốt trái → Thêm, hoặc dòng Mục trong Cài đặt nhóm/trò chuyện — cùng một sheet chọn mục
+  (radio các mục + "Mục mới…").
+- **Tìm trong chat:** chạm viên thuốc thì nó đứng yên và thành ô tìm (ô chữ cái xoay thành ←, viền accent 2px, danh sách mờ đi,
   panel gợi ý dâng lên); chưa gõ: Tìm gần đây (xoá từng mục hoặc Xoá tất cả + Hoàn tác) + Trò chuyện gần đây; gõ: gợi ý Người,
   Nhóm và trò chuyện, Tin nhắn + "Xem tất cả kết quả"; Enter: kết quả tin nhắn với chip lọc cuộn ngang (cao 36) Người gửi ·
   Trong · Ngày · Có tệp · Có liên kết · Nhắc đến tôi, chip mở danh sách thành bottom sheet. Chỉ trả tin trong cuộc trò
   chuyện còn quyền đọc. Chi tiết: "Gợi ý trong ô tìm" (§6, `search-gchat.html` §5, duyệt 2026-10-18).
-- **Luồng:** thanh trên có quay lại, icon nhóm 28, tên + "N thành viên", nút Thread (badge) và Thông tin; bong bóng tối đa
+- **Luồng:** thanh trên có quay lại, icon nhóm 28, tên + "N thành viên" (chạm tên mở Cài đặt nhóm/trò chuyện, §6), nút Gọi và Thread (badge); bong bóng tối đa
   88%, chữ 16px; hàng tóm tắt thread cao 36. Không hover: chạm tin hiện giờ trong cụm. Tin của bạn không chừa
   cột giờ bên phải: bong bóng cách mép phải bằng khoảng avatar cách mép trái (14); chạm dòng gom cụm thì giờ hiện
   ngay trên bong bóng, căn phải, chạm lần nữa thì ẩn.
@@ -585,16 +600,16 @@ theo §5 "Điều hướng di động".
   đang theo dõi, công việc giao cho bạn, đề nghị cần bạn duyệt (chỉ workspace tổ chức). Dòng nguồn "Nexus · tên
   nhóm/khu vực", tiêu đề là người gửi hoặc câu "X cần bạn duyệt", thân là đoạn đầu văn bản thuần (2 dòng) khi bật
   "Xem trước nội dung", nếu không thì "Tin nhắn mới trong …". Không ID. Gộp tin cùng cuộc trò chuyện trong 30s thành
-  "N tin mới". Không gửi khi đang mở đúng cuộc trò chuyện, trong giờ yên lặng, hoặc khi người nhận không còn quyền đọc.
+  "N tin mới". Không gửi khi đang mở đúng cuộc trò chuyện, hoặc khi người nhận không còn quyền đọc. Trong giờ yên lặng push bị chặn, trừ khi người nhận được nhắc tên (kể cả @Tất cả).
   Bấm: mở/focus app tới đúng cuộc trò chuyện hoặc thread, tin được nhắc có viền accent loé 2,4s.
 - **Hỏi bật thông báo:** thẻ trong app (Card `--color-raised`, viền trong `--color-line`, radius 14, ô icon chuông
   40 nền accent wash, "Nhận thông báo khi có tin mới?" + một câu lợi ích + Để sau / **Bật thông báo**) hiện sau tin đầu
   tiên bạn gửi hoặc khi mở Thông báo; chỉ khi bấm Bật mới gọi hộp quyền của trình duyệt. "Để sau" ẩn 7 ngày, ba lần thì
   thôi. Cho phép → toast success; chặn → toast + hướng dẫn trong Cài đặt. iPhone chưa thêm vào màn hình chính: thẻ đổi
   thành lời mời thêm vào màn hình chính.
-- **Cài đặt → Thông báo:** nhóm "Thiết bị này" (Switch thông báo đẩy, khoá + banner `danger-wash` có 3 bước mở lại khi
-  trình duyệt chặn; banner `info-wash` cho iPhone chưa cài), "Báo cho tôi khi" (5 Switch theo loại, icon 32 radius 9 nền
-  sunk), "Nội dung và giờ" (Xem trước nội dung, Giờ yên lặng + hai select từ/đến). Lưu ngay, không hộp xác nhận; tắt
+- **Cài đặt → Thông báo (máy tính):** là bản máy tính của các tuỳ chọn thông báo theo phân hệ ở §6 "Cài đặt" (cùng một nơi lưu, hai lối vào); điện thoại dùng Tôi → Thông báo. Nhóm "Thiết bị này" (Switch thông báo đẩy, khoá + banner `danger-wash` có 3 bước mở lại khi
+  trình duyệt chặn; banner `info-wash` cho iPhone chưa cài), Tạm dừng thông báo, Giờ yên lặng + hai select từ/đến (giờ yên lặng chặn push trừ khi bạn được nhắc tên, kể cả @Tất cả),
+  và "Theo phân hệ" dẫn tới mục của từng phân hệ, nơi có các Switch theo loại việc (từ 2026-11-01, xem §6 "Cài đặt trên máy tính"). Lưu ngay, không hộp xác nhận; tắt
   thiết bị thì các mục dưới mờ 50% nhưng giữ giá trị. Hàng ≥ 56, Switch 44 × 26.
 - **Cài app:** Android — thanh nổi trên thanh đáy (icon app 44, "Cài Nexus vào màn hình chính" + một dòng mờ, Để sau /
   Cài đặt) từ lần mở thứ hai, chỉ ở danh sách, không trong cuộc trò chuyện; iPhone — sheet một lần với 3 bước có số
@@ -715,12 +730,34 @@ cho tab Tệp của nhóm.
   Vị trí, Người có quyền cụm Avatar + "+ N") · Hoạt động (Avatar 20 + "**Tên** việc · thời gian"). Không chọn gì: panel ẩn.
 - **Bàn phím:** mũi tên đi trong lưới theo số cột; **Space/Enter** mở Trình xem tệp với các tệp của thư mục (đã lọc),
   ←/→ trong đó; Shift+F10 mở ⋯; chuột phải mở cùng menu.
-- **Máy tính bảng (768–1023):** cây thư mục vào ngăn kéo (nút ☰ trước breadcrumb); lưới 3 cột; chip loại gọn thành một
-  chip có menu; panel thành sheet bên phải (rộng 340, cách mép 10, bo 16) phủ lên lưới với scrim; ⋯ luôn hiện; vùng chạm 44.
-- **Điện thoại (< 768):** thanh trên: Quay lại · tên thư mục · Tìm · đổi Lưới/Danh sách; chip loại cuộn ngang; lưới 2 cột
-  (gap 8, ô thư mục 44); chạm thẻ mở thẳng Trình xem tệp; nhấn giữ hoặc ⋯ mở bottom sheet (xem trước nhỏ + "Loại · dung
-  lượng · người · giờ" + Mở · Tải xuống · Chia sẻ · Chuyển tới thư mục… · Đổi tên · Xoá danger, hàng 48); nút + nổi 56 bo
-  18 accent góc dưới phải (sheet: Tải tệp lên · Chụp ảnh · Thư mục mới).
+- **Dưới 1024 (điện thoại và máy tính bảng; mockup `design/mockups/mobile-shell.html` §10, duyệt 2026-10-19):** vỏ như
+  mọi phân hệ (§5). Không ngăn kéo cây thư mục: dưới tiêu đề là chip lối vào **Gần đây · Thư mục · Gắn sao · Chia sẻ với
+  tôi · Bản nháp** (một mục "chia sẻ" duy nhất: những gì người khác chia sẻ với bạn; Bản nháp là văn bản nháp của bạn).
+  "Thư mục" mở thư mục gốc của workspace (cá nhân: "Tài liệu của tôi"; tổ chức: tên tổ chức, rồi thư mục phòng ban theo
+  quyền). Máy tính bảng: lưới 3 cột, panel chi tiết thành sheet bên phải (rộng 340, cách mép 10, bo 16) phủ lên với scrim.
+  - *Gần đây:* "Truy cập nhanh" — tối đa 6 thẻ 148 cuộn ngang (thumbnail 16:10 bo 9 + tên 13/600 + một dòng lý do: "Bạn
+    sửa · Hôm qua", "Thu Lan chia sẻ"; lý do chỉ hiện khi người xem còn quyền thấy nguồn của nó) — rồi danh sách nhóm theo
+    thời gian (Hôm nay · Tuần này · Tháng này · Cũ hơn).
+  - *Danh sách là mặc định trên điện thoại:* hàng 60, ô loại 40 radius 10 tô theo `file-kind` (văn bản `--color-info`,
+    bảng tính `--color-success`, PDF `--color-danger`, ảnh `--color-warning`, thư mục `--color-sunk`), tên 15/500 (sao vàng
+    nếu đã gắn sao) + "Loại · ai sửa · khi nào" 13px mờ, ⋯ 44. Nút đổi Lưới/Danh sách ở hàng tiêu đề, nhớ theo người. Lưới 2
+    cột chỉ dùng thumbnail thật; tệp không có thumbnail hiện như ô danh sách.
+  - *Trong thư mục:* thanh trên ← (lên thư mục cha) · tên thư mục · Tìm (ô tìm §6 với phạm vi = thư mục này) · ⋯; dưới là
+    đường dẫn cuộn ngang 13px ("NovaPay › Phòng Kế toán › Tài chính", đoạn cuối 600, chạm một đoạn để nhảy), rồi một hàng
+    sắp xếp ("Sửa gần nhất ⌄") + đổi kiểu xem; thư mục trước tệp.
+  - *Menu tệp* (⋯ hoặc nhấn giữ, bottom sheet): đầu sheet là hàng tệp (ô loại + tên + "Loại · dung lượng · ai sửa"); 4 lối
+    tắt ô 16 radius: Chia sẻ · Sao chép liên kết · Gắn sao · Tải xuống; rồi hàng 52: Gửi vào trò chuyện… · Chuyển tới thư
+    mục… · Tạo bản sao · Thông tin và hoạt động (người có quyền, lịch sử) · Đổi tên · Chuyển vào thùng rác (danger). Chỉ
+    hiện việc người xem được phép. Tạo bản sao trong cùng thư mục thành "Bản sao của <tên>".
+  - *Chọn nhiều:* nhấn giữ một hàng vào chế độ chọn; ô chọn 22 radius 7 thay ô loại; chạm hàng khác (hoặc kéo dọc cột ô
+    chọn) để chọn tiếp; thanh trên "Đã chọn N" + ✕ + Chọn tất cả; thanh thao tác nền `--color-ink` cao 64 radius 22 thay
+    thanh đáy: Chia sẻ · Chuyển · Tải xuống · Gắn sao · Xoá — chỉ những việc mọi mục đã chọn đều cho phép. Esc / ✕ / vuốt mép
+    trái thoát chọn.
+  - *Nút + (sheet "Thêm vào <thư mục>"):* Tải tệp lên · Chụp ảnh · Thư mục mới · Văn bản mới. Tải lên chạy nền: thẻ tiến độ
+    (`--color-overlay`, radius 16, "Đang tải lên N tệp" + %, thanh 4px accent, tên tệp + thời gian còn lại) nổi trên thanh
+    đáy, gập thành vòng % khi cuộn, theo sang màn khác và còn sau khi tải lại app; lỗi từng tệp có "Thử lại"; xong thì toast
+    "Đã tải lên N tệp vào <thư mục> · Xem".
+  - *Vuốt hàng (§6 "Vuốt"):* trái lộ Chia sẻ · Gắn sao · Thêm; không có vuốt xoá.
 - **Tab Tệp của nhóm:** cùng thẻ và lưới; chip Tất cả · Ảnh & video · Tài liệu · Khác; nhóm theo thời gian (Hôm nay · Tuần
   này · Tháng này · Cũ hơn, tiêu đề dính khi cuộn trên điện thoại); nhóm toàn ảnh/video thành lưới vuông sát nhau (ô tối
   thiểu 112, gap 4, bo 6; điện thoại 3 cột) như album; "Mở trong Tài liệu" ghost ở cuối thanh công cụ; menu ⋯ có thêm
@@ -805,7 +842,7 @@ thanh trên không có nút primary.
   ra · Tham gia" và nút gọi ở đầu nhóm đổi thành "Tham gia".
 - **Máy tính bảng (768–1023):** cột lịch thành ngăn kéo (nút khung bên phải tiêu đề); nút + nổi 56 bo 18 thay Tạo; vùng chạm
   ≥ 44; kéo thả bằng nhấn giữ 400ms; chạm sự kiện mở sheet phải rộng 360 (cách mép 10, bo 16), chạm ô trống mở sheet tạo nhanh.
-- **Điện thoại (< 768):** ☰ như mọi module, thanh trên viên thuốc "Tìm sự kiện", không thanh đáy. Dải tuần 7 ô 36 (chấm dưới
+- **Điện thoại (< 768):** vỏ như mọi phân hệ (§5), thanh trên viên thuốc "Tìm sự kiện", thanh đáy phân hệ, nút + là Sự kiện mới; vuốt ngang dải tuần đổi tuần (§6 "Vuốt"). Dải tuần 7 ô 36 (chấm dưới
   ngày có sự kiện, vuốt ngang đổi tuần); chạm "Tháng 10 ▾" gấp ra lịch tháng (280ms expo). Thẻ lịch biểu cao ≥ 56, nền đặc màu
   lịch (đã qua / chưa trả lời / từ chối theo cùng quy tắc khối), tiêu đề 16/600, giờ + địa điểm 13 mờ. ⋯ cạnh tiêu đề chọn kiểu
   xem: Lịch biểu · Ngày · 3 ngày · Tháng. Chi tiết là bottom sheet (§5); + nổi mở trình soạn toàn màn, Khách và Tìm giờ là màn con.
@@ -844,8 +881,8 @@ gợi ý khi gõ và **bộ lọc** đợt này chỉ có ở Chat. Mockup §1�
   - *Đóng:* danh sách và chân fade ra 120ms `--ease-in`, clip về viên thuốc 210ms `--ease-in`, bóng tắt cùng lúc; chữ ở
     lại trong ô.
   - *Đổi nhóm khi gõ:* hàng mới fade 120ms, không trượt, không lệch.
-- **Điện thoại (< 1024):** không có popover. Chạm viên thuốc 52 của thanh trên (§5): viên thuốc **đứng yên tại chỗ**, ☰
-  xoay −90° + fade ra và ← xoay 90° → 0 + fade vào (160ms `--ease-out`), avatar fade ra 160ms, viền trong 2px
+- **Điện thoại (< 1024):** không có popover. Chạm viên thuốc 52 của thanh trên (§5): viên thuốc **đứng yên tại chỗ**, ô
+  chữ cái workspace xoay thành ← (← xoay 90° → 0 + fade vào, chữ cái xoay −90° + fade ra) (160ms `--ease-out`), avatar fade ra 160ms, viền trong 2px
   `--color-accent` (lớp riêng) fade vào 160ms, danh sách màn fade ra 120ms `--ease-in`, panel gợi ý `translateY(8px)` +
   fade 220ms `--ease-out` sau 60ms, hàng lệch 20ms. Focus đồng bộ trong cú chạm để bàn phím mở ngay. ← hoặc back hệ điều
   hành: ngược lại 160ms, giữ vị trí cuộn. Hàng 52, icon 36, tên 15/500; ✕ luôn hiện, vùng chạm 44. Cất bàn phím không
@@ -914,7 +951,7 @@ gợi ý khi gõ và **bộ lọc** đợt này chỉ có ở Chat. Mockup §1�
     "…" với các bộ lọc này." + **Xoá bộ lọc**; không bộ lọc: "Không có tin nhắn nào khớp "…". Thử từ khác hoặc viết ngắn
     hơn." Lỗi: icon 24 + "Chưa tìm được. Kiểm tra kết nối rồi thử lại." + **Thử lại**.
 - **Giảm chuyển động:** bề mặt đổi ngay rồi fade 120ms; không `transform`, không lệch hàng, không FLIP; xoá hàng chỉ fade
-  120ms; ☰/← đổi ngay; sheet chỉ fade ≤ 120ms; Skeleton không chạy sáng.
+  120ms; ô chữ cái/← đổi ngay; sheet chỉ fade ≤ 120ms; Skeleton không chạy sáng.
 - **Bàn phím (máy tính):** ↑/↓ đi qua mọi hàng mọi nhóm (vòng), focus vẫn ở ô; Enter chọn hàng hoặc Xem tất cả; Delete xoá
   lần tìm cũ đang chọn (chỉ khi ô trống); Tab tới "Xoá tất cả" (thứ duy nhất Tab tới được trong bề mặt), Tab lần nữa
   rời và đóng, Esc ở đó về ô; **Esc** lần 1 thu bề mặt giữ chữ, lần 2 xoá chữ, lần 3 rời ô và trả focus về chỗ trước `/`
@@ -987,6 +1024,25 @@ Danh bạ kiểu Lark: list panel chọn danh mục (§5), content duyệt danh 
   khi quay lại." + "Hiện mọi người") · Lỗi ("Không tải được danh bạ" + "Thử lại"). Mỗi nguồn hỏng riêng: cây phòng ban lỗi
   thì báo lỗi tại chỗ dưới danh mục Phòng ban ("Không tải được cây phòng ban. Bạn vẫn tìm được người bằng ô tìm." + Thử lại),
   Vai trò, Nhóm của tôi và ô tìm vẫn dùng được.
+- **Điện thoại (mockup `design/mockups/mobile-shell.html` §12, duyệt 2026-10-19; vỏ theo §5):**
+  - *Phòng ban chỉ có ở workspace tổ chức.* Ở workspace cá nhân không có ô Phòng ban, Phòng của tôi, Vai trò, chip lọc Phòng
+    ban, dòng Phòng ban và Cùng phòng trên thẻ hồ sơ, và dòng phụ của người chỉ là chức danh (không "· phòng").
+  - *Màn đầu:* tiêu đề "Danh bạ" + ⋯ (quản trị viên: "Mời thành viên" → Cài đặt workspace); **Thường liên lạc** — tối đa 8
+    avatar 52 cuộn ngang (tên ngắn 12px dưới), lấy từ tin nhắn trực tiếp gần đây, chỉ người còn trong phạm vi được xem, ẩn khi
+    chưa nhắn ai; chạm mở thẻ hồ sơ, nhấn giữ mở Nhắn tin · danh mục thành **lưới 2 cột** (ô `--color-raised` radius 16, icon 40
+    trên person-wash, tên 15/600 + dòng mờ): Phòng ban · Phòng của tôi (khi người xem thuộc một phòng) · Vai trò · Nhóm của
+    tôi; workspace cá nhân: Thành viên · Nhóm của tôi · **Đang trực tuyến · N** (tối đa 5 hàng + "Xem tất cả").
+  - *Trong phòng / vai trò / nhóm:* thanh trên ← (lên cấp trên) · tên · kính lúp (ô tìm §6 "Tìm cho mọi tác vụ", phạm vi
+    Người, lọc sẵn đúng phòng đang mở) — không ô tìm trong trang; đường dẫn 13px dưới thanh; chip "Đang trực tuyến · N"; hàng
+    người 60, avatar 40. Từ 30 người: cột chữ cái A–Z 18px bên phải (theo chữ cái đầu của **tên**, thứ tự tiếng Việt), chạm
+    hoặc kéo để nhảy, chữ đang chọn hiện to giữa màn khi kéo. Vuốt trái hàng người lộ **Nhắn tin** (accent) · **Gọi** (success).
+  - *Thẻ hồ sơ:* bìa 120 trong vùng cuộn, nút ← và ⋯ nổi; avatar 80 viền 4px đè bìa; tên display 22/700, chức danh, pill trạng
+    thái; **4 nút đều** cao 64: Nhắn tin (primary) · Gọi · **Lịch** (mở Lịch với lịch của người đó chồng lên, theo quyền xem lịch
+    hiện có) · Email (hiện địa chỉ, chép được); dòng chi tiết theo nhóm iOS (nhãn trên giá trị); Cùng phòng; **Đã cùng làm việc**:
+    "N nhóm chung" (tên nhóm, mở danh sách) · "Tệp đã chia sẻ với bạn" (N tệp) — chỉ những gì người xem đọc được. ⋯: Sao chép
+    email · Thêm vào nhóm… · Mời vào cuộc họp. Hồ sơ của chính bạn: "Sửa hồ sơ" mở Tôi › Tài khoản và hồ sơ.
+  - *Tìm người:* ô tìm §6 với chip phạm vi Người và chip lọc Phòng ban · Vai trò · Đang trực tuyến; dòng "Kết quả trong cả <tổ
+    chức> · N người khớp" (hoặc "trong phạm vi bạn được xem"); mỗi hàng có nút Nhắn tin.
 - **Quản trị › Danh bạ** (mockup `design/mockups/admin.html` §7b; Claude chốt 2026-10-17 theo uỷ quyền của Zane, khớp
   §1c của mockup đã duyệt): tab thứ tư của Quản trị, chỉ ở workspace tổ chức và chỉ khi workspace đã có dữ liệu phạm vi
   (chưa có thì không hiện tab, không báo lỗi). Câu đầu "Mặc định mọi thành viên thấy toàn bộ danh bạ. Quản trị viên luôn thấy
@@ -1002,11 +1058,145 @@ Danh bạ kiểu Lark: list panel chọn danh mục (§5), content duyệt danh 
 
 - Máy tính: nút góc phải trang đăng nhập (secondary, icon + chữ) đổi giữa form và mã QR; lựa chọn nhớ trên máy. Trạng thái
   của mã (đã quét, đang đăng nhập, bị huỷ, hết hạn) phủ lên chính mã, khung không đổi kích thước.
-- Điện thoại: "Quét mã QR" trong sheet nút + và sheet tài khoản; máy quét toàn màn trên nền stage; màn xác nhận nói máy nào xin
+- Điện thoại: "Quét mã QR" trong sheet nút + và trang Tôi (mở từ avatar); máy quét toàn màn trên nền stage; màn xác nhận nói máy nào xin
   vào, tài khoản và tổ chức, luôn có cảnh báo lừa đảo, nút Đăng nhập ở vùng ngón cái.
 - Hai lớp chống lừa đảo (thêm 2026-11-01): máy tính hỏi lại "Tiếp tục với tên …?" trước khi vào (có "Không phải tôi");
   điện thoại hiện cảnh báo đỏ khi máy tính ở mạng khác. Mỗi lần duyệt ghi nhật ký kiểm toán.
 - Ngoại lệ màu có ghi chú: mã QR dùng trắng thật và đen thật ở cả hai chế độ (camera cần vùng sáng); máy quét luôn tối (token stage).
+
+### Cài đặt: Tôi, cài đặt phân hệ, workspace cá nhân và tổ chức (mockup `design/mockups/mobile-shell.html` §3, §4, §8, duyệt 2026-10-19)
+
+Mỗi tuỳ chọn có **một chỗ ở**; lối vào khác nhau mở cùng một trang. Cài đặt chia hai lớp: **Tài khoản** (theo người, mọi
+workspace dùng chung) và **Trong workspace này** (theo workspace). Máy tính có cùng các mục, cùng dữ liệu (xem "Cài đặt trên máy tính" dưới).
+- **Cài đặt trên máy tính (≥ 1024; mockup `design/mockups/settings-desktop.html`, duyệt 2026-11-01):** thay thanh tab cũ
+  bằng **danh mục bên trái** 248px trong trang Cài đặt, hai nhóm như Tôi: *Tài khoản* (Tài khoản và hồ sơ · Thông báo ·
+  Giao diện và ngôn ngữ · Thiết bị và phiên) và *Trong <workspace>* (tổ chức: Hồ sơ trong tổ chức · Chat · Lịch · Tài
+  liệu · Phê duyệt · Tài sản · Cài đặt workspace; cá nhân: Chat · Lịch · Tài liệu · Cài đặt workspace), cuối danh mục là
+  dòng Giới thiệu (phiên bản). Mục đang mở nền `--color-accent-wash`, chữ accent. Mỗi mục là `/settings/<mục>` như điện
+  thoại; `/settings` mở Tài khoản và hồ sơ; `?tab=ho-so|workspace|giao-dien|thong-bao` cũ mở mục tương ứng. Bên phải:
+  tiêu đề mục (display 19/700) + dòng mờ "Dùng chung mọi workspace" / "Trong <workspace>", rồi các nhóm: tiêu đề nhóm 13/600
+  mờ, hàng phẳng có divider (không thẻ), rộng tối đa 680. Chọn giá trị: ô chọn thả xuống (từ 4 lựa chọn) hoặc Segmented
+  (2–3), lưu ngay; công tắc lưu ngay; trường chữ là biểu mẫu với Lưu thay đổi (Tài khoản và hồ sơ, Hồ sơ trong tổ chức,
+  Thông tin của workspace). Giờ yên lặng và Giờ làm việc: hai ô giờ trên một dòng. Lịch đang hiện: ô đánh dấu ngay trong
+  dòng. Dòng chỉ có nghĩa trên màn cảm ứng không hiện: Enter để gửi, Mở Chat ở, Sắp xếp Chat, Cảm xúc khi chạm đúp, Thanh
+  đáy, Tải ảnh xem trước bằng dữ liệu di động, Chế độ xem và Thời lượng mặc định của Lịch, Sắp xếp Phê duyệt. Các công
+  tắc "Báo cho tôi khi" theo loại việc nằm ở mục phân hệ (Chat…), Thông báo chỉ giữ Tạm dừng, thông báo đẩy trên máy này
+  (banner 3 bước khi trình duyệt chặn), Giờ yên lặng và nhóm Theo phân hệ dẫn tới từng mục. Cài đặt workspace trên máy tính
+  có đủ các dòng của §11 (dòng có chevron mở màn Quản trị hiện có; Mời mở hộp thoại mời) và giữ thẻ Loại workspace.
+  Lịch chỉ có một chỗ cài đặt: Giờ làm việc vào mục Lịch (cả điện thoại), hộp thoại cài đặt trong Lịch bỏ, nút ⚙ của Lịch
+  mở `/settings/calendar`.
+- **Lối vào Cài đặt từ phân hệ trên máy tính (mockup `settings-desktop.html` §7, duyệt 2026-11-01):** máy tính không có ⋯ của
+  phân hệ, nên mỗi phân hệ có nút ⚙ như của Lịch (`IconButton` tròn, icon 20, tên "Cài đặt <phân hệ>"), mở
+  `/settings/<phân hệ>` giữ workspace. Chat: cạnh nút Mới ở đầu cột danh sách. Tài liệu, Phê duyệt, Tài sản: nút cuối bên
+  phải đầu trang. Danh bạ không có.
+- **Hồ sơ trong tổ chức là chỗ duy nhất của thông tin theo tổ chức (duyệt 2026-11-01, cả điện thoại và máy tính):** ở
+  workspace tổ chức, Chức danh (sửa), Phòng ban và Vai trò (chỉ đọc) chỉ nằm ở Hồ sơ trong tổ chức; Tài khoản và hồ sơ giữ
+  ảnh, Tên hiển thị, Nơi làm việc, Email. Workspace cá nhân không có Hồ sơ trong tổ chức nên Chức danh ở Tài khoản và hồ sơ.
+- **Tôi (dưới 1024; chạm avatar ở thanh trên):** trang toàn màn trượt từ phải, ẩn thanh đáy; thay bốn lối vào cũ (☰ → Cài
+  đặt, sheet tài khoản với Cài đặt thông báo / Cài đặt tài khoản / Cài đặt, Thêm → Thông báo của Chat). Từ trên: thẻ hồ sơ
+  (avatar 64, tên display 18/700, dòng phụ — tổ chức: "chức danh · phòng"; cá nhân: email — pill trạng thái, pill loại
+  workspace) · Tạm dừng thông báo · nhóm **Tài khoản · dùng chung mọi workspace**: Tài khoản và hồ sơ · Thông báo · Giao diện
+  và ngôn ngữ · Thiết bị và phiên · nhóm **Trong <workspace>**: (tổ chức) Hồ sơ trong tổ chức · Chat · Lịch · Tài liệu · Phê
+  duyệt · Tài sản · Thanh đáy; (cá nhân) Chat · Lịch (chỉ lịch cá nhân) · Tài liệu · Thanh đáy · **Cài đặt workspace**
+  (một dòng, mở trang dưới đây) · Giới thiệu (phiên bản `2026.10.18 · 6368e8e`) · Đăng xuất (danger, chỉ ở đây).
+- **Danh sách nhóm (iOS/Lark):** nhóm nền `--color-raised` radius 16, cách mép 16; tiêu đề nhóm 13/600 mờ ở ngoài; hàng ≥ 52,
+  ô icon 32 radius 9 `--color-sunk`, nhãn 15/500 + dòng mờ 13px, giá trị hiện tại mờ bên phải, chevron `--color-ink-subtle`;
+  divider `--color-line` giữa các hàng. Công tắc 44×26 accent khi bật. Chọn giá trị (Sắp xếp, Tuần bắt đầu…): trang con một
+  cột radio, chạm là chọn và quay lại. Sửa một trường (Tên hiển thị, Chức danh…): trang con có ô nhập, Lưu ở thanh trên (bật
+  khi có thay đổi), quay lại = huỷ.
+- **Lưu:** công tắc và radio lưu ngay khi chạm; lưu lỗi thì trả lại giá trị cũ + toast "Chưa lưu được…".
+- **Thông báo (Tôi → Thông báo):** Thông báo đẩy trên máy này · Giờ yên lặng (giờ; push bị chặn trừ khi bạn được nhắc tên, kể cả @Tất cả) · Xem trước nội
+  dung trên màn khoá · nhóm Theo phân hệ: Chat · Lịch · Phê duyệt · Tài liệu · Tài sản (dòng mờ nói loại việc) — mỗi dòng
+  mở mục Thông báo của trang Cài đặt <phân hệ>. Mức thông báo từng nhóm đặt trong cài đặt nhóm đó.
+- **Cài đặt <phân hệ>** (⋯ của phân hệ → dòng đầu, hoặc Tôi → dòng phân hệ):
+  - *Chat:* Thông báo (Tin nhắn trực tiếp · Được nhắc tên · Thread đang theo dõi · Mức mặc định cho nhóm mới) · Soạn và đọc
+    (Enter để gửi · Xem trước liên kết · Cảm xúc khi chạm đúp: 👍 / Tắt) · Danh sách (Mở Chat ở: Tất cả / Mục · Sắp xếp ·
+    Quản lý mục).
+  - *Lịch:* Hiển thị (Chế độ xem mặc định · Tuần bắt đầu vào · Múi giờ · Lịch đang hiện) · Sự kiện mới (Thời lượng mặc định ·
+    Nhắc trước) · Thông báo (Lời mời mới · Thay đổi sự kiện · Nhắc sự kiện).
+  - *Tài liệu:* Hiển thị (Xem dạng · Sắp xếp · Thư mục trước tệp) · Dữ liệu di động (Tải ảnh xem trước) · Thông báo (Được
+    chia sẻ tài liệu).
+  - *Phê duyệt, Tài sản:* cùng khuôn — Thông báo theo loại việc + Hiển thị (tab mở đầu, sắp xếp). Danh bạ không có trang
+    cài đặt.
+- **Cài đặt workspace (mockup §11):** mọi thứ thuộc về chính workspace, một trang; mở từ nút ⚙ trên khối workspace trong
+  Thêm, từ sheet chọn workspace, hoặc Tôi → Cài đặt workspace. Thay Cài đặt → Workspace và ô Quản trị trên điện thoại (ô
+  Quản trị bỏ khỏi lưới Thêm; máy tính giữ màn Quản trị). Đầu trang: ô chữ cái workspace 72 radius 20 · tên · "Workspace
+  tổ chức · N thành viên" / "Workspace cá nhân · chỉ bạn" · pill vai trò của người xem. Mỗi dòng chỉ hiện khi người xem làm
+  được việc đó (kiểm tra quản trị hiện có); server quyết định ở mọi màn.
+  - *Tổ chức, quản trị viên:* Thông tin (Tên · Mô tả) · Thành viên và tổ chức (Thành viên · Mời thành viên + "N lời mời
+    đang chờ" · Phòng ban · Vai trò và quyền · Phạm vi danh bạ) · Quy định (Ai được tạo nhóm) · Phân hệ (Mẫu phê duyệt ·
+    Loại tài sản · Dung lượng Tài liệu "đã dùng / tối đa · N tệp", chạm để đổi hạn mức) · Rời <workspace>. Mỗi dòng mở màn
+    Quản trị hiện có với bố cục điện thoại (danh sách, sheet chi tiết thay panel bên phải).
+  - *Tổ chức, thành viên:* Thông tin chỉ đọc · Quản trị viên (cụm avatar → danh sách) · Quy định (giá trị + "Do quản trị
+    viên đặt") · Hồ sơ trong tổ chức · Rời <workspace> (chủ sở hữu cuối cùng phải chuyển quyền trước).
+  - *Cá nhân:* Tên workspace · Dung lượng Tài liệu. Không thành viên, phòng ban, vai trò, quy định hay Rời.
+- **Workspace cá nhân và tổ chức:** cùng vỏ, khác nội dung. Cá nhân: không Phê duyệt, Tài sản, Quản trị, phòng ban, Hồ sơ
+  trong tổ chức, Rời; không dòng nào bị khoá. Tổ chức: quản trị viên có thể **khoá** một tuỳ chọn cho cả tổ chức — dòng
+  khoá mờ 72%, hiện giá trị + dòng "🛡 Quản trị viên <workspace> đã đặt" (không nêu tên người đặt, vì đồ thị không ghi người đặt),
+  không chạm được; server là nơi chặn. Đợt này chỉ khoá "Ai được tạo nhóm": khoá = bỏ quyền tạo nhóm của Thành viên và của
+  mọi vai trò tự tạo (chủ sở hữu giữ quyền); màn Vai trò và quyền không cho cấp quyền tạo nhóm khi đang khoá; mở khoá trả lại
+  quyền cho Thành viên, vai trò tự tạo không tự được trả lại.
+
+### Cài đặt cuộc trò chuyện (mockup `design/mockups/mobile-shell.html` §5, duyệt 2026-10-19)
+
+- **Thanh trên trong cuộc trò chuyện (điện thoại):** quay lại · nút tên (avatar 28 + tên display 17/700 + chevron nhỏ + dòng
+  "N thành viên" / chức danh) mở trang cài đặt · Gọi · Thread. "Tìm trong nhóm" và ⓘ rời thanh trên. Máy tính: cùng nội
+  dung là panel Thông tin bên phải, mở bằng ⓘ như hiện nay.
+- **Cài đặt nhóm:** đầu trang ảnh nhóm 72 (radius 20) · tên display 20/700 · mô tả mờ + "Sửa" (người có quyền) · 4 lối tắt
+  (ô `--color-raised` radius 16, icon 20 + nhãn 13px): Tìm · Thông báo · Gắn sao · Thêm người · nhóm Nội dung: Thành viên (cụm
+  avatar 28 + số) · Tệp, ảnh và liên kết (số) · Tin đã ghim (số) · nhóm Của bạn: Thông báo (mức) · Mục
+  (sheet chọn mục) · Quản lý nhóm (chỉ chủ nhóm và quản trị nhóm) · Rời nhóm (danger, hộp xác nhận; chủ nhóm phải chuyển
+  quyền trước).
+- **Cài đặt trò chuyện (DM):** avatar 64 · tên · chức danh · phòng (tổ chức) · lối tắt Hồ sơ · Tìm · Thông báo · Gắn sao · Tệp,
+  ảnh và liên kết · Tin đã ghim · Thông báo (mức) · Mục · "Tạo nhóm với <tên>" (accent).
+- **Thành viên:** danh sách có ô tìm, vai trò trong nhóm (Chủ nhóm / Quản trị nhóm / Thành viên); nhấn giữ một người: Nhắn
+  riêng · Đặt làm quản trị nhóm · Xoá khỏi nhóm (theo quyền). Không bao giờ hiện ID.
+- **Quản lý nhóm:** ba nhóm radio — Ai được gửi tin · Ai được thêm người · Ai được nhắc @Tất cả — mỗi nhóm "Mọi thành viên" |
+  "Chỉ chủ nhóm và quản trị nhóm" (gửi tin: dòng mờ "Thành viên vẫn trả lời trong thread"; bắt đầu bình chọn, công việc hay
+  thẻ phê duyệt trong luồng chính cũng tính là gửi tin, còn bỏ phiếu và đóng bình chọn của mình vẫn mở; @Tất cả: ở kênh
+  của cả workspace chỉ quản trị viên workspace dùng được, tin nhắn trực tiếp không có); Người quản lý (chủ nhóm, các
+  quản trị nhóm, "Thêm quản trị nhóm"); Chuyển quyền chủ nhóm; Giải tán nhóm (danger, chỉ chủ nhóm). Mỗi lựa chọn là quyết định
+  của server; bị từ chối thì trả lại lựa chọn cũ + toast. Mất quyền giữa chừng (bị gỡ quản trị): trang và nút tự ẩn khi
+  quyền đổi; thao tác đã gửi bị từ chối thì toast "Bạn không còn quyền làm việc này".
+
+### Tìm cho mọi tác vụ (mockup `design/mockups/mobile-shell.html` §6, duyệt 2026-10-19)
+
+Một ô tìm cho mọi phân hệ; hành vi nở ra, Tìm gần đây, gợi ý khi gõ theo "Gợi ý trong ô tìm" ở trên, nay áp cho mọi phân hệ.
+- **Phạm vi:** chip đầu là phân hệ đang mở (mặc định), rồi **Tất cả**, rồi các phân hệ khác (workspace cá nhân: không Phê
+  duyệt, Tài sản). Chip đang chọn nền `--color-ink` chữ `--color-base`; đổi phạm vi giữ chữ đã gõ. Sau phạm vi là chip lọc
+  viền 1px của phân hệ đó: Chat (Người gửi · Trong · Ngày · Có tệp · Có liên kết · Nhắc đến tôi), Tài liệu (Loại · Người sửa
+  · Ngày · Thư mục), Phê duyệt (Trạng thái · Loại · Người gửi · Ngày), Lịch (Lịch · Khoảng ngày), Tài sản (Loại · Trạng thái
+  · Người giữ); chip đang lọc nền `--color-accent-wash` viền accent + ✕.
+- **Chưa gõ:** Tìm gần đây (riêng từng phạm vi) · Gợi ý · **Làm nhanh** (lưới 4: Tạo đề nghị · Sự kiện mới · Nhắn tin · Cài
+  đặt <phân hệ>, theo phân hệ và quyền).
+- **Tất cả, đang gõ:** nhóm theo loại — Hành động (lệnh khớp chữ, ví dụ "Tạo đề nghị "đối soát"") · Người · Trò chuyện · Tin
+  nhắn · Tài liệu · Đề nghị · Sự kiện · Tài sản — mỗi nhóm 1–3 hàng 52 + "Xem tất cả · N" (accent) chuyển sang phạm vi đó;
+  chữ khớp đậm `--color-ink`. Mỗi nhóm hiện ngay khi về, nhóm đang chờ là Skeleton.
+- **Trong một phân hệ:** kết quả + chip lọc; cuối danh sách thẻ `--color-sunk` "Có N kết quả ở phân hệ khác · Tìm ở mọi nơi".
+- Kết quả chỉ gồm những gì người tìm được phép đọc; không bao giờ hiện ID.
+
+### Vuốt (mockup `design/mockups/mobile-shell.html` §7, §9, duyệt 2026-10-19)
+
+App cài trên iPhone không có cử chỉ quay lại của hệ điều hành; app tự làm. Mọi cử chỉ có nút tương đương; không cử chỉ
+nào làm việc không hoàn tác được.
+- **Quay lại:** vuốt từ mép trái (vùng 20px) ở mọi màn chi tiết, trang cài đặt, thread: màn hiện tại theo ngón tay, màn trước
+  lộ dần; thả quá 35% hoặc vận tốc > 0,5 px/ms là quay lại. Mở app từ thông báo đẩy (không có màn trước): về màn gốc của
+  phân hệ. Ở trình duyệt (không cài app) dùng nút ←.
+- **Vuốt hàng:** trái lộ 2–3 nút rộng 76 (nhãn 12px dưới icon) — Chat: Tắt thông báo · Gắn sao · Thêm (có Chuyển tới mục); Tài liệu:
+  Chia sẻ · Gắn sao · Thêm; Thông báo: Xoá (xoá xong có toast Hoàn tác). Phải ở Chat và Thông báo: Đã đọc / Chưa đọc, vuốt hết (> 60%) làm luôn kèm Hoàn
+  tác. Phê duyệt (Chờ tôi): chỉ **lộ** Duyệt… (phải) / Từ chối… (trái), chạm mới mở sheet xác nhận có ô ý kiến; vuốt hết
+  không làm gì. Một hàng mở tại một thời điểm.
+- **Trong cuộc trò chuyện:** vuốt tin sang phải (64px) = trích dẫn trả lời (ô soạn hiện khung trích, bàn phím mở); sang trái
+  = mở thread của tin; cùng hướng cho tin của mình và người khác. Nhấn giữ 400ms rồi trượt lên hàng cảm xúc: biểu tượng
+  dưới ngón phóng 1.5 và nhô lên, nhấc tay là chọn, trượt ra ngoài là huỷ; nhấc tay trước khi trượt mở sheet như hiện nay.
+  Chạm đúp (≤ 300ms) thả 👍 (đổi hoặc tắt ở Cài đặt Chat), chạm đúp lần nữa bỏ. Kéo luồng tin xuống quá 48px khi bàn phím mở
+  thì đóng bàn phím. Kéo vạch trên ô soạn lên quá 25% mở soạn toàn màn. Xoá và sửa tin chỉ có trong nhấn giữ.
+- **Khác:** vuốt ngang dải tuần / lưới tháng ở Lịch; kéo xuống ở đầu mọi danh sách để tải lại; kéo sheet, trang Tôi, trình
+  xem ảnh/tệp xuống để đóng; trình xem ảnh vuốt ngang chuyển ảnh, chụm hoặc chạm đúp để phóng.
+- **Quy tắc chung:** khoá trục sau 10px đầu; bắt đầu trong vùng mép 20px luôn là quay lại; không vuốt ngang đổi tab/chip.
+  Theo ngón tay 1:1, thả thì về đích 240ms `--ease-out-expo`; qua ngưỡng thì icon phóng 1.15 + đổi màu accent (iOS không
+  có rung cho web). Giảm chuyển động: không theo ngón tay, thả quá ngưỡng là làm ngay. Đọc màn hình: mỗi tin có hành động
+  "Trích dẫn", "Trả lời trong thread", "Thả cảm xúc".
 
 ## 7. Motion
 
@@ -1116,7 +1306,7 @@ WCAG 2.2 AA. Chữ ≥ 4.5:1, chữ lớn và UI ≥ 3:1 trên nền thật. M�
 `button`/`a`/control thật, có hover, `:focus-visible`, active, disabled. Touch target ≥ 44px.
 Màu không bao giờ là kênh duy nhất (trạng thái có nhãn; lớp phủ realtime có nhãn chữ).
 Điện thoại **không phóng to trang** (người dùng chốt 2026-10-17, vì phóng to làm vỡ bố cục): viewport `maximum-scale=1,
-user-scalable=no`, `touch-action: manipulation` (không chạm đúp), cử chỉ chụm của iOS bị huỷ; ô nhập 16px trên màn cảm
+user-scalable=no`, `touch-action: manipulation` (bỏ phóng to bằng chạm đúp của trình duyệt; chạm đúp thả cảm xúc của app, §6 "Vuốt", vẫn hoạt động), cử chỉ chụm của iOS bị huỷ; ô nhập 16px trên màn cảm
 ứng để không tự phóng khi focus. Đánh đổi có chủ đích với WCAG 1.4.4: chữ đã đủ lớn (chat 16px trên điện thoại), và nội
 dung cần phóng (ảnh trong Trình xem tệp) có phóng riêng bằng chụm hai ngón.
 Hàng cuộn ngang (tab, chip) phải cho thấy còn nội dung: dùng `ScrollFade` (mép còn nội dung mờ dần), không để một mục bị cắt cụt mà không có dấu hiệu. Popover không bao giờ sát mép màn: luôn cách mép viewport ≥ 16px.

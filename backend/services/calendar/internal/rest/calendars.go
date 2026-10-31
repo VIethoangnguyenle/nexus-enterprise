@@ -40,7 +40,7 @@ type Calendars interface {
 	SuggestSlots(ctx context.Context, wsID string, users []string, durationMin int, day string) ([]domain.TimeSlot, error)
 
 	GetSettings(ctx context.Context, wsID string) (*domain.SettingsView, error)
-	UpdateSettings(ctx context.Context, wsID string, in domain.SettingsView) (*domain.SettingsView, error)
+	UpdateSettings(ctx context.Context, wsID string, in domain.SettingsPatch) (*domain.SettingsView, error)
 }
 
 // Handler serves the calendar REST endpoints.

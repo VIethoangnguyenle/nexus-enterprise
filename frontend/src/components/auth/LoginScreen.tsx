@@ -215,12 +215,17 @@ function IdentityStep({ raw, onRaw, onSent }: {
         </Button>
       )}
 
-      {googleOn && codesOn && (
-        <div className="flex items-center gap-3 text-sm text-ink-muted">
-          <span className="h-px flex-1 bg-line" />
-          hoặc nhận mã đăng nhập
-          <span className="h-px flex-1 bg-line" />
-        </div>
+      {googleOn && codesOn && <OrCode />}
+
+      {/* While the server has not said which ways in it offers, Google's row and
+          the line under it are held open, empty, so the form below does not jump
+          down when they arrive. Google is on almost everywhere, so holding beats
+          collapsing; a server without it lets the place go once it answers. */}
+      {providers.isPending && (
+        <>
+          <div data-provider-slot aria-hidden="true" className={WIDE} />
+          <OrCode slot />
+        </>
       )}
 
       {codesOn && (
@@ -249,6 +254,20 @@ function IdentityStep({ raw, onRaw, onSent }: {
         </form>
       )}
     </>
+  )
+}
+
+/** The line between Google and the code form. `slot`: an invisible stand-in of the same height. */
+function OrCode({ slot = false }: { slot?: boolean }) {
+  return (
+    <div
+      className={`flex items-center gap-3 text-sm text-ink-muted ${slot ? 'invisible' : ''}`}
+      {...(slot ? { 'data-provider-slot': '', 'aria-hidden': true } : {})}
+    >
+      <span className="h-px flex-1 bg-line" />
+      hoặc nhận mã đăng nhập
+      <span className="h-px flex-1 bg-line" />
+    </div>
   )
 }
 

@@ -2,14 +2,28 @@ import {
   addDays, addMonths, differenceInCalendarDays, endOfMonth, format, formatISO, getISOWeek, isSameDay, isSameMonth,
   isSameYear, parseISO, startOfDay, startOfMonth, startOfWeek,
 } from 'date-fns'
-import type { Occurrence, RsvpResponse } from '../api/calendar'
+import type { CalendarSummary, Occurrence, RsvpResponse } from '../api/calendar'
 
 /** The five ways to look at the calendar (DESIGN.md §6 Lịch). */
 export const CALENDAR_VIEWS = ['day', '3day', 'week', 'month', 'agenda'] as const
 export type CalendarView = (typeof CALENDAR_VIEWS)[number]
 
-/** Monday first, as everywhere in the app. */
+/** The day a week starts on: 1 Monday (the default), 0 Sunday (Cài đặt Lịch → Tuần bắt đầu vào). */
+export type WeekStart = 0 | 1
+
+/** Monday first, the default everywhere in the app. */
 export const WEEK_OPTIONS = { weekStartsOn: 1 } as const
+
+/** date-fns options for a week that starts on `weekStart`. */
+export const weekOptions = (weekStart: WeekStart = 1) => ({ weekStartsOn: weekStart })
+
+/**
+ * Whether Lịch shows a calendar: its own checkbox is on and the person's saved list of visible calendars names it.
+ * An empty or absent list is every calendar.
+ */
+export function calendarShown(c: Pick<CalendarSummary, 'id' | 'visible'>, listed: readonly string[] | null | undefined): boolean {
+  return c.visible && (!listed || listed.length === 0 || listed.includes(c.id))
+}
 
 /** Names the view menu shows (D, W, M, A are the shortcuts). */
 export const VIEW_LABEL: Record<CalendarView, string> = {
@@ -55,33 +69,33 @@ export function spanOf(o: Pick<Occurrence, 'start' | 'end'>): { start: Date; end
 // --- Ranges ----------------------------------------------------------------
 
 /** First day shown and the number of days, for the views that are a row of days. */
-export function visibleDays(view: CalendarView, date: Date): Date[] {
+export function visibleDays(view: CalendarView, date: Date, weekStart: WeekStart = 1): Date[] {
   const day = startOfDay(date)
   if (view === 'day') return [day]
   if (view === '3day') return [0, 1, 2].map((n) => addDays(day, n))
-  const first = startOfWeek(day, WEEK_OPTIONS)
+  const first = startOfWeek(day, weekOptions(weekStart))
   return [0, 1, 2, 3, 4, 5, 6].map((n) => addDays(first, n))
 }
 
-/** Weeks (Monday first) a month grid shows: as many rows as the month needs, at least five like the mockup. */
-export function monthWeeks(date: Date): Date[][] {
-  const first = startOfWeek(startOfMonth(date), WEEK_OPTIONS)
+/** Weeks (Monday first unless `weekStart` says Sunday) a month grid shows: as many rows as the month needs, at least five like the mockup. */
+export function monthWeeks(date: Date, weekStart: WeekStart = 1): Date[][] {
+  const first = startOfWeek(startOfMonth(date), weekOptions(weekStart))
   const last = endOfMonth(date)
   const rows = Math.max(5, Math.ceil((differenceInCalendarDays(last, first) + 1) / 7))
   return Array.from({ length: rows }, (_, r) => Array.from({ length: 7 }, (_, c) => addDays(first, r * 7 + c)))
 }
 
 /** `[from, to)` the view needs events for. */
-export function rangeOf(view: CalendarView, date: Date): { from: Date; to: Date } {
+export function rangeOf(view: CalendarView, date: Date, weekStart: WeekStart = 1): { from: Date; to: Date } {
   if (view === 'month') {
-    const weeks = monthWeeks(date)
+    const weeks = monthWeeks(date, weekStart)
     return { from: weeks[0]![0]!, to: addDays(weeks[weeks.length - 1]![6]!, 1) }
   }
   if (view === 'agenda') {
     const from = startOfDay(date)
     return { from, to: addDays(from, AGENDA_DAYS) }
   }
-  const days = visibleDays(view, date)
+  const days = visibleDays(view, date, weekStart)
   return { from: days[0]!, to: addDays(days[days.length - 1]!, 1) }
 }
 
@@ -99,10 +113,10 @@ export function shiftDate(view: CalendarView, date: Date, steps: number): Date {
 // --- Words -----------------------------------------------------------------
 
 /** Heading of the top bar. */
-export function titleOf(view: CalendarView, date: Date): string {
+export function titleOf(view: CalendarView, date: Date, weekStart: WeekStart = 1): string {
   if (view === 'month') return `Tháng ${format(date, 'M')} năm ${format(date, 'yyyy')}`
   if (view === 'day') return `${format(date, 'd')} tháng ${format(date, 'M')} năm ${format(date, 'yyyy')}`
-  const { from, to } = rangeOf(view, date)
+  const { from, to } = rangeOf(view, date, weekStart)
   const last = addDays(to, -1)
   if (isSameMonth(from, last)) return `Tháng ${format(from, 'M')} năm ${format(from, 'yyyy')}`
   if (isSameYear(from, last)) return `Tháng ${format(from, 'M')} – ${format(last, 'M')} năm ${format(last, 'yyyy')}`

@@ -50,6 +50,9 @@ type scriptedPolicyRead struct {
 	getNodeErr  error                      // GetNode fails
 	edges       map[[2]string]bool         // child, parent: assignments IsAssigned reports (besides a Members UA under its PC)
 	ancErr      error                      // GetAncestors fails
+	parentsErr  error                      // GetParents fails
+	assignedAsk [][2]string                // every IsAssigned asked: child, parent
+	parentsAsk  []string                   // every GetParents asked
 }
 
 // addMember scripts a user node who belongs to the workspace: it is a U node, and
@@ -135,8 +138,29 @@ func (p *scriptedPolicyRead) BatchCheckAccess(_ context.Context, req *policypb.B
 func (p *scriptedPolicyRead) IsAssigned(_ context.Context, req *policypb.IsAssignedRequest, _ ...grpc.CallOption) (*policypb.BoolResponse, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	p.assignedAsk = append(p.assignedAsk, [2]string{req.ChildId, req.ParentId})
 	return &policypb.BoolResponse{Value: p.edges[[2]string{req.ChildId, req.ParentId}] ||
 		strings.HasPrefix(req.ChildId, "ua-") && strings.HasPrefix(req.ParentId, "pc-")}, nil
+}
+
+// GetParents answers a node's direct parents from the scripted edges.
+func (p *scriptedPolicyRead) GetParents(_ context.Context, req *policypb.GetParentsRequest, _ ...grpc.CallOption) (*policypb.NodeList, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.parentsAsk = append(p.parentsAsk, req.NodeId)
+	if p.parentsErr != nil {
+		return nil, p.parentsErr
+	}
+	if p.err != nil {
+		return nil, p.err
+	}
+	out := &policypb.NodeList{}
+	for e, ok := range p.edges {
+		if ok && e[0] == req.NodeId {
+			out.Nodes = append(out.Nodes, &policypb.NGACNode{Id: e[1], Name: e[1], NodeType: ngac.TypeUA})
+		}
+	}
+	return out, nil
 }
 
 func (p *scriptedPolicyRead) GetChildren(_ context.Context, req *policypb.GetChildrenRequest, _ ...grpc.CallOption) (*policypb.NodeList, error) {
@@ -147,7 +171,10 @@ func (p *scriptedPolicyRead) GetChildren(_ context.Context, req *policypb.GetChi
 }
 
 func (p *scriptedPolicyRead) FindNodeByName(_ context.Context, req *policypb.FindNodeByNameRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
-	if req.Name == ngac.NodePCGlobal && req.NodeType == ngac.TypePC && !p.noGlobal {
+	if req.Name == ngac.NodePCGlobal && req.NodeType == ngac.TypePC {
+		if p.noGlobal {
+			return nil, errors.New("not found")
+		}
 		return &policypb.NGACNode{Id: "pc-global", Name: req.Name, NodeType: req.NodeType}, nil
 	}
 	switch {
@@ -156,7 +183,7 @@ func (p *scriptedPolicyRead) FindNodeByName(_ context.Context, req *policypb.Fin
 	case req.NodeType == ngac.TypePC && strings.HasPrefix(req.Name, "PC_"):
 		return &policypb.NGACNode{Id: "pc-" + req.Name, Name: req.Name, NodeType: req.NodeType}, nil
 	}
-	return nil, errors.New("not found")
+	return nil, status.Error(codes.NotFound, "not found")
 }
 
 func (p *scriptedPolicyRead) asked() []grant {
@@ -171,10 +198,22 @@ func (p *scriptedPolicyRead) asked() []grant {
 type recordingPolicyWrite struct {
 	policypb.PolicyWriteServiceClient
 	pool *pgxpool.Pool
+	// world, when set, is the scripted graph the writer reads back: its edges
+	// answer IsAssigned and its children answer FindNodeByName, so the writer and
+	// the reader agree about who is where. Without it every edge exists.
+	world *scriptedPolicyRead
 
-	mu     sync.Mutex
-	nodes  []string
-	writes int
+	mu       sync.Mutex
+	nodes    []string
+	writes   int
+	assigned [][2]string // child, parent of every CreateAssignment
+	removed  [][2]string // child, parent of every RemoveAssignment
+	deleted  []string    // every DeleteNode
+	// grants is the graph's associations, keyed by UA and OA: every
+	// CreateAssociation writes one, and a test may seed one. GetAssociations
+	// answers from it.
+	grants      map[[2]string][]string
+	grantWrites [][2]string // UA, OA of every CreateAssociation
 }
 
 func (w *recordingPolicyWrite) CreateNode(ctx context.Context, req *policypb.CreateNodeRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
@@ -192,18 +231,99 @@ func (w *recordingPolicyWrite) CreateNode(ctx context.Context, req *policypb.Cre
 	return &policypb.NGACNode{Id: id, Name: req.Name, NodeType: req.NodeType}, nil
 }
 
-func (w *recordingPolicyWrite) CreateAssignment(_ context.Context, _ *policypb.CreateAssignmentRequest, _ ...grpc.CallOption) (*policypb.Assignment, error) {
+func (w *recordingPolicyWrite) CreateAssignment(_ context.Context, req *policypb.CreateAssignmentRequest, _ ...grpc.CallOption) (*policypb.Assignment, error) {
 	w.mu.Lock()
 	w.writes++
+	w.assigned = append(w.assigned, [2]string{req.ChildId, req.ParentId})
 	w.mu.Unlock()
 	return &policypb.Assignment{Id: "assign"}, nil
 }
 
-func (w *recordingPolicyWrite) CreateAssociation(_ context.Context, _ *policypb.CreateAssociationRequest, _ ...grpc.CallOption) (*policypb.Association, error) {
+func (w *recordingPolicyWrite) CreateAssociation(_ context.Context, req *policypb.CreateAssociationRequest, _ ...grpc.CallOption) (*policypb.Association, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.writes++
+	if w.grants == nil {
+		w.grants = map[[2]string][]string{}
+	}
+	key := [2]string{req.UaId, req.OaId}
+	w.grants[key] = append([]string(nil), req.Operations...)
+	w.grantWrites = append(w.grantWrites, key)
+	return &policypb.Association{Id: "assoc"}, nil
+}
+
+// GetAssociations lists what the UA is granted in this writer's graph.
+func (w *recordingPolicyWrite) GetAssociations(_ context.Context, req *policypb.GetAssociationsRequest, _ ...grpc.CallOption) (*policypb.AssociationList, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	out := &policypb.AssociationList{}
+	for k, ops := range w.grants {
+		if k[0] == req.UaId {
+			out.Associations = append(out.Associations, &policypb.Association{UaId: k[0], OaId: k[1], Operations: append([]string(nil), ops...)})
+		}
+	}
+	return out, nil
+}
+
+// seedGrant puts an association into the writer's graph without counting a write.
+func (w *recordingPolicyWrite) seedGrant(ua, oa string, ops []string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.grants == nil {
+		w.grants = map[[2]string][]string{}
+	}
+	w.grants[[2]string{ua, oa}] = append([]string(nil), ops...)
+}
+
+func (w *recordingPolicyWrite) RemoveAssignment(_ context.Context, req *policypb.RemoveAssignmentRequest, _ ...grpc.CallOption) (*policypb.Empty, error) {
 	w.mu.Lock()
 	w.writes++
+	w.removed = append(w.removed, [2]string{req.ChildId, req.ParentId})
 	w.mu.Unlock()
-	return &policypb.Association{Id: "assoc"}, nil
+	return &policypb.Empty{}, nil
+}
+
+func (w *recordingPolicyWrite) GetNode(_ context.Context, req *policypb.GetNodeRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+	return &policypb.NGACNode{Id: req.NodeId, Name: req.NodeId, NodeType: ngac.TypeU}, nil
+}
+
+func (w *recordingPolicyWrite) IsAssigned(ctx context.Context, req *policypb.IsAssignedRequest, _ ...grpc.CallOption) (*policypb.BoolResponse, error) {
+	if w.world != nil {
+		return w.world.IsAssigned(ctx, req)
+	}
+	return &policypb.BoolResponse{Value: true}, nil
+}
+
+// FindNodeByName finds a node among the scripted world's children by its exact
+// name and type; a writer with no world knows no names.
+func (w *recordingPolicyWrite) FindNodeByName(_ context.Context, req *policypb.FindNodeByNameRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+	if w.world != nil {
+		w.world.mu.Lock()
+		defer w.world.mu.Unlock()
+		for _, nodes := range w.world.children {
+			for _, n := range nodes {
+				if n.Name == req.Name && n.NodeType == req.NodeType {
+					return n, nil
+				}
+			}
+		}
+	}
+	return nil, status.Error(codes.NotFound, "no such node")
+}
+
+// GetChildren answers from the scripted world, like the reader.
+func (w *recordingPolicyWrite) GetChildren(ctx context.Context, req *policypb.GetChildrenRequest, _ ...grpc.CallOption) (*policypb.NodeList, error) {
+	if w.world != nil {
+		return w.world.GetChildren(ctx, req)
+	}
+	return &policypb.NodeList{}, nil
+}
+
+func (w *recordingPolicyWrite) DeleteNode(_ context.Context, req *policypb.DeleteNodeRequest, _ ...grpc.CallOption) (*policypb.Empty, error) {
+	w.mu.Lock()
+	w.deleted = append(w.deleted, req.NodeId)
+	w.mu.Unlock()
+	return &policypb.Empty{}, nil
 }
 
 func (w *recordingPolicyWrite) graphWrites() int {
@@ -216,6 +336,10 @@ type stubAuth struct{ authpb.AuthServiceClient }
 
 func (stubAuth) GetUserByID(_ context.Context, req *authpb.GetUserByIDRequest, _ ...grpc.CallOption) (*authpb.UserInfo, error) {
 	return &authpb.UserInfo{Id: req.UserId, Username: "testuser"}, nil
+}
+
+func (stubAuth) GetUserByNGACNodeID(_ context.Context, req *authpb.GetUserByNGACNodeIDRequest, _ ...grpc.CallOption) (*authpb.UserInfo, error) {
+	return &authpb.UserInfo{Id: "user-" + req.NgacNodeId, Username: "testuser-" + req.NgacNodeId}, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -254,7 +378,7 @@ func newFixture(t *testing.T) *fixture {
 	require.NoError(t, pool.QueryRow(context.Background(), `SELECT name FROM workspaces WHERE id = $1`, f.wsID).Scan(&f.wsName))
 
 	f.read = &scriptedPolicyRead{allow: map[grant]bool{}, children: map[string][]*policypb.NGACNode{}}
-	f.write = &recordingPolicyWrite{pool: pool}
+	f.write = &recordingPolicyWrite{pool: pool, world: f.read}
 	f.svc = domain.NewService(store.NewStore(pool), f.read, f.write, stubAuth{}, nil)
 
 	t.Cleanup(func() {

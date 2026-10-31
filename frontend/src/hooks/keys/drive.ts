@@ -18,4 +18,10 @@ export const driveKeys = {
   shares: (itemId: string) => ['drive', 'shares', itemId] as const,
   /** Presigned download URL of a file; short-lived, so cached for minutes, not the session. */
   downloadUrl: (fileId: string) => ['drive', 'download-url', fileId] as const,
+  /** Items the user has starred in a workspace; re-checked for read on every fetch. */
+  starred: (wsId: string) => ['drive', wsId, 'starred'] as const,
+  /** Recently relevant items for the phone's Quick Access carousel. */
+  quickAccess: (wsId: string) => ['drive', wsId, 'quick-access'] as const,
+  /** The workspace's files the user can read, last edited first (the phone's Gần đây). */
+  recent: (wsId: string) => ['drive', wsId, 'recent'] as const,
 }
