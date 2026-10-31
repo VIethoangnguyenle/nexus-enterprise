@@ -25,3 +25,16 @@ export function requireSignedIn(): void {
     throw redirect({ to: '/login', replace: true })
   }
 }
+
+/**
+ * The workspace needs a session too, and decides before its code loads: a
+ * signed-out visitor sent through the shell would download it, ask for the
+ * workspaces without a token, and the 401 that came back would end a session
+ * that never was. A shared link's workspace rides along to the login page.
+ */
+export function requireSignedInToWorkspace({ search }: { search: Record<string, unknown> }): void {
+  if (!useAuthStore.getState().isAuthenticated()) {
+    const ws = typeof search.ws === 'string' && search.ws ? { ws: search.ws } : {}
+    throw redirect({ to: '/login', search: ws, replace: true })
+  }
+}

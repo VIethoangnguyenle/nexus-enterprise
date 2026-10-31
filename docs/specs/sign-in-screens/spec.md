@@ -6,7 +6,7 @@ Take a person from "not signed in" to "inside a workspace" in the fewest honest 
 ## Requirements
 
 ### Requirement: Sign-in offers only the ways the server has
-The sign-in page SHALL offer Google when `GET /api/auth/providers` says `google: true`, and a six-digit code to an email or a Vietnamese phone number unless it says `otp: false`. A failed providers request hides Google and keeps the code form. When neither is offered the page says sign-in is paused and offers "Thử lại". There is no single-sign-on button, no "Join an Organization" and no plan label. No screen, in any build, prints the fixed test code or a "test mode" line.
+The sign-in page SHALL offer Google when `GET /api/auth/providers` says `google: true`, and a six-digit code to an email or a Vietnamese phone number unless it says `otp: false`. While that request is out, the places of the Google button and the line under it are held empty (hidden from assistive technology), so the form does not move when they arrive. A failed providers request hides Google and keeps the code form. When neither is offered the page says sign-in is paused and offers "Thử lại". There is no single-sign-on button, no "Join an Organization" and no plan label. No screen, in any build, prints the fixed test code or a "test mode" line.
 
 #### Scenario: Codes switched off
 - **WHEN** the server reports `otp: false` and `google: true`
@@ -90,11 +90,15 @@ without a copy (first visit, after sign-out or a workspace switch). Design: `DES
 - **THEN** the strip never appears and the screens show their loading skeletons as usual
 
 ### Requirement: Routes and sessions
-Moving from the profile step to workspace selection or creation keeps the `ws` the person arrived with. The sign-in page turns away a signed-in person to workspace selection; the profile, workspace-selection and create-workspace pages turn away a signed-out person to the sign-in page. Both checks run when navigation starts, not whenever the session changes. "Đổi tài khoản" ends the session through the one logout path (`logoutSession`: the server revokes the refresh token, then the local session and every cached query are dropped). There is no welcome page and no timed redirect.
+Moving from the profile step to workspace selection or creation keeps the `ws` the person arrived with. The sign-in page turns away a signed-in person to workspace selection; the profile, workspace-selection and create-workspace pages, and every page of the workspace, turn away a signed-out person to the sign-in page (the workspace keeps the link's `ws`). These checks run when navigation starts, before the page's code loads, not whenever the session changes; the front page `/` forwards to chat the same way, so a signed-out visitor goes from `/` to the sign-in page without loading the workspace or asking the server for anything that needs a session. "Đổi tài khoản" ends the session through the one logout path (`logoutSession`: the server revokes the refresh token, then the local session and every cached query are dropped). A 401 that arrives when no one is signed in drops nothing from the cache, so it cannot take the sign-in methods away from the sign-in page. There is no welcome page and no timed redirect.
 
 #### Scenario: Signed-out visit
 - **WHEN** a signed-out person opens the workspace selection URL
 - **THEN** they are sent to the sign-in page
+
+#### Scenario: First visit to the front page
+- **WHEN** a signed-out person opens `/` (or a workspace link with `?ws=`)
+- **THEN** they land on the sign-in page (keeping `ws`) with no request to `/api/workspaces` or `/api/auth/refresh`, and Google is offered when the server has it on
 
 ### Requirement: No identifier reaches the screen
 No UUID, node id, session id or machine code is rendered, labelled or typed on any sign-in screen; people are shown by display name with an avatar from their initials, workspaces by name.

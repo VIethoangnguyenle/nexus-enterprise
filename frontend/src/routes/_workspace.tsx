@@ -26,6 +26,7 @@ import { UpdateBar } from '../components/app/UpdateBar'
 import { UpdatingBar } from '../components/app/UpdatingBar'
 import { Button, Spinner, Text } from '../components/primitives'
 import { ErrorBoundary } from '../components/ErrorBoundary'
+import { requireSignedInToWorkspace } from '../lib/auth-guards'
 import { CallProvider } from '../components/calls/CallProvider'
 import { IncomingCallLayer } from '../components/calls/IncomingCallLayer'
 import { apiFetch, logoutSession } from '../api/client'
@@ -35,6 +36,7 @@ export const Route = createFileRoute('/_workspace')({
   // Keep the chosen workspace across in-app navigation; a link that names no
   // `ws` would otherwise drop the user back into their first workspace.
   search: { middlewares: [retainSearchParams(['ws'])] },
+  beforeLoad: requireSignedInToWorkspace,
   component: WorkspaceLayout,
 })
 

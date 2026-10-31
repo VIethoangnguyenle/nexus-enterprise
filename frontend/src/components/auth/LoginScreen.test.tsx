@@ -70,6 +70,24 @@ describe('Login: which ways in are offered', () => {
     expect(await field()).toBeInTheDocument()
   })
 
+  // Google's row is held open while the answer is out, so the form does not jump
+  // down when the button arrives. The held row is not a button anyone can reach.
+  it('holds the place of Google while the providers are still unknown', async () => {
+    world.providers = 'pending'
+    await login()
+    await field()
+    const held = document.querySelectorAll('[data-provider-slot]')
+    expect(held).toHaveLength(2)
+    held.forEach((el) => expect(el).toHaveAttribute('aria-hidden', 'true'))
+    expect(screen.queryByRole('button', { name: /Google/ })).not.toBeInTheDocument()
+  })
+
+  it('lets the held place go once the providers have answered', async () => {
+    await login()
+    await screen.findByRole('button', { name: /Tiếp tục với Google/ })
+    expect(document.querySelectorAll('[data-provider-slot]')).toHaveLength(0)
+  })
+
   it('keeps Google and drops the code form when codes are switched off', async () => {
     world.providers = { google: true, otp: false }
     await login()

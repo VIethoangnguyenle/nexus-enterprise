@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { createMemoryHistory, createRouter } from '@tanstack/react-router'
 import { routeTree } from '../routeTree.gen'
+import { useAuthStore } from '../stores/auth.store'
+
+// The workspace turns a signed-out person away before it loads; these addresses are a signed-in person's.
+beforeEach(() => useAuthStore.setState({ user: { id: 'u1', username: 'hoa.le' } }))
 
 /** The router with the app's real route tree, loaded at `url`; what the address bar ends up as. */
 async function landing(url: string) {

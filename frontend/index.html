@@ -7,6 +7,13 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- The faces the first screen is set in: body text and the page title, both
+         subsets a Vietnamese line needs. Fetched with the bundle instead of after the
+         first paint, so a first visit does not show a fallback face that then swaps. -->
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="/node_modules/@fontsource/be-vietnam-pro/files/be-vietnam-pro-latin-400-normal.woff2" />
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="/node_modules/@fontsource/be-vietnam-pro/files/be-vietnam-pro-vietnamese-400-normal.woff2" />
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="/node_modules/@fontsource/bricolage-grotesque/files/bricolage-grotesque-latin-700-normal.woff2" />
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="/node_modules/@fontsource/bricolage-grotesque/files/bricolage-grotesque-vietnamese-700-normal.woff2" />
     <meta name="theme-color" content="#f1f8f7" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#0a1414" media="(prefers-color-scheme: dark)" />
     <meta name="mobile-web-app-capable" content="yes" />

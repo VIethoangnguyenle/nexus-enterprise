@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { createMemoryHistory, createRouter } from '@tanstack/react-router'
 import { routeTree } from '../routeTree.gen'
+import { useAuthStore } from '../stores/auth.store'
+
+// The workspace turns a signed-out person away before it loads; these addresses are a signed-in person's.
+beforeEach(() => useAuthStore.setState({ user: { id: 'u1', username: 'hoa.le' } }))
 
 /** The router with the app's real route tree, loaded at `url`; what the address bar ends up as. */
 async function landing(url: string) {
@@ -28,6 +32,13 @@ describe('/documents', () => {
 
   it('/drive?view=texts&group=drafts keeps its group', async () => {
     expect(await landing('/drive?view=texts&group=drafts')).toEqual({ path: '/drive', search: { view: 'texts', group: 'drafts' } })
+  })
+
+  it('a signed-out person reaches the login page from the front page or a workspace link, the link\'s workspace kept', async () => {
+    useAuthStore.setState({ user: null, accessToken: null })
+    expect(await landing('/')).toEqual({ path: '/login', search: {} })
+    expect(await landing('/documents?ws=w-9')).toEqual({ path: '/login', search: { ws: 'w-9' } })
+    expect(await landing('/channels?ws=w-9')).toEqual({ path: '/login', search: { ws: 'w-9' } })
   })
 
   it('/settings keeps its tab', async () => {

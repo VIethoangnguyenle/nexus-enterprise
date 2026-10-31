@@ -86,8 +86,11 @@ export const useAuthStore = create<AuthState>()(
       logout: () => {
         // Every cache keyed off this session goes with it: otherwise the next
         // person to sign in on this tab is served the previous user's data
-        // until each query happens to refetch.
-        queryClient.clear()
+        // until each query happens to refetch. With no session there is none of
+        // it, only what the sign-in screen fetched (its sign-in methods), which a
+        // stray 401 must not take away from under it.
+        const { user, accessToken } = get()
+        if (user || accessToken) queryClient.clear()
         // And the copy on the device, which would otherwise outlive the session (401, refresh refused, sign-out alike).
         void wipeDeviceCache()
         // Client stores holding chat content (drafts, previews) go the same way.
