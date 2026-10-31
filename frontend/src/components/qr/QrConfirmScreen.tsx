@@ -145,7 +145,7 @@ function Confirm({ token }: { token: string }) {
         tone="success"
         icon={<CircleCheck size={32} strokeWidth={1.75} />}
         title="Đã đăng nhập trên máy tính"
-        line={`${describeDevice(device.browser, device.os)} đã vào ${device.tenant_name} với tài khoản của bạn.`}
+        line={`${describeDevice(device.browser, device.os)} đã vào ${device.tenant_name || 'tổ chức đang mở'} với tài khoản của bạn.`}
         actions={<Button variant="primary" size="md" className="w-full h-11" onClick={leave}>Xong</Button>}
       />
     )
@@ -202,7 +202,7 @@ function Ask({ device, name, avatar, hueKey, title, busy, approving, onApprove, 
           <Avatar name={name || ' '} hueKey={hueKey} src={avatar || undefined} size={40} />
           <span className="grid min-w-0">
             <b className="font-semibold truncate">{name}</b>
-            <span className="text-sm text-ink-muted truncate">{title ? `${device.tenant_name} · ${title}` : device.tenant_name}</span>
+            <span className="text-sm text-ink-muted truncate">{[device.tenant_name || 'Tổ chức đang mở', title].filter(Boolean).join(' · ')}</span>
           </span>
         </div>
       </div>

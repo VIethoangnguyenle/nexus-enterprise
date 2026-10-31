@@ -29,7 +29,12 @@ type Direction = 1 | -1
 type Method = 'form' | 'qr'
 const METHOD_KEY = 'nexus.login.method'
 
+/**
+ * Below 1024 the form always comes first: a phone or tablet cannot scan its own
+ * screen (design/mockups/qr-login.html §1 note 1). The switch is still there.
+ */
 function storedMethod(): Method {
+  if (typeof window.matchMedia === 'function' && !window.matchMedia('(min-width: 1024px)').matches) return 'form'
   try {
     return localStorage.getItem(METHOD_KEY) === 'qr' ? 'qr' : 'form'
   } catch {

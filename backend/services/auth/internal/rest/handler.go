@@ -353,6 +353,9 @@ func mapError(err error) *echo.HTTPError {
 		return apiError(http.StatusBadRequest, "avatar_not_image", err.Error())
 	case errors.Is(err, domain.ErrAvatarTooManyPixels):
 		return apiError(http.StatusBadRequest, "avatar_too_many_pixels", err.Error())
+	case errors.Is(err, domain.ErrQRSessionEnded):
+		// The phone's session was ended under a still-valid access token.
+		return apiError(http.StatusUnauthorized, "session_invalid", err.Error())
 	case errors.Is(err, domain.ErrQRUnavailable):
 		// One answer for never issued, expired, used and someone else's code.
 		return apiError(http.StatusGone, "qr_unavailable", err.Error())

@@ -30,10 +30,13 @@ const tokenOf = (n: number) => `token-${n}`.padEnd(43, 'x')
 function qrFetch(path: string, options: RequestInit = {}): Promise<unknown> {
   if (path === '/auth/qr') {
     server.creates += 1
-    return Promise.resolve({ token: tokenOf(server.creates), expires_in: server.expiresIn })
+    return Promise.resolve({ token: tokenOf(server.creates), poll_secret: `secret-${server.creates}`, expires_in: server.expiresIn })
   }
   if (path === '/auth/qr/status') {
-    server.polls.push(JSON.parse(String(options.body)).token)
+    const sent = JSON.parse(String(options.body)) as { token: string; poll_secret: string }
+    // Each code is polled with its own secret, kept by the page that asked.
+    expect(sent.poll_secret).toBe(`secret-${sent.token.slice('token-'.length).replace(/x+$/, '')}`)
+    server.polls.push(sent.token)
     if (server.failing > 0) {
       server.failing -= 1
       return Promise.reject(new ApiError('Bad Gateway', 502))
@@ -89,6 +92,19 @@ describe('Login by QR code on a computer', () => {
     localStorage.setItem('nexus.login.method', 'qr')
     await renderAuthScreen(LoginScreen, '/login')
     expect(await screen.findByRole('img', { name: 'Mã QR đăng nhập' })).toBeInTheDocument()
+  })
+
+  it('starts on the form on a phone or tablet, whatever was chosen before', async () => {
+    localStorage.setItem('nexus.login.method', 'qr')
+    vi.stubGlobal('matchMedia', (q: string) => ({ matches: false, media: q, addEventListener() {}, removeEventListener() {} }))
+    try {
+      await renderAuthScreen(LoginScreen, '/login')
+      expect(await screen.findByLabelText('Email hoặc số điện thoại')).toBeInTheDocument()
+      expect(server.creates).toBe(0)
+      expect(screen.getByRole('button', { name: 'Mã QR' })).toBeInTheDocument()
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 
   it('shows who scanned, by name only', async () => {

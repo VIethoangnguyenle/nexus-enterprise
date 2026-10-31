@@ -558,6 +558,38 @@ func (s *RefreshStore) revokedForUser(ctx context.Context, id RefreshIdentity) (
 	return keep == "" || keep != id.SessionID, nil
 }
 
+// SessionLive reports whether a session can still mint access tokens: its
+// refresh family exists and no user-wide revocation postdates its start. An
+// access token outlives both (up to AccessTokenTTL), so an act that would hand
+// out a new session in this one's name asks here instead of trusting the token.
+func (s *RefreshStore) SessionLive(ctx context.Context, userID, sessionID string) (bool, error) {
+	if s == nil || s.rdb == nil || sessionID == "" {
+		return false, nil
+	}
+	tokens, err := s.rdb.SMembers(ctx, sessionKey(sessionID)).Result()
+	if err != nil && !errors.Is(err, redis.Nil) {
+		return false, fmt.Errorf("%w: read session family: %v", ErrUnavailable, err)
+	}
+	for _, t := range tokens {
+		rec, err := s.read(ctx, t)
+		if errors.Is(err, ErrRefreshRejected) {
+			continue
+		}
+		if err != nil {
+			return false, err
+		}
+		if rec.UserID != userID {
+			return false, nil
+		}
+		revoked, err := s.revokedForUser(ctx, rec.RefreshIdentity)
+		if err != nil {
+			return false, fmt.Errorf("%w: %v", ErrUnavailable, err)
+		}
+		return !revoked, nil
+	}
+	return false, nil
+}
+
 // revokeLogged ends a session on the way to refusing a refresh. The refusal does
 // not depend on the revocation succeeding, but a session that could not be
 // revoked is still live and the log must say so.

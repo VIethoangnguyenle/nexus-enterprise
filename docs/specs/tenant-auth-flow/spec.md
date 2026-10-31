@@ -415,12 +415,12 @@ The system SHALL provide a `/me` endpoint that returns the authenticated user's 
 - **THEN** the response includes user info (id, email, display_name) and current tenant info (id, name, role, open_id)
 
 ### Requirement: Sign in on a computer by approving its QR code from a phone
-A browser that is not signed in MAY ask for a sign-in QR code; a person signed in on a phone approves it, and the browser then gets a session for that person in the tenant the phone is using. The state of one code lives only in Redis (`qr_login:<sha256(token)>`, 120 s) and moves `pending → scanned → approved | declined`; each transition is one optimistic transaction, so two phones or two polls cannot both win. Two secrets are minted per code: the token, which the QR carries as `<origin>/qr/<token>` and anyone looking at the screen can read, and a poll secret, which the browser holds only as the httpOnly `SameSite=Strict` cookie `qr_poll` scoped to `/api/auth/qr`. Tokens travel in request bodies, never in a URL the server logs.
+A browser that is not signed in MAY ask for a sign-in QR code; a person signed in on a phone approves it, and the browser then gets a session for that person in the tenant the phone is using. The state of one code lives only in Redis (`qr_login:<sha256(token)>`, 120 s) and moves `pending → scanned → approved | declined`; each transition is one optimistic transaction, so two phones or two polls cannot both win. Two secrets are minted per code: the token, which the QR carries as `<origin>/qr/<token>` and anyone looking at the screen can read, and a poll secret, which only the page that asked receives and keeps in memory (one per code, so two sign-in tabs never disturb each other). The token alone never yields a session, which is why it may appear in the `/qr/<token>` page address; API calls carry both secrets in request bodies.
 
-- `POST /api/auth/qr` (public, per-address limit) sets the cookie and returns `{token, expires_in: 120}`; it reads the browser and OS from `User-Agent`.
-- `POST /api/auth/qr/status` (public, twice the per-address limit, since the page polls every 2 s) returns `{status, scanner?: {display_name, avatar_url}}`. On the poll after an approval it mints the session, deletes the code, sets the refresh cookie through the same path as every other sign-in, clears `qr_poll`, and answers like a verified code: `{status: "approved", access_token, user, needs_profile}`.
-- `POST /api/auth/qr/scan`, `/approve`, `/decline` (JWT) take `{token}`. Scan returns `{browser, os, created_at, tenant_name}`; a second scan by the same person is harmless; anyone else is refused. Only the scanner may approve or decline. Scan and approval both require an active membership of the token's tenant (`activeMemberRow`, the graph has the last word), so a person removed between scanning and approving cannot complete it.
-- Every unusable code (never issued, expired, used, declined, someone else's, or polled without the right cookie) answers `410 {"code": "qr_unavailable"}`. A refused membership is `403 access_denied`. Without Redis the routes answer `qr_unavailable`.
+- `POST /api/auth/qr` (public, per-address limit) returns `{token, poll_secret, expires_in: 120}` and sets no cookie; it reads the browser and OS from `User-Agent`.
+- `POST /api/auth/qr/status` (public, five times the per-address limit, since the page polls every 2 s and an office signs in from one address) takes `{token, poll_secret}` and returns `{status, scanner?: {display_name, avatar_url}}`. On the poll after an approval it mints the session before removing the code (a failed read leaves the code for the next poll), sets the refresh cookie through the same path as every other sign-in, and answers like a verified code: `{status: "approved", access_token, user, needs_profile}`.
+- `POST /api/auth/qr/scan`, `/approve`, `/decline` (JWT) take `{token}`. Scan returns `{browser, os, created_at, tenant_name}`; a second scan by the same person is harmless; anyone else is refused. Only the scanner may approve or decline, and only from the tenant they scanned from. Scan and approval both require the phone's session to be live (its refresh family exists and no user-wide revocation postdates it; an ended session answers `401 session_invalid` although its access token has not expired) and an active membership of the token's tenant (`activeMemberRow`, the graph has the last word), so a person signed out or removed between scanning and approving cannot complete it. A scan does not extend the code's two minutes.
+- Every unusable code (never issued, expired, used, declined, someone else's, or polled without the right poll secret) answers `410 {"code": "qr_unavailable"}`. A refused membership is `403 access_denied`. Without Redis the routes answer `qr_unavailable`.
 - No NGAC node, assignment or association is written: the session belongs to an identity that already holds the membership.
 
 #### Scenario: Phone approves
@@ -428,8 +428,12 @@ A browser that is not signed in MAY ask for a sign-in QR code; a person signed i
 - **THEN** the next status poll from the browser that created the code returns an access token whose tenant is T, sets the refresh cookie, and the code is gone: a second poll answers `qr_unavailable`
 
 #### Scenario: Someone else has the token
-- **WHEN** a browser without the `qr_poll` cookie, or with a different one, polls an approved code
-- **THEN** it gets `410 qr_unavailable`, no token and no cookie, and the rightful browser can still collect the session
+- **WHEN** a browser that knows only the token, or presents a different poll secret, polls an approved code
+- **THEN** it gets `410 qr_unavailable`, no token and no cookie, and the rightful page can still collect the session
+
+#### Scenario: Signed out on the phone after scanning
+- **WHEN** the phone's session is ended (sign-out or a user-wide revocation) while its access token is still valid
+- **THEN** scanning and approving answer `401 session_invalid` and no session can be collected
 
 #### Scenario: A second phone
 - **WHEN** a code was scanned by A and B scans, approves or declines it

@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/redis/go-redis/v9"
+
 	"ngac-platform/services/auth/internal/auth"
 	"ngac-platform/services/auth/internal/domain"
 	"ngac-platform/services/auth/internal/store"
@@ -15,6 +17,8 @@ const chromeOnWindows = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/5
 
 // qrWorld is a service with real Redis, one tenant and one active member of it.
 type qrWorld struct {
+	t      *testing.T
+	rdb    *redis.Client
 	svc    *domain.Service
 	w      *fakeWorld
 	phone  *store.User
@@ -32,11 +36,22 @@ func newQRWorld(t *testing.T) qrWorld {
 	if err := w.InsertTenantUser(context.Background(), tenant, u.ID, "member", "active", u.NGACNodeID); err != nil {
 		t.Fatal(err)
 	}
-	return qrWorld{svc: svc, w: w, phone: u, tenant: tenant}
+	return qrWorld{t: t, rdb: rdb, svc: svc, w: w, phone: u, tenant: tenant}
 }
 
+// phoneOf is u signed in on a phone in tenant: a live session with a refresh family.
 func (q qrWorld) phoneOf(u *store.User, tenant string) domain.QRPhone {
-	return domain.QRPhone{UserID: u.ID, Username: u.Username, NGACNodeID: u.NGACNodeID, TenantID: tenant}
+	q.t.Helper()
+	_, sessionID, err := auth.GenerateToken(u.ID, u.Username, u.NGACNodeID, tenant)
+	if err != nil {
+		q.t.Fatal(err)
+	}
+	if _, err := q.svc.AttachRefreshToken(context.Background(), domain.RefreshIdentity{
+		UserID: u.ID, Username: u.Username, NGACNodeID: u.NGACNodeID, TenantID: tenant, SessionID: sessionID,
+	}); err != nil {
+		q.t.Fatal(err)
+	}
+	return domain.QRPhone{UserID: u.ID, Username: u.Username, NGACNodeID: u.NGACNodeID, TenantID: tenant, SessionID: sessionID}
 }
 
 func (q qrWorld) create(t *testing.T) domain.QRTicket {
@@ -184,6 +199,102 @@ func TestQRLogin_RefusesAPhoneThatIsNoLongerAMemberOfItsTenant(t *testing.T) {
 	ticket = q.create(t)
 	if _, err := q.svc.ScanQRLogin(ctx, ticket.Token, q.phoneOf(q.phone, "")); !errors.Is(err, domain.ErrAccessDenied) {
 		t.Errorf("scan with no tenant: err = %v, want ErrAccessDenied", err)
+	}
+}
+
+func TestQRLogin_AnEndedPhoneSessionCannotHandOutANewOne(t *testing.T) {
+	q := newQRWorld(t)
+	ctx := context.Background()
+
+	// Signed out on the phone: the access token still verifies, the session does not.
+	ticket := q.create(t)
+	phone := q.phoneOf(q.phone, q.tenant)
+	if err := q.svc.EndSession(ctx, phone.SessionID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.svc.ScanQRLogin(ctx, ticket.Token, phone); !errors.Is(err, domain.ErrQRSessionEnded) {
+		t.Errorf("scan from an ended session: err = %v, want ErrQRSessionEnded", err)
+	}
+
+	// Ended between scan and approve.
+	phone = q.phoneOf(q.phone, q.tenant)
+	if _, err := q.svc.ScanQRLogin(ctx, ticket.Token, phone); err != nil {
+		t.Fatal(err)
+	}
+	if err := q.svc.EndSession(ctx, phone.SessionID); err != nil {
+		t.Fatal(err)
+	}
+	if err := q.svc.ApproveQRLogin(ctx, ticket.Token, phone); !errors.Is(err, domain.ErrQRSessionEnded) {
+		t.Fatalf("approve from an ended session: err = %v, want ErrQRSessionEnded", err)
+	}
+	if p, _ := q.svc.PollQRLogin(ctx, ticket.Token, ticket.PollSecret); p != nil && p.Session != nil {
+		t.Fatal("an ended session must not leave a session to claim")
+	}
+
+	// Every session of the person revoked (an account takeover being cleaned up).
+	ticket = q.create(t)
+	phone = q.phoneOf(q.phone, q.tenant)
+	if err := q.svc.RevokeAllSessions(ctx, q.phone.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.svc.ScanQRLogin(ctx, ticket.Token, phone); !errors.Is(err, domain.ErrQRSessionEnded) {
+		t.Errorf("scan after a user-wide revocation: err = %v, want ErrQRSessionEnded", err)
+	}
+
+	// A token with no session at all.
+	phone = q.phoneOf(q.phone, q.tenant)
+	phone.SessionID = ""
+	if _, err := q.svc.ScanQRLogin(ctx, ticket.Token, phone); !errors.Is(err, domain.ErrQRSessionEnded) {
+		t.Errorf("scan with no session: err = %v, want ErrQRSessionEnded", err)
+	}
+}
+
+func TestQRLogin_TheTenantIsTheOneScannedFrom(t *testing.T) {
+	q := newQRWorld(t)
+	ctx := context.Background()
+	other := q.w.addTenant("Other", "")
+	if err := q.w.InsertTenantUser(ctx, other, q.phone.ID, "member", "active", q.phone.NGACNodeID); err != nil {
+		t.Fatal(err)
+	}
+	stranger := q.w.addTenant("Stranger", "")
+
+	ticket := q.create(t)
+	if _, err := q.svc.ScanQRLogin(ctx, ticket.Token, q.phoneOf(q.phone, q.tenant)); err != nil {
+		t.Fatal(err)
+	}
+	// Switched workspace on the phone after scanning: approval is refused.
+	if err := q.svc.ApproveQRLogin(ctx, ticket.Token, q.phoneOf(q.phone, other)); !errors.Is(err, domain.ErrQRUnavailable) {
+		t.Errorf("approve from another tenant: err = %v, want ErrQRUnavailable", err)
+	}
+	// Re-scanning from a tenant the person is not a member of is refused too.
+	if _, err := q.svc.ScanQRLogin(ctx, ticket.Token, q.phoneOf(q.phone, stranger)); !errors.Is(err, domain.ErrAccessDenied) {
+		t.Errorf("re-scan into a non-member tenant: err = %v, want ErrAccessDenied", err)
+	}
+	if p, _ := q.svc.PollQRLogin(ctx, ticket.Token, ticket.PollSecret); p == nil || p.Status != domain.QRScanned || p.Session != nil {
+		t.Errorf("the code must still wait for its first scan's tenant, got %+v", p)
+	}
+}
+
+func TestQRLogin_ScanningDoesNotExtendTheCode(t *testing.T) {
+	q := newQRWorld(t)
+	ctx := context.Background()
+	ticket := q.create(t)
+	time.Sleep(1100 * time.Millisecond)
+	if _, err := q.svc.ScanQRLogin(ctx, ticket.Token, q.phoneOf(q.phone, q.tenant)); err != nil {
+		t.Fatal(err)
+	}
+	var left time.Duration
+	keys, err := q.rdb.Keys(ctx, "qr_login:*").Result()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range keys {
+		if ttl := q.rdb.TTL(ctx, k).Val(); ttl > left {
+			left = ttl
+		}
+	}
+	if left <= 0 || left >= domain.QRLoginTTL {
+		t.Errorf("a scanned code has %v left; it must keep its original expiry (< %v)", left, domain.QRLoginTTL)
 	}
 }
 

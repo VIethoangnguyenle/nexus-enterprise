@@ -33,6 +33,11 @@ const QRLoginTTL = 2 * time.Minute
 
 const qrLoginKeyPrefix = "qr_login:"
 
+// ErrQRSessionEnded means the phone's session was ended (signed out, revoked)
+// although its access token has not expired yet. Such a session must not hand
+// a new one to a computer.
+var ErrQRSessionEnded = errors.New("session has ended")
+
 // ErrQRUnavailable means the code cannot be used: never issued, expired, used,
 // scanned by someone else, or asked about by a browser that did not create it.
 // Every one of those answers the same, so probing tokens learns nothing.
@@ -59,6 +64,7 @@ type QRPhone struct {
 	Username   string
 	NGACNodeID string
 	TenantID   string
+	SessionID  string
 }
 
 // QRScan is what the phone shows before the person approves.
@@ -217,7 +223,6 @@ func (s *Service) qrUpdate(ctx context.Context, token string, change func(*qrSta
 // handed out exactly once and only to the browser holding pollSecret.
 func (s *Service) PollQRLogin(ctx context.Context, token, pollSecret string) (*QRPoll, error) {
 	var out QRPoll
-	var approved qrState
 	err := s.qrUpdate(ctx, token, func(st *qrState) (bool, error) {
 		if pollSecret == "" || subtle.ConstantTimeCompare([]byte(qrHash(pollSecret)), []byte(st.PollHash)) != 1 {
 			return false, ErrQRUnavailable
@@ -228,7 +233,13 @@ func (s *Service) PollQRLogin(ctx context.Context, token, pollSecret string) (*Q
 		}
 		switch st.Status {
 		case QRApproved:
-			approved = *st
+			// The session is minted before the code is removed: if the user cannot
+			// be read the code stays, and the next poll tries again.
+			session, err := s.qrSession(ctx, *st)
+			if err != nil {
+				return false, err
+			}
+			out.Session = session
 			return true, nil
 		case QRDeclined:
 			// Told once; the code is finished either way.
@@ -239,14 +250,6 @@ func (s *Service) PollQRLogin(ctx context.Context, token, pollSecret string) (*Q
 	if err != nil {
 		return nil, err
 	}
-	if out.Status != QRApproved {
-		return &out, nil
-	}
-	session, err := s.qrSession(ctx, approved)
-	if err != nil {
-		return nil, err
-	}
-	out.Session = session
 	return &out, nil
 }
 
@@ -359,9 +362,17 @@ func (s *Service) qrScannedBy(ctx context.Context, token string, phone QRPhone) 
 	})
 }
 
-// qrMemberTenant is the name of the phone's tenant when the phone's person is an
-// active member of it, and ErrAccessDenied otherwise.
+// qrMemberTenant is the name of the phone's tenant when the phone's session is
+// still live and its person an active member of the tenant: ErrQRSessionEnded
+// for an ended session, ErrAccessDenied for anyone not a member.
 func (s *Service) qrMemberTenant(ctx context.Context, phone QRPhone) (string, error) {
+	live, err := s.refresh.SessionLive(ctx, phone.UserID, phone.SessionID)
+	if err != nil {
+		return "", err
+	}
+	if !live {
+		return "", ErrQRSessionEnded
+	}
 	if phone.TenantID == "" {
 		return "", ErrAccessDenied
 	}

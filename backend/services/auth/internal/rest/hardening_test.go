@@ -225,11 +225,11 @@ func TestPublicPosts_AllOfThemAreCovered(t *testing.T) {
 		if r.Method != http.MethodPost || !strings.HasPrefix(r.Path, "/api/auth/") || authenticated[r.Path] {
 			continue
 		}
-		// The QR status route is polled by the sign-in page, so it has twice the
+		// The QR status route is polled by the sign-in page, so it has a larger
 		// allowance; it is still limited.
 		allowance := 1
 		if r.Path == "/api/auth/qr/status" {
-			allowance = 2
+			allowance = qrStatusAllowance
 		}
 		remote := uniqueRemote()
 		for i := 0; i < allowance; i++ {

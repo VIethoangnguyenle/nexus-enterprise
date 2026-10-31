@@ -141,8 +141,11 @@ export const authApi = {
 /** Where a sign-in QR code stands, as the computer that shows it sees it. */
 export type QrStatus = 'pending' | 'scanned' | 'approved' | 'declined'
 
-/** POST /api/auth/qr: a single-use code; the browser is bound to it by an httpOnly cookie. */
-export interface QrTicket { token: string; expires_in: number }
+/**
+ * POST /api/auth/qr: a single-use code. The QR shows only `token`; `poll_secret`
+ * stays in this page's memory and is what collects the session.
+ */
+export interface QrTicket { token: string; poll_secret: string; expires_in: number }
 
 /** POST /api/auth/qr/status. Once approved it carries the session, as a verified code does. */
 export interface QrStatusResponse {
@@ -164,8 +167,10 @@ export interface QrScanResponse { browser: string; os: string; created_at: strin
  */
 export const qrApi = {
   create: () => publicFetch<QrTicket>('/auth/qr', { method: 'POST' }),
-  status: (token: string) =>
-    publicFetch<QrStatusResponse>('/auth/qr/status', { method: 'POST', body: JSON.stringify({ token }) }),
+  status: (token: string, pollSecret: string) =>
+    publicFetch<QrStatusResponse>('/auth/qr/status', {
+      method: 'POST', body: JSON.stringify({ token, poll_secret: pollSecret }),
+    }),
   scan: (token: string) =>
     apiFetch<QrScanResponse>('/auth/qr/scan', { method: 'POST', body: JSON.stringify({ token }) }),
   approve: (token: string) =>

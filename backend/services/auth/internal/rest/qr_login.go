@@ -11,21 +11,13 @@ import (
 	"ngac-platform/services/auth/internal/domain"
 )
 
-const (
-	// qrPollCookieName holds the poll secret of the code this browser asked for.
-	// Only a status request carrying it can collect the session, so whoever
-	// photographs the QR on screen gets nothing.
-	qrPollCookieName = "qr_poll"
-	qrCookiePath     = "/api/auth/qr"
-)
-
 func (h *Handler) registerQRRoutes(e *echo.Echo, api *echo.Group) {
 	// The computer, not signed in.
 	e.POST("/api/auth/qr", h.CreateQRLogin, h.publicLimiter("qr-create"))
-	// The page polls every two seconds, so the status route gets twice the
-	// allowance of the sign-in routes: one address can poll every second.
+	// The page polls every two seconds and an office signs in from one address,
+	// so the status route gets five times the allowance of the sign-in routes.
 	statusLimit := h.publicLimit()
-	statusLimit.Max *= 2
+	statusLimit.Max *= qrStatusAllowance
 	e.POST("/api/auth/qr/status", h.QRLoginStatus, h.limiterAt("qr-status", statusLimit))
 	// The phone, signed in.
 	api.POST("/auth/qr/scan", h.ScanQRLogin)
@@ -33,24 +25,18 @@ func (h *Handler) registerQRRoutes(e *echo.Echo, api *echo.Group) {
 	api.POST("/auth/qr/decline", h.DeclineQRLogin)
 }
 
-func setQRPollCookie(c echo.Context, value string, maxAge int) {
-	c.SetCookie(&http.Cookie{
-		Name:     qrPollCookieName,
-		Value:    value,
-		Path:     qrCookiePath,
-		MaxAge:   maxAge,
-		HttpOnly: true,
-		Secure:   secureCookies(),
-		SameSite: http.SameSiteStrictMode,
-	})
+// qrStatusAllowance multiplies the public per-address limit for the status route.
+const qrStatusAllowance = 5
+
+// qrBody is the body of every QR route but create: the code's token, and on the
+// status route also its poll secret. Both travel in bodies, never in a URL.
+type qrBody struct {
+	Token      string `json:"token"`
+	PollSecret string `json:"poll_secret"`
 }
 
-// qrTokenBody is the body of every QR route but create. The token travels in a
-// body, never in a URL, so it does not end up in access logs.
 func qrTokenBody(c echo.Context) (string, error) {
-	var body struct {
-		Token string `json:"token"`
-	}
+	var body qrBody
 	if err := c.Bind(&body); err != nil {
 		return "", badBody()
 	}
@@ -63,24 +49,23 @@ func (h *Handler) CreateQRLogin(c echo.Context) error {
 	if err != nil {
 		return fail(c, err)
 	}
-	ttl := int(ticket.ExpiresIn / time.Second)
-	setQRPollCookie(c, ticket.PollSecret, ttl)
-	return c.JSON(http.StatusOK, map[string]any{"token": ticket.Token, "expires_in": ttl})
+	// The poll secret goes only to the page that asked, which keeps it in memory:
+	// the QR shows the token alone, so whoever sees the screen cannot collect the
+	// session. One secret per code, so two sign-in tabs never disturb each other.
+	return c.JSON(http.StatusOK, map[string]any{
+		"token": ticket.Token, "poll_secret": ticket.PollSecret, "expires_in": int(ticket.ExpiresIn / time.Second),
+	})
 }
 
 // QRLoginStatus handles POST /api/auth/qr/status: how this browser's code is
 // doing. Once the phone approved, this is the response that signs the browser
 // in, with the same body and refresh cookie as a verified sign-in code.
 func (h *Handler) QRLoginStatus(c echo.Context) error {
-	token, err := qrTokenBody(c)
-	if err != nil {
-		return err
+	var in qrBody
+	if err := c.Bind(&in); err != nil {
+		return badBody()
 	}
-	secret := ""
-	if ck, err := c.Cookie(qrPollCookieName); err == nil {
-		secret = ck.Value
-	}
-	poll, err := h.svc.PollQRLogin(c.Request().Context(), token, secret)
+	poll, err := h.svc.PollQRLogin(c.Request().Context(), in.Token, in.PollSecret)
 	if err != nil {
 		return fail(c, err)
 	}
@@ -96,7 +81,6 @@ func (h *Handler) QRLoginStatus(c echo.Context) error {
 		}); err != nil {
 			return err
 		}
-		setQRPollCookie(c, "", -1)
 		body["access_token"] = s.Token
 		body["user"] = map[string]any{
 			"id": s.UserID, "username": s.Username,
@@ -110,7 +94,10 @@ func (h *Handler) QRLoginStatus(c echo.Context) error {
 }
 
 func qrPhone(claims *httputil.Claims) domain.QRPhone {
-	return domain.QRPhone{UserID: claims.UserID, Username: claims.Username, NGACNodeID: claims.NGACNodeID, TenantID: claims.TenantID}
+	return domain.QRPhone{
+		UserID: claims.UserID, Username: claims.Username, NGACNodeID: claims.NGACNodeID,
+		TenantID: claims.TenantID, SessionID: claims.SessionID,
+	}
 }
 
 // ScanQRLogin handles POST /api/auth/qr/scan: the phone opened a code and is

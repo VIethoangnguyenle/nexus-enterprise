@@ -38,7 +38,7 @@ type Ended = 'expired' | 'declined' | 'failed'
  */
 export function useQrLogin(onSignedIn: (needsProfile: boolean) => void): QrLogin {
   const login = useAuthStore((s) => s.login)
-  const [ticket, setTicket] = useState<{ token: string; expiresAt: number } | null>(null)
+  const [ticket, setTicket] = useState<{ token: string; secret: string; expiresAt: number } | null>(null)
   const [ended, setEnded] = useState<Ended | null>(null)
   const [reconnecting, setReconnecting] = useState(false)
   const renewals = useRef(0)
@@ -54,7 +54,7 @@ export function useQrLogin(onSignedIn: (needsProfile: boolean) => void): QrLogin
       failures.current = 0
       setReconnecting(false)
       setEnded(null)
-      setTicket({ token: r.token, expiresAt: Date.now() + r.expires_in * 1000 })
+      setTicket({ token: r.token, secret: r.poll_secret, expiresAt: Date.now() + r.expires_in * 1000 })
     },
     onError: () => setEnded('failed'),
   })
@@ -83,7 +83,7 @@ export function useQrLogin(onSignedIn: (needsProfile: boolean) => void): QrLogin
     },
     queryFn: async (): Promise<QrStatusResponse | { status: 'expired' }> => {
       try {
-        const r = await qrApi.status(token!)
+        const r = await qrApi.status(ticket!.token, ticket!.secret)
         failures.current = 0
         setReconnecting(false)
         return r

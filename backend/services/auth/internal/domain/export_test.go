@@ -55,3 +55,8 @@ func (s *Service) RefreshStoreForTest() *RefreshStore { return s.refresh }
 func (s *Service) JoinTenantForTest(ctx context.Context, tenantID, userID, ngacNodeID, role string) error {
 	return s.joinTenant(ctx, tenantID, userID, ngacNodeID, role)
 }
+
+// RevokeAllSessions ends every session of the user, as account recovery does.
+func (s *Service) RevokeAllSessions(ctx context.Context, userID string) error {
+	return s.refresh.RevokeAllForUser(ctx, userID)
+}

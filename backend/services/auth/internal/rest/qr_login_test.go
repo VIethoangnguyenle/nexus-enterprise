@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"ngac-platform/services/auth/internal/auth"
+	"ngac-platform/services/auth/internal/domain"
 	"ngac-platform/services/auth/internal/store"
 )
 
@@ -33,25 +35,33 @@ func newQRApp(t *testing.T) qrApp {
 	return qrApp{acctApp: a, phone: u, tenant: tenant}
 }
 
+// phoneToken is an access token of a live phone session of u in tenant.
 func (q qrApp) phoneToken(t *testing.T, u *store.User, tenant string) string {
-	t.Helper()
-	tok, _, err := auth.GenerateToken(u.ID, u.Username, u.NGACNodeID, tenant)
-	if err != nil {
-		t.Fatal(err)
-	}
+	tok, _ := q.phoneSession(t, u, tenant)
 	return tok
 }
 
-// call is a request carrying the given cookies (as a browser would) and bearer token.
-func (q qrApp) call(path, bearer, body string, cookies ...*http.Cookie) *httptest.ResponseRecorder {
+func (q qrApp) phoneSession(t *testing.T, u *store.User, tenant string) (token, sessionID string) {
+	t.Helper()
+	tok, sid, err := auth.GenerateToken(u.ID, u.Username, u.NGACNodeID, tenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.svc.AttachRefreshToken(context.Background(), domain.RefreshIdentity{
+		UserID: u.ID, Username: u.Username, NGACNodeID: u.NGACNodeID, TenantID: tenant, SessionID: sid,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return tok, sid
+}
+
+// call is a request with the given bearer token and JSON body.
+func (q qrApp) call(path, bearer, body string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	req.Header.Set("User-Agent", qrUA)
 	if bearer != "" {
 		req.Header.Set(echo.HeaderAuthorization, "Bearer "+bearer)
-	}
-	for _, c := range cookies {
-		req.AddCookie(c)
 	}
 	rec := httptest.NewRecorder()
 	q.e.ServeHTTP(rec, req)
@@ -69,8 +79,8 @@ func tenantOfToken(t *testing.T, token string) string {
 }
 
 // create asks for a code the way the sign-in page does and returns its token and
-// the browser-binding cookie.
-func (q qrApp) create(t *testing.T) (string, *http.Cookie) {
+// the poll secret the page keeps.
+func (q qrApp) create(t *testing.T) (string, string) {
 	t.Helper()
 	rec := q.call("/api/auth/qr", "", "")
 	if rec.Code != http.StatusOK {
@@ -78,20 +88,18 @@ func (q qrApp) create(t *testing.T) (string, *http.Cookie) {
 	}
 	body := decode(t, rec)
 	token, _ := body["token"].(string)
-	if token == "" || body["expires_in"] != float64(120) {
+	secret, _ := body["poll_secret"].(string)
+	if token == "" || secret == "" || token == secret || body["expires_in"] != float64(120) {
 		t.Fatalf("create body %v", body)
 	}
-	c := cookieNamed(rec, qrPollCookieName)
-	if c == nil || c.Value == "" {
-		t.Fatal("create must bind the code to this browser with a cookie")
+	if len(rec.Result().Cookies()) != 0 {
+		t.Error("create sets no cookie: each tab keeps its own code's secret")
 	}
-	if !c.HttpOnly || c.SameSite != http.SameSiteStrictMode || c.Path != qrCookiePath {
-		t.Errorf("poll cookie must be httpOnly, SameSite=Strict, scoped to %s: %+v", qrCookiePath, c)
-	}
-	if strings.Contains(rec.Body.String(), c.Value) {
-		t.Error("the poll secret must never be in a response body")
-	}
-	return token, c
+	return token, secret
+}
+
+func statusBody(token, secret string) string {
+	return `{"token":"` + token + `","poll_secret":"` + secret + `"}`
 }
 
 func TestQRLoginREST_PhoneApprovesAndTheComputerGetsASession(t *testing.T) {
@@ -99,7 +107,7 @@ func TestQRLoginREST_PhoneApprovesAndTheComputerGetsASession(t *testing.T) {
 	token, poll := q.create(t)
 	phone := q.phoneToken(t, q.phone, q.tenant)
 
-	rec := q.call("/api/auth/qr/status", "", `{"token":"`+token+`"}`, poll)
+	rec := q.call("/api/auth/qr/status", "", statusBody(token, poll))
 	if rec.Code != http.StatusOK || decode(t, rec)["status"] != "pending" {
 		t.Fatalf("pending: %d %s", rec.Code, rec.Body)
 	}
@@ -113,7 +121,7 @@ func TestQRLoginREST_PhoneApprovesAndTheComputerGetsASession(t *testing.T) {
 		t.Errorf("scan body %v", scan)
 	}
 
-	rec = q.call("/api/auth/qr/status", "", `{"token":"`+token+`"}`, poll)
+	rec = q.call("/api/auth/qr/status", "", statusBody(token, poll))
 	st := decode(t, rec)
 	scanner, _ := st["scanner"].(map[string]any)
 	if st["status"] != "scanned" || scanner["display_name"] != "Lê Thị Hoa" {
@@ -127,7 +135,7 @@ func TestQRLoginREST_PhoneApprovesAndTheComputerGetsASession(t *testing.T) {
 		t.Fatalf("approve: %d %s", rec.Code, rec.Body)
 	}
 
-	rec = q.call("/api/auth/qr/status", "", `{"token":"`+token+`"}`, poll)
+	rec = q.call("/api/auth/qr/status", "", statusBody(token, poll))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("collect: %d %s", rec.Code, rec.Body)
 	}
@@ -143,31 +151,51 @@ func TestQRLoginREST_PhoneApprovesAndTheComputerGetsASession(t *testing.T) {
 	if c := cookieNamed(rec, refreshCookieName); c == nil || c.Value == "" {
 		t.Error("the computer must get a refresh cookie like every other sign-in")
 	}
-	if c := cookieNamed(rec, qrPollCookieName); c == nil || c.MaxAge >= 0 {
-		t.Error("the poll cookie must be cleared once the session is collected")
-	}
 
 	// Collected once only.
-	if rec := q.call("/api/auth/qr/status", "", `{"token":"`+token+`"}`, poll); rec.Code != http.StatusGone || decode(t, rec)["code"] != "qr_unavailable" {
+	if rec := q.call("/api/auth/qr/status", "", statusBody(token, poll)); rec.Code != http.StatusGone || decode(t, rec)["code"] != "qr_unavailable" {
 		t.Errorf("second collect: %d %s", rec.Code, rec.Body)
 	}
 }
 
 func TestQRLoginREST_AnotherBrowserWithTheTokenGetsNothing(t *testing.T) {
 	q := newQRApp(t)
-	token, _ := q.create(t)
+	token, secret := q.create(t)
 	phone := q.phoneToken(t, q.phone, q.tenant)
 	q.call("/api/auth/qr/scan", phone, `{"token":"`+token+`"}`)
 	q.call("/api/auth/qr/approve", phone, `{"token":"`+token+`"}`)
 
-	forged := &http.Cookie{Name: qrPollCookieName, Value: "guess"}
-	for name, cookies := range map[string][]*http.Cookie{"no cookie": nil, "wrong cookie": {forged}} {
-		rec := q.call("/api/auth/qr/status", "", `{"token":"`+token+`"}`, cookies...)
+	for name, body := range map[string]string{
+		"no secret": `{"token":"` + token + `"}`, "wrong secret": statusBody(token, "guess"), "the token as secret": statusBody(token, token),
+	} {
+		rec := q.call("/api/auth/qr/status", "", body)
 		if rec.Code != http.StatusGone {
 			t.Errorf("%s: %d %s", name, rec.Code, rec.Body)
 		}
 		if strings.Contains(rec.Body.String(), "access_token") || cookieNamed(rec, refreshCookieName) != nil {
 			t.Errorf("%s: a session leaked", name)
+		}
+	}
+	if rec := q.call("/api/auth/qr/status", "", statusBody(token, secret)); decode(t, rec)["status"] != "approved" {
+		t.Errorf("the rightful page must still collect: %s", rec.Body)
+	}
+}
+
+func TestQRLoginREST_AnEndedPhoneSessionIsRefused(t *testing.T) {
+	q := newQRApp(t)
+	token, _ := q.create(t)
+	phone, sid := q.phoneSession(t, q.phone, q.tenant)
+	// Scanned while signed in, then signed out before approving.
+	if rec := q.call("/api/auth/qr/scan", phone, `{"token":"`+token+`"}`); rec.Code != http.StatusOK {
+		t.Fatalf("scan: %d %s", rec.Code, rec.Body)
+	}
+	if err := q.svc.EndSession(context.Background(), sid); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"/api/auth/qr/approve", "/api/auth/qr/scan"} {
+		rec := q.call(path, phone, `{"token":"`+token+`"}`)
+		if rec.Code != http.StatusUnauthorized || decode(t, rec)["code"] != "session_invalid" {
+			t.Errorf("%s from a signed-out phone: %d %s", path, rec.Code, rec.Body)
 		}
 	}
 }
@@ -196,7 +224,7 @@ func TestQRLoginREST_DeclineAndUnknownCodes(t *testing.T) {
 	if rec := q.call("/api/auth/qr/decline", phone, `{"token":"`+token+`"}`); rec.Code != http.StatusNoContent {
 		t.Fatalf("decline: %d %s", rec.Code, rec.Body)
 	}
-	if rec := q.call("/api/auth/qr/status", "", `{"token":"`+token+`"}`, poll); decode(t, rec)["status"] != "declined" {
+	if rec := q.call("/api/auth/qr/status", "", statusBody(token, poll)); decode(t, rec)["status"] != "declined" {
 		t.Errorf("after decline: %s", rec.Body)
 	}
 
