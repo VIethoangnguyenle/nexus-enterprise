@@ -1,7 +1,7 @@
 ---
 title: "Đăng nhập bằng mã QR (kiểu Lark)"
 description: "Desktop sign-in shows a single-use QR; a phone already signed in to Nexus scans it (in-app scanner or plain camera), sees which computer is asking, and approves. The desktop then gets a session for the same user and the tenant the phone is using."
-status: in-review
+status: completed
 priority: P2
 effort: 22h
 branch: feat/qr-login
