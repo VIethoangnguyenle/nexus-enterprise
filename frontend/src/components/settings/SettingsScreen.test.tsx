@@ -218,7 +218,7 @@ describe('SettingsScreen: section list', () => {
     const router = await renderShell()
     await user.click(within(await sections()).getByRole('link', { name: 'Giao diện, ngôn ngữ' }))
     await waitFor(() => expect(router.state.location.pathname).toBe('/settings/appearance'))
-    expect(await screen.findByRole('switch', { name: 'Giảm chuyển động' })).toBeInTheDocument()
+    expect(await screen.findByRole('radiogroup', { name: 'Giảm chuyển động' })).toBeInTheDocument()
 
     await user.click(within(await sections()).getByRole('link', { name: 'Tài khoản và hồ sơ' }))
     await waitFor(() => expect(router.state.location.pathname).toBe('/settings/account'))

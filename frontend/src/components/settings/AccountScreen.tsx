@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { CircleAlert } from 'lucide-react'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useMyProfile } from '../../hooks/useMyProfile'
 import { useRemoveAvatar, useUpdateProfile, useUploadAvatar } from '../../hooks/useProfile'
@@ -9,12 +8,15 @@ import { avatarErrorMessage } from '../../lib/avatar-file'
 import { UNKNOWN_PERSON } from '../../lib/people'
 import { workspaceDisplayName } from '../../lib/workspace'
 import { useAuthStore } from '../../stores/auth.store'
-import { Button, toast } from '../primitives'
+import { TextField, toast } from '../primitives'
 import { AvatarEdit } from '../patterns/AvatarEdit'
-import { EmptyState } from '../spaces/EmptyState'
 import { EditFieldScreen } from './EditFieldScreen'
+import { ProfileFormBar, ProfileLoadFailed, ProfileLoading, ProfileTab, RoleField, useProfileForm } from './ProfileTab'
+import { ReadOnlyField } from './ReadOnlyField'
 import { SettingsGroup, SettingsPage, SettingsRow } from './SettingsGroup'
-import { FIELD_MAX, NAME_MAX, validateProfile, type ProfileForm } from './settings-model'
+import { useWorkspaceLead } from './modules/workspace-lead'
+import { ACCOUNT_LEAD, FIELD_MAX, NAME_MAX, validateProfile, type ProfileForm } from './settings-model'
+import { useSettingsWide } from './settings-layout'
 import { useSettingsNav } from './settings-nav'
 
 type Field = keyof ProfileForm
@@ -52,11 +54,7 @@ function useProfilePage() {
 function ProfileFailed({ title, onBack, retry }: { title: string; onBack: () => void; retry: () => void }) {
   return (
     <SettingsPage title={title} onBack={onBack}>
-      <EmptyState
-        icon={<CircleAlert size={24} strokeWidth={1.75} />}
-        text="Không tải được hồ sơ của bạn. Kiểm tra kết nối rồi thử lại."
-        action={<Button variant="soft" size="sm" onClick={retry}>Thử lại</Button>}
-      />
+      <ProfileLoadFailed retry={retry} />
     </SettingsPage>
   )
 }
@@ -64,10 +62,24 @@ function ProfileFailed({ title, onBack, retry }: { title: string; onBack: () => 
 const shown = (v: string | undefined) => v?.trim() || 'Chưa có'
 
 /**
- * Tài khoản và hồ sơ (mockup mobile-shell.html §3): the picture, then each field a person sets as a row that opens
- * a page to edit that one field; below, what an administrator sets, read only.
+ * Tài khoản và hồ sơ. On a phone (mockup mobile-shell.html §3) the picture, then each field a person sets as a row
+ * that opens a page to edit that one field; below, what an administrator sets, read only. Inside the desktop shell
+ * (mockup settings-desktop.html §6) the same fields as one form with Lưu thay đổi, and Đăng xuất at the end.
  */
 export function AccountScreen() {
+  return useSettingsWide() ? <AccountForm /> : <AccountRows />
+}
+
+function AccountForm() {
+  const { back } = useSettingsNav()
+  return (
+    <SettingsPage title="Tài khoản và hồ sơ" lead={ACCOUNT_LEAD} onBack={back}>
+      <ProfileTab />
+    </SettingsPage>
+  )
+}
+
+function AccountRows() {
   const { back } = useSettingsNav()
   const me = useAuthStore((s) => s.user)
   const { isPersonal } = useWorkspaceType()
@@ -138,9 +150,50 @@ export function AccountScreen() {
 
 /**
  * Hồ sơ trong tổ chức (mockup §8, organization only): the title a person gives themselves, and the department and
- * role an administrator of the workspace set for them.
+ * role an administrator of the workspace set for them. On a phone the title is a row that opens its own page; inside
+ * the desktop shell it is a form with Lưu thay đổi.
  */
 export function OrgProfileScreen() {
+  return useSettingsWide() ? <OrgProfileForm /> : <OrgProfileRows />
+}
+
+function OrgProfileForm() {
+  const { back } = useSettingsNav()
+  const lead = useWorkspaceLead()
+  const { q, tenant, form, errors, changes, saving, refs, set, blur, submit, reset } = useProfileForm(['title'])
+
+  const body = q.isError
+    ? <ProfileLoadFailed retry={() => void q.refetch()} />
+    : !q.data
+      ? <ProfileLoading rows={3} avatar={false} />
+      : (
+        <form
+          aria-label="Hồ sơ trong tổ chức"
+          noValidate
+          onSubmit={(e) => { e.preventDefault(); void submit() }}
+          className="grid gap-5 max-w-130"
+        >
+          <TextField
+            ref={refs.title}
+            label="Chức danh"
+            labelHint="(không bắt buộc)"
+            value={form.title}
+            maxLength={FIELD_MAX + 20}
+            autoComplete="organization-title"
+            error={errors.title}
+            onChange={(e) => set('title')(e.target.value)}
+            onBlur={blur('title')}
+          />
+          <ReadOnlyField label="Phòng ban" value={tenant?.department ?? ''} reason="Do quản trị viên đặt." />
+          <RoleField role={tenant?.role} />
+          <ProfileFormBar saving={saving} changed={!!changes} onReset={reset} />
+        </form>
+      )
+
+  return <SettingsPage title="Hồ sơ trong tổ chức" lead={lead} onBack={back}>{body}</SettingsPage>
+}
+
+function OrgProfileRows() {
   const { back } = useSettingsNav()
   const { workspaceName } = useActiveWorkspace()
   const { q, person, tenant, values, editor, edit } = useProfilePage()

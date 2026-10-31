@@ -7,6 +7,7 @@ import { Button, toast } from '../primitives'
 import { ConfirmDialog } from '../composites/ConfirmDialog'
 import { EmptyState } from '../spaces/EmptyState'
 import { SettingsGroup, SettingsPage, SettingsRow } from './SettingsGroup'
+import { ACCOUNT_LEAD } from './settings-model'
 import { useSettingsNav } from './settings-nav'
 
 const ICON = { size: 18, strokeWidth: 1.75 } as const
@@ -17,8 +18,8 @@ const deviceName = (s: Session) => s.device || 'Trình duyệt không rõ'
 
 /**
  * Tôi → Thiết bị và phiên: where this account is signed in, this device first. Another session can be signed
- * out from here; this one is ended with Đăng xuất on Tôi. The server lists only the caller's own sessions and
- * refuses to end anyone else's.
+ * out from here, after a confirmation; this one is ended with Đăng xuất on Tôi (on a wide screen, at the end of
+ * Tài khoản và hồ sơ). The server lists only the caller's own sessions and refuses to end anyone else's.
  */
 export function SessionsScreen() {
   const { back } = useSettingsNav()
@@ -88,7 +89,7 @@ export function SessionsScreen() {
   })()
 
   return (
-    <SettingsPage title="Thiết bị và phiên" onBack={back}>
+    <SettingsPage title="Thiết bị và phiên" lead={ACCOUNT_LEAD} onBack={back}>
       {body}
       <ConfirmDialog
         open={!!ending}

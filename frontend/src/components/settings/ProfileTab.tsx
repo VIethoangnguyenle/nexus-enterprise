@@ -5,6 +5,7 @@ import { useWorkspaceType } from '../../hooks/useWorkspaceType'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useMyProfile } from '../../hooks/useMyProfile'
 import { useRemoveAvatar, useUpdateProfile, useUploadAvatar } from '../../hooks/useProfile'
+import { roleLabel } from '../../lib/auth-flow'
 import { avatarErrorMessage } from '../../lib/avatar-file'
 import { UNKNOWN_PERSON } from '../../lib/people'
 import { useAuthStore } from '../../stores/auth.store'
@@ -15,24 +16,17 @@ import { ReadOnlyField } from './ReadOnlyField'
 import { FIELD_MAX, NAME_MAX, profileChanges, profileOf, validateProfile, type ProfileErrors, type ProfileForm } from './settings-model'
 
 /**
- * Cài đặt → Hồ sơ (mockup §4): the three things a person can change about
- * themselves, the two they can only see, and signing out. Errors show when a
- * field is left and when saving; only what changed is sent.
+ * The person's own profile as a form: the stored values, what is being typed, the errors, and saving only what
+ * changed. Errors show when a field is left and when saving; saving focuses the first field at fault. `fields` are the
+ * ones the form shows: only those are checked before saving.
  */
-export function ProfileTab() {
-  const { workspaceId: wsId } = useActiveWorkspace()
-  const me = useAuthStore((s) => s.user)
-  const { isPersonal } = useWorkspaceType()
-  const q = useMyProfile(wsId)
+export function useProfileForm(fields: readonly (keyof ProfileForm)[] = ['displayName', 'title', 'location']) {
+  const { workspaceId } = useActiveWorkspace()
+  const q = useMyProfile(workspaceId)
   const save = useUpdateProfile()
-  const uploadAvatar = useUploadAvatar()
-  const removeAvatar = useRemoveAvatar()
-  const [avatarError, setAvatarError] = useState<string | null>(null)
 
   // The person's own record (GET /api/me), not a search of the directory.
   const person = q.data?.user
-  // Departments belong to company workspaces; a personal one shows none.
-  const department = isPersonal ? '' : (q.data?.current_tenant?.department ?? '')
   const initial = useMemo(() => profileOf(person), [person])
 
   const [form, setForm] = useState<ProfileForm>(initial)
@@ -40,6 +34,7 @@ export function ProfileTab() {
   const nameRef = useRef<HTMLInputElement>(null)
   const titleRef = useRef<HTMLInputElement>(null)
   const placeRef = useRef<HTMLInputElement>(null)
+  const refs = { displayName: nameRef, title: titleRef, location: placeRef }
 
   // The stored profile arrives (or changes after a save): the form starts from it.
   // A form being edited is left alone; only a pristine one follows.
@@ -49,7 +44,6 @@ export function ProfileTab() {
     const pristine = !seeded.current || !profileChanges(seeded.current, form)
     seeded.current = initial
     if (pristine) setForm(initial)
-     
   }, [initial, person])
 
   const changes = profileChanges(initial, form)
@@ -60,11 +54,12 @@ export function ProfileTab() {
   const blur = (key: keyof ProfileForm) => () => setErrors((e) => ({ ...e, [key]: validateProfile(form)[key] }))
 
   const submit = async () => {
-    const found = validateProfile(form)
+    const all = validateProfile(form)
+    const found: ProfileErrors = {}
+    for (const key of fields) if (all[key]) found[key] = all[key]
     setErrors(found)
-    if (found.displayName) return nameRef.current?.focus()
-    if (found.title) return titleRef.current?.focus()
-    if (found.location) return placeRef.current?.focus()
+    const first = fields.find((key) => found[key])
+    if (first) return refs[first].current?.focus()
     if (!changes) return
     try {
       await save.mutateAsync(changes)
@@ -73,25 +68,65 @@ export function ProfileTab() {
     }
     toast('Đã lưu hồ sơ')
   }
+  const reset = () => { setForm(initial); setErrors({}) }
 
-  if (q.isError) {
-    return (
-      <EmptyState
-        icon={<CircleAlert size={24} strokeWidth={1.75} />}
-        text="Không tải được hồ sơ của bạn. Kiểm tra kết nối rồi thử lại."
-        action={<Button variant="soft" size="sm" onClick={() => void q.refetch()}>Thử lại</Button>}
-      />
-    )
+  return {
+    q, person, tenant: q.data?.current_tenant, initial, form, errors, changes, saving: save.isPending,
+    refs, set, blur, submit, reset,
   }
-  if (!q.data) {
-    return (
-      <div aria-busy="true" className="grid gap-5 max-w-130">
+}
+
+/** Could not read the profile: say so and offer to try again, instead of an empty form. */
+export function ProfileLoadFailed({ retry }: { retry: () => void }) {
+  return (
+    <EmptyState
+      icon={<CircleAlert size={24} strokeWidth={1.75} />}
+      text="Không tải được hồ sơ của bạn. Kiểm tra kết nối rồi thử lại."
+      action={<Button variant="soft" size="sm" onClick={retry}>Thử lại</Button>}
+    />
+  )
+}
+
+/** The form while the profile is read. */
+export function ProfileLoading({ rows = 4, avatar = true }: { rows?: number; avatar?: boolean }) {
+  return (
+    <div aria-busy="true" className="grid gap-5 max-w-130">
+      {avatar && (
         <div className="flex items-center gap-4"><span className="skeleton w-16 h-16 rounded-full" /><span className="skeleton h-4 w-48 rounded-sm" /></div>
-        {[0, 1, 2, 3].map((i) => <span key={i} className="skeleton h-10 rounded-md" />)}
-      </div>
-    )
-  }
+      )}
+      {Array.from({ length: rows }, (_, i) => <span key={i} className="skeleton h-10 rounded-md" />)}
+    </div>
+  )
+}
 
+/** Lưu thay đổi and Huỷ, both off until something changed. */
+export function ProfileFormBar({ saving, changed, onReset }: { saving: boolean; changed: boolean; onReset: () => void }) {
+  return (
+    <div className="flex items-center gap-2">
+      <Button type="submit" loading={saving} disabled={!changed}>Lưu thay đổi</Button>
+      <Button type="button" variant="ghost" disabled={!changed || saving} onClick={onReset}>Huỷ</Button>
+    </div>
+  )
+}
+
+/**
+ * Tài khoản và hồ sơ on a wide screen (mockup settings-desktop.html §6, the former Hồ sơ tab): the three things a
+ * person can change about themselves, what they can only see (in an organization also the department and role an
+ * administrator set), and signing out. Only what changed is sent.
+ */
+export function ProfileTab() {
+  const me = useAuthStore((s) => s.user)
+  const { isPersonal } = useWorkspaceType()
+  const { q, person, tenant, initial, form, errors, changes, saving, refs, set, blur, submit, reset } = useProfileForm()
+  const uploadAvatar = useUploadAvatar()
+  const removeAvatar = useRemoveAvatar()
+  const [avatarError, setAvatarError] = useState<string | null>(null)
+
+  if (q.isError) return <ProfileLoadFailed retry={() => void q.refetch()} />
+  if (!q.data) return <ProfileLoading />
+
+  // Departments and roles belong to company workspaces; a personal one shows none.
+  const department = isPersonal ? '' : (tenant?.department ?? '')
   const shownName = form.displayName.trim() || initial.displayName || UNKNOWN_PERSON
   const subtitle = [initial.title, department].filter(Boolean).join(' · ')
 
@@ -142,7 +177,7 @@ export function ProfileTab() {
       </div>
 
       <TextField
-        ref={nameRef}
+        ref={refs.displayName}
         label="Tên hiển thị"
         value={form.displayName}
         maxLength={NAME_MAX + 20}
@@ -154,7 +189,7 @@ export function ProfileTab() {
       <p className="m-0 -mt-3.5 text-xs text-ink-muted">Mọi người thấy tên này trong chat, phê duyệt và danh bạ.</p>
 
       <TextField
-        ref={titleRef}
+        ref={refs.title}
         label="Chức danh"
         labelHint="(không bắt buộc)"
         value={form.title}
@@ -166,7 +201,7 @@ export function ProfileTab() {
       />
 
       <TextField
-        ref={placeRef}
+        ref={refs.location}
         label="Nơi làm việc"
         labelHint="(không bắt buộc)"
         value={form.location}
@@ -178,18 +213,9 @@ export function ProfileTab() {
 
       <ReadOnlyField label="Email đăng nhập" value={person?.email ?? ''} reason="Dùng để nhận mã đăng nhập. Đổi email cần quản trị viên." />
       {!isPersonal && <ReadOnlyField label="Phòng ban" value={department} reason="Do quản trị viên đặt." />}
+      {!isPersonal && <RoleField role={tenant?.role} />}
 
-      <div className="flex items-center gap-2">
-        <Button type="submit" loading={save.isPending} disabled={!changes}>Lưu thay đổi</Button>
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={!changes || save.isPending}
-          onClick={() => { setForm(initial); setErrors({}) }}
-        >
-          Huỷ
-        </Button>
-      </div>
+      <ProfileFormBar saving={saving} changed={!!changes} onReset={reset} />
 
       <hr className="w-full m-0 border-0 border-t border-line" />
       <div className="flex items-center gap-4">
@@ -206,3 +232,7 @@ export function ProfileTab() {
   )
 }
 
+/** The role in this workspace, as a person would say it; an administrator sets it. */
+export function RoleField({ role }: { role: string | undefined }) {
+  return <ReadOnlyField label="Vai trò" value={role ? roleLabel(role) : ''} reason="Quản trị viên workspace đặt vai trò của bạn." />
+}

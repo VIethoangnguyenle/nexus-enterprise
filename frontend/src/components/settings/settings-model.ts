@@ -1,6 +1,9 @@
 import type { Contact } from '../../hooks/useContacts'
 import type { ProfileChanges } from '../../api/profile'
 
+/** The line under the title of an account section on a wide screen: these options follow the person, not the workspace. */
+export const ACCOUNT_LEAD = 'Dùng chung mọi workspace'
+
 /** The limits the server enforces (auth service), counted in characters. */
 export const NAME_MAX = 80
 export const FIELD_MAX = 120
