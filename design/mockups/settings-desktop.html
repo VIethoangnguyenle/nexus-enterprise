@@ -683,6 +683,7 @@ html.reduce .ovl.enter { animation-duration: 120ms; }
 .cals .sw-dot { width: 10px; height: 10px; border-radius: 3px; }
 .dev { display: flex; align-items: center; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--color-line); }
 .dev .t { flex: 1; display: grid; gap: 2px; } .dev .t span { color: var(--color-ink-muted); font-size: 0.8125rem; }
+.gstrips { display: grid; gap: 16px; } .gstrip { background: var(--color-base); border: 1px solid var(--color-line); border-radius: 12px; max-width: 900px; }
 .timepair { display: inline-flex; align-items: center; gap: 8px; }
 .srow .timepair .inp.sel { min-width: 96px; font-size: 0.875rem; }
 </style>
@@ -692,7 +693,7 @@ html.reduce .ovl.enter { animation-duration: 120ms; }
   <h1>Nexus Hub · Cài đặt trên máy tính</h1>
   <p>Cài đặt trên máy tính có đủ mọi tuỳ chọn của bản điện thoại (DESIGN.md §6 “Cài đặt”, mockup <code>mobile-shell.html</code> §3, §4, §8). Thanh tab cũ thay bằng danh mục bên trái chia hai nhóm như trang Tôi: <b>Tài khoản</b> (dùng chung mọi workspace) và <b>Trong &lt;workspace&gt;</b>. Mỗi mục có cùng địa chỉ <code>/settings/&lt;mục&gt;</code> với điện thoại, nên mỗi tuỳ chọn chỉ có một chỗ ở. Chấm số xanh khớp với chú thích cùng số.</p>
   <div class="controls"><div class="seg" role="group" aria-label="Theme"><button type="button" data-theme-set="system" aria-pressed="true">Theo hệ thống</button><button type="button" data-theme-set="light" aria-pressed="false">Sáng</button><button type="button" data-theme-set="dark" aria-pressed="false">Tối</button></div><label class="check"><input type="checkbox" id="reduce"> Giảm chuyển động</label><label class="check"><input type="checkbox" id="cxs" checked> Hiện chú thích số</label></div>
-  <nav class="toc" aria-label="Các màn"><a href="#chat">Chat</a><a href="#notif">Thông báo</a><a href="#sessions">Thiết bị và phiên</a><a href="#calendar">Lịch</a><a href="#wsadmin">Cài đặt workspace</a><a href="#personal">Workspace cá nhân</a></nav>
+  <nav class="toc" aria-label="Các màn"><a href="#chat">Chat</a><a href="#notif">Thông báo</a><a href="#sessions">Thiết bị và phiên</a><a href="#calendar">Lịch</a><a href="#wsadmin">Cài đặt workspace</a><a href="#personal">Workspace cá nhân</a><a href="#entry">Lối vào</a></nav>
 </header>
 
 <!-- ============================ 1 · CHAT ============================ -->
@@ -921,6 +922,24 @@ html.reduce .ovl.enter { animation-duration: 120ms; }
   <ol class="notes cxl">
     <li><span class="cxn">1</span><b>Danh mục của workspace cá nhân</b>: nhóm “Trong Cá nhân” chỉ có Chat, Lịch, Tài liệu và Cài đặt workspace (Tên workspace, Dung lượng Tài liệu). Địa chỉ của mục workspace không có (Phê duyệt…) mở Tài khoản và hồ sơ.</li>
     <li><span class="cxn">2</span><b>Đăng xuất</b> vẫn ở cuối Tài khoản và hồ sơ (máy tính không có trang Tôi). Ở workspace tổ chức, mục này còn hiện Phòng ban và Vai trò chỉ đọc; Chức danh sửa ở Hồ sơ trong tổ chức.</li>
+  </ol>
+</section>
+
+<!-- ============================ 7 · LỐI VÀO TỪ PHÂN HỆ ============================ -->
+<section class="screen" id="entry" aria-labelledby="h-entry">
+  <div class="screen-head">
+    <h2 id="h-entry">7 · Lối vào Cài đặt từ từng phân hệ (máy tính)</h2>
+    <p>Trên máy tính các phân hệ không có ⋯ như điện thoại. Mỗi đầu phân hệ có một nút ⚙ giống nút ⚙ hiện có của Lịch: icon 20 trong nút tròn 40, cuối hàng nút của đầu trang, mở <code>/settings/&lt;phân hệ&gt;</code> giữ workspace đang mở.</p>
+  </div>
+  <div class="gstrips">
+    <div class="gstrip" style="max-width:340px"><div class="chead"><div class="t"><h3>Chat</h3></div><div class="end"><button class="btn sm" type="button"><svg class="i s"><use href="#i-plus"/></svg>Mới</button><button class="ibtn" type="button" aria-label="Cài đặt Chat" title="Cài đặt Chat" style="width:40px;height:40px;border-radius:999px" data-cx="1"><svg class="i"><use href="#i-gear"/></svg></button></div></div><div style="padding:0 20px 12px"><div class="search"><svg class="i s"><use href="#i-search"/></svg>Tìm trong chat</div></div></div>
+    <div class="gstrip"><div class="chead"><div class="t"><h3>Tài liệu</h3><div class="sub">Khối Vận hành · 1.284 tệp</div></div><div class="end"><button class="btn primary sm" type="button"><svg class="i s"><use href="#i-upload"/></svg>Tải lên</button><button class="ibtn" type="button" aria-label="Cài đặt Tài liệu" title="Cài đặt Tài liệu" style="width:40px;height:40px;border-radius:999px" data-cx="2"><svg class="i"><use href="#i-gear"/></svg></button></div></div></div>
+    <div class="gstrip"><div class="chead"><div class="t"><h3>Phê duyệt</h3><div class="sub">2 đề nghị chờ bạn duyệt</div></div><div class="end"><button class="btn primary sm" type="button"><svg class="i s"><use href="#i-plus"/></svg>Tạo đề nghị</button><button class="ibtn" type="button" aria-label="Cài đặt Phê duyệt" title="Cài đặt Phê duyệt" style="width:40px;height:40px;border-radius:999px"><svg class="i"><use href="#i-gear"/></svg></button></div></div></div>
+    <div class="gstrip"><div class="chead"><div class="t"><h3>Tài sản</h3><div class="sub">312 tài sản trong Khối Vận hành</div></div><div class="end"><button class="btn sm" type="button">Yêu cầu tài sản</button><button class="btn primary sm" type="button"><svg class="i s"><use href="#i-plus"/></svg>Thêm tài sản</button><button class="ibtn" type="button" aria-label="Cài đặt Tài sản" title="Cài đặt Tài sản" style="width:40px;height:40px;border-radius:999px"><svg class="i"><use href="#i-gear"/></svg></button></div></div></div>
+  </div>
+  <ol class="notes cxl">
+    <li><span class="cxn">1</span><b>Chat</b>: nút ⚙ cạnh nút Mới ở đầu cột danh sách, vì Chat trên máy tính không có đầu trang riêng.</li>
+    <li><span class="cxn">2</span><b>Tài liệu, Phê duyệt, Tài sản</b>: nút ⚙ là nút cuối cùng bên phải của đầu trang, sau các nút hành động; tooltip và tên cho trình đọc màn hình là "Cài đặt &lt;phân hệ&gt;". Phê duyệt và Tài sản chỉ có ở workspace tổ chức nên nút cũng chỉ có ở đó. Danh bạ không có trang cài đặt nên không có nút.</li>
   </ol>
 </section>
 </div>

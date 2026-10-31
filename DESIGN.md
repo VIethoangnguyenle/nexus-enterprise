@@ -1075,6 +1075,13 @@ workspace dùng chung) và **Trong workspace này** (theo workspace). Máy tính
   có đủ các dòng của §11 (dòng có chevron mở màn Quản trị hiện có; Mời mở hộp thoại mời) và giữ thẻ Loại workspace.
   Lịch chỉ có một chỗ cài đặt: Giờ làm việc vào mục Lịch (cả điện thoại), hộp thoại cài đặt trong Lịch bỏ, nút ⚙ của Lịch
   mở `/settings/calendar`.
+- **Lối vào Cài đặt từ phân hệ trên máy tính (mockup `settings-desktop.html` §7, duyệt 2026-11-01):** máy tính không có ⋯ của
+  phân hệ, nên mỗi phân hệ có nút ⚙ như của Lịch (`IconButton` tròn, icon 20, tên "Cài đặt <phân hệ>"), mở
+  `/settings/<phân hệ>` giữ workspace. Chat: cạnh nút Mới ở đầu cột danh sách. Tài liệu, Phê duyệt, Tài sản: nút cuối bên
+  phải đầu trang. Danh bạ không có.
+- **Hồ sơ trong tổ chức là chỗ duy nhất của thông tin theo tổ chức (duyệt 2026-11-01, cả điện thoại và máy tính):** ở
+  workspace tổ chức, Chức danh (sửa), Phòng ban và Vai trò (chỉ đọc) chỉ nằm ở Hồ sơ trong tổ chức; Tài khoản và hồ sơ giữ
+  ảnh, Tên hiển thị, Nơi làm việc, Email. Workspace cá nhân không có Hồ sơ trong tổ chức nên Chức danh ở Tài khoản và hồ sơ.
 - **Tôi (dưới 1024; chạm avatar ở thanh trên):** trang toàn màn trượt từ phải, ẩn thanh đáy; thay bốn lối vào cũ (☰ → Cài
   đặt, sheet tài khoản với Cài đặt thông báo / Cài đặt tài khoản / Cài đặt, Thêm → Thông báo của Chat). Từ trên: thẻ hồ sơ
   (avatar 64, tên display 18/700, dòng phụ — tổ chức: "chức danh · phòng"; cá nhân: email — pill trạng thái, pill loại
