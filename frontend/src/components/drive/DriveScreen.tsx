@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type
 import { useRegisterCreateAction } from '../../hooks/useModuleCreateAction'
 import { useNavigate, useRouter, useSearch } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
-import { FolderTree, MoreHorizontal, Search, Star, StarOff, UserPlus, WifiOff } from 'lucide-react'
+import { FolderTree, MoreHorizontal, Search, Settings, Star, StarOff, UserPlus, WifiOff } from 'lucide-react'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useMeteredConnection } from '../../hooks/useMeteredConnection'
 import { useModuleSettings } from '../../hooks/useModuleSettings'
@@ -35,6 +35,7 @@ import { ModuleMenu } from '../patterns/ModuleMenu'
 import { PullToRefresh } from '../patterns/PullToRefresh'
 import type { SwipeAction } from '../patterns/SwipeRow'
 import { SearchSuggestions } from '../patterns/SearchSuggestions'
+import { useSettingsNav } from '../settings/settings-nav'
 import { DeleteItemDialog } from './DeleteItemDialog'
 import { DriveBody } from './DriveBody'
 import { DriveBreadcrumbs, type Crumb } from './DriveBreadcrumbs'
@@ -113,6 +114,7 @@ export function DriveScreen() {
   const m = useMotionPresets()
   const layout = useDriveLayout()
   const phone = layout === 'phone'
+  const settingsNav = useSettingsNav()
   const connectionLost = useConnectionLost()
   const { workspaceId: wsId, workspaceName, workspaces } = useActiveWorkspace()
   const people = usePeople(wsId)
@@ -712,6 +714,11 @@ export function DriveScreen() {
                   <div className="skeleton h-6 w-40 rounded-sm" aria-busy="true" />
                 )}
               </div>
+              {layout === 'desktop' && (
+                <IconButton size="lg" shape="round" className="ml-auto shrink-0" aria-label="Cài đặt Tài liệu" title="Cài đặt Tài liệu" onClick={() => settingsNav.open('drive')}>
+                  <Settings size={20} strokeWidth={1.75} />
+                </IconButton>
+              )}
             </header>
 
             {!missing && (

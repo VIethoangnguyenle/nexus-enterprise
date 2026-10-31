@@ -24,7 +24,10 @@ async function renderAssets(url = '/assets') {
   const route = createRoute({
     getParentRoute: () => root, path: '/assets', validateSearch: validateAssetsSearch, component: AssetsScreen,
   })
-  const router = createRouter({ routeTree: root.addChildren([route]), history: createMemoryHistory({ initialEntries: [url] }) })
+  const settings = createRoute({ getParentRoute: () => root, path: '/settings/$section', component: () => null })
+  const router = createRouter({
+    routeTree: root.addChildren([route, settings]), history: createMemoryHistory({ initialEntries: [url] }),
+  })
   await router.load()
   renderWithClient(<RouterProvider router={router} />)
   return router
@@ -39,8 +42,31 @@ beforeEach(() => {
   api.mockImplementation(assetFixtureApi)
 })
 afterEach(() => {
+  vi.unstubAllGlobals()
   vi.restoreAllMocks()
   resetClient()
+})
+
+describe('AssetsScreen: the desktop gear to Cài đặt Tài sản', () => {
+  it('on a wide screen the header ends with the gear, which opens Cài đặt Tài sản in the same workspace', async () => {
+    const user = userEvent.setup()
+    const router = await renderAssets(`/assets?ws=${WS_ID}&section=requests`)
+    const gear = await screen.findByRole('button', { name: 'Cài đặt Tài sản' })
+    expect(gear).toHaveAttribute('title', 'Cài đặt Tài sản')
+    await user.click(gear)
+    await waitFor(() => expect(router.state.location.pathname).toBe('/settings/assets'))
+    // Only the workspace follows; the tab stays behind.
+    expect(router.state.location.search).toEqual({ ws: WS_ID })
+  })
+
+  it('a phone has no gear: its ⋯ already leads there', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query.includes('max-width'), media: query, addEventListener: () => {}, removeEventListener: () => {},
+    }))
+    await renderAssets()
+    await screen.findAllByRole('heading', { name: 'Tài sản', level: 1 })
+    expect(screen.queryByRole('button', { name: 'Cài đặt Tài sản' })).toBeNull()
+  })
 })
 
 describe('AssetsScreen: Cài đặt Tài sản → Tab mở đầu', () => {
