@@ -1,4 +1,4 @@
-import { Bell, LogOut, Settings, User } from 'lucide-react'
+import { Bell, LogOut, ScanLine, Settings, User } from 'lucide-react'
 import { logoutSession } from '../../api/client'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { usePeople } from '../../hooks/usePeople'
@@ -49,6 +49,9 @@ export function AccountSheet({ onClose }: { onClose: () => void }) {
         onClick={toSettings}
       >
         Cài đặt thông báo
+      </PhoneSheetRow>
+      <PhoneSheetRow icon={<ScanLine size={20} strokeWidth={1.75} />} hint="Đăng nhập Nexus trên máy tính" to="/scan" onClick={onClose}>
+        Quét mã QR
       </PhoneSheetRow>
       <PhoneSheetRow icon={<User size={20} strokeWidth={1.75} />} to="/settings" onClick={toSettings}>
         Cài đặt tài khoản

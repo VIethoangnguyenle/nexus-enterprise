@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { FolderPlus, Plus, UserPlus, Users } from 'lucide-react'
+import { FolderPlus, Plus, ScanLine, UserPlus, Users } from 'lucide-react'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useChatSections } from '../../hooks/useChatSections'
 import { Pressable } from '../primitives'
@@ -64,6 +64,10 @@ export function NewChatButton() {
             }}
           >
             Tạo mục
+          </PhoneSheetRow>
+          {/* Sign a computer in by its QR code, where Lark keeps its scanner (design/mockups/qr-login.html §3). */}
+          <PhoneSheetRow icon={<ScanLine {...ICON} />} hint="Đăng nhập Nexus trên máy tính" to="/scan">
+            Quét mã QR
           </PhoneSheetRow>
         </NavSheet>
       )}

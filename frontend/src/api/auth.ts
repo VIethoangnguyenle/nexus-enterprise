@@ -138,6 +138,42 @@ export const authApi = {
     }),
 }
 
+/** Where a sign-in QR code stands, as the computer that shows it sees it. */
+export type QrStatus = 'pending' | 'scanned' | 'approved' | 'declined'
+
+/** POST /api/auth/qr: a single-use code; the browser is bound to it by an httpOnly cookie. */
+export interface QrTicket { token: string; expires_in: number }
+
+/** POST /api/auth/qr/status. Once approved it carries the session, as a verified code does. */
+export interface QrStatusResponse {
+  status: QrStatus
+  /** Who scanned the code: a name and picture, never an id. */
+  scanner?: { display_name: string; avatar_url: string }
+  access_token?: string
+  user?: SessionUser
+  needs_profile?: boolean
+}
+
+/** POST /api/auth/qr/scan: which computer is asking, and the workspace it would enter. */
+export interface QrScanResponse { browser: string; os: string; created_at: string; tenant_name: string }
+
+/**
+ * Sign-in by QR code. The computer (not signed in) creates a code and polls it;
+ * the phone (signed in) scans, then approves or declines. Every token travels
+ * in a body, never a URL the server logs.
+ */
+export const qrApi = {
+  create: () => publicFetch<QrTicket>('/auth/qr', { method: 'POST' }),
+  status: (token: string) =>
+    publicFetch<QrStatusResponse>('/auth/qr/status', { method: 'POST', body: JSON.stringify({ token }) }),
+  scan: (token: string) =>
+    apiFetch<QrScanResponse>('/auth/qr/scan', { method: 'POST', body: JSON.stringify({ token }) }),
+  approve: (token: string) =>
+    apiFetch<void>('/auth/qr/approve', { method: 'POST', body: JSON.stringify({ token }) }),
+  decline: (token: string) =>
+    apiFetch<void>('/auth/qr/decline', { method: 'POST', body: JSON.stringify({ token }) }),
+}
+
 /**
  * Server endpoint that starts "Sign in with Google". The whole OAuth flow runs
  * on the server, so this is a full-page navigation rather than a fetch.

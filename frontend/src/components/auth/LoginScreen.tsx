@@ -1,7 +1,7 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
-import { ArrowLeft, Lock, RefreshCw } from 'lucide-react'
+import { ArrowLeft, Lock, Mail, QrCode as QrIcon, RefreshCw } from 'lucide-react'
 import { startGoogleSignIn, type OTPVerifyResponse } from '../../api/auth'
 import { useProviders, useRequestOTP } from '../../hooks/useAuth'
 import {
@@ -15,12 +15,35 @@ import { stepPresets, STEP_SHIFT } from './auth-motion'
 import { CodeEntry, type CodeSession } from './CodeEntry'
 import { GoogleLogo } from './GoogleLogo'
 import { Notice } from './Notice'
+import { QrLoginPanel } from './QrLoginPanel'
+import { takeQrReturn } from '../../lib/qr-login'
+import { useAuthStore } from '../../stores/auth.store'
 
 const WIDE = 'w-full h-11'
 
 type Step = { name: 'identity' } | { name: 'code'; identifier: Identifier; session: CodeSession; from?: FlightOrigin }
 
 type Direction = 1 | -1
+
+/** How this browser last chose to sign in; remembered on the device only. */
+type Method = 'form' | 'qr'
+const METHOD_KEY = 'nexus.login.method'
+
+function storedMethod(): Method {
+  try {
+    return localStorage.getItem(METHOD_KEY) === 'qr' ? 'qr' : 'form'
+  } catch {
+    return 'form'
+  }
+}
+
+function storeMethod(m: Method): void {
+  try {
+    localStorage.setItem(METHOD_KEY, m)
+  } catch {
+    // A browser that keeps nothing just asks again next time.
+  }
+}
 
 /**
  * Sign in (design/mockups/auth.html §1, §2): Google, or a six-digit code sent
@@ -35,6 +58,15 @@ export function LoginScreen() {
   const [moved, setMoved] = useState(false)
   // Held here so the address survives a trip to the code step and back.
   const [raw, setRaw] = useState('')
+  const [method, setMethodState] = useState<Method>(storedMethod)
+  const navigate = useNavigate()
+  const { ws } = useSearch({ strict: false }) as { ws?: string }
+
+  const setMethod = (next: Method) => {
+    storeMethod(next)
+    setMoved(true)
+    setMethodState(next)
+  }
 
   const go = (next: Step, dir: Direction) => {
     setDirection(dir)
@@ -49,10 +81,23 @@ export function LoginScreen() {
     leave: (d: Direction) => stepPresets(m.reduced, d).exit,
   }
 
+  const view = method === 'qr' ? 'qr' : step.name
   return (
+    <>
+    {/* The one way between the two (design/mockups/qr-login.html §1 note 1): icon and words, top right. */}
+    <Button
+      variant="secondary"
+      size="sm"
+      className="fixed top-4 right-4 z-10"
+      onClick={() => setMethod(method === 'qr' ? 'form' : 'qr')}
+    >
+      {method === 'qr'
+        ? <><Mail size={16} strokeWidth={1.75} aria-hidden="true" />Email hoặc Google</>
+        : <><QrIcon size={16} strokeWidth={1.75} aria-hidden="true" />Mã QR</>}
+    </Button>
     <AnimatePresence mode="wait" initial={false} custom={direction}>
       <motion.div
-        key={step.name}
+        key={view}
         custom={direction}
         variants={variants}
         initial="enter"
@@ -60,7 +105,18 @@ export function LoginScreen() {
         exit="leave"
         className={`auth-rise ${moved ? 'auth-rise--step' : ''} grid gap-5`}
       >
-        {step.name === 'identity' ? (
+        {method === 'qr' ? (
+          <QrLoginPanel
+            onUseForm={() => setMethod('form')}
+            onSignedIn={(needsProfile) => {
+              // The session is already in the workspace the phone uses: go straight in,
+              // unless the profile step is still owed (design/mockups/qr-login.html §2).
+              const tenant = useAuthStore.getState().tenantId
+              if (!needsProfile && tenant) void navigate({ to: '/channels', search: { ws: tenant } })
+              else void navigate({ to: afterSignIn(needsProfile), search: ws ? { ws } : {} })
+            }}
+          />
+        ) : step.name === 'identity' ? (
           <IdentityStep
             raw={raw}
             onRaw={setRaw}
@@ -71,6 +127,7 @@ export function LoginScreen() {
         )}
       </motion.div>
     </AnimatePresence>
+    </>
   )
 }
 
@@ -200,6 +257,12 @@ function CodeStep({ step, onBack }: { step: Extract<Step, { name: 'code' }>; onB
   const [flying, setFlying] = useState(() => !!from && !m.reduced && canFly())
 
   const done = (res: OTPVerifyResponse) => {
+    // A phone that opened a sign-in QR code while signed out goes back to it.
+    const qr = takeQrReturn()
+    if (qr) {
+      void navigate({ to: '/qr/$token', params: { token: qr }, replace: true })
+      return
+    }
     // Only the workspace asked for in the link rides along; a Google error
     // from an earlier attempt must not follow the person into the app.
     void navigate({ to: afterSignIn(res.needs_profile), search: ws ? { ws } : {} })

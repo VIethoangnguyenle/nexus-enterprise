@@ -1,5 +1,7 @@
 export const authKeys = {
   providers: () => ['auth', 'providers'] as const,
+  /** How one sign-in QR code stands, polled by the computer showing it. */
+  qrStatus: (token: string) => ['auth', 'qr', token] as const,
   /** The signed-in person: name, address, whether it is verified, whether a profile is owed. */
   me: () => ['auth', 'me'] as const,
   /** Their profile as Settings shows it, with their place in one workspace. */

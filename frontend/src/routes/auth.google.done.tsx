@@ -4,6 +4,7 @@ import { completeGoogleSignIn } from '../api/auth'
 import { AuthShell } from '../components/auth/AuthShell'
 import { Spinner, Text } from '../components/primitives'
 import { afterSignIn } from '../lib/auth-flow'
+import { takeQrReturn } from '../lib/qr-login'
 
 export const Route = createFileRoute('/auth/google/done')({
   component: GoogleDonePage,
@@ -27,7 +28,11 @@ function GoogleDonePage() {
     started.current = true
 
     void completeGoogleSignIn().then((result) => {
-      if (result) {
+      const qr = result ? takeQrReturn() : null
+      if (qr) {
+        // A phone that opened a sign-in QR code while signed out goes back to it.
+        void navigate({ to: '/qr/$token', params: { token: qr }, replace: true })
+      } else if (result) {
         // The same next step as a code sign-in: a profile if one is owed,
         // otherwise the choice of workspace.
         void navigate({ to: afterSignIn(result.needsProfile), replace: true })

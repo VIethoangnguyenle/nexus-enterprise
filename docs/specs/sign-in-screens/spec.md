@@ -98,3 +98,20 @@ Moving from the profile step to workspace selection or creation keeps the `ws` t
 
 ### Requirement: No identifier reaches the screen
 No UUID, node id, session id or machine code is rendered, labelled or typed on any sign-in screen; people are shown by display name with an avatar from their initials, workspaces by name.
+
+### Requirement: Sign in with a QR code from a phone
+Design: `design/mockups/qr-login.html`. The sign-in page has a secondary corner button, icon and words ("Mã QR" ⇄ "Email hoặc Google"), that switches between the form and a QR code; the choice is remembered on the device (`nexus.login.method`) and the form is the default. The QR panel shows a real code (error correction H, the N tile over its centre, true white quiet zone in both themes), "Mã tự làm mới sau m:ss", and where to tap on the phone. It polls every 2 s while the tab is visible; an unscanned code is swapped 5 s before it runs out, at most 5 times in a row, then the panel shows "Mã đã hết hạn" with "Lấy mã mới". States lie over the code itself (`aria-live="polite"`) so the frame never moves: scanned ("<tên> đã quét", avatar, "Xác nhận trên điện thoại", "Quét bằng điện thoại khác"), signing in, declined ("Đã huỷ trên điện thoại"), expired, and failed to fetch. Three failed polls in a row add "Mất kết nối, đang thử lại" and polling continues. On approval the browser goes straight into the phone's workspace (`/channels?ws=`), or to the profile step if one is owed.
+
+On the phone, "Quét mã QR · Đăng nhập Nexus trên máy tính" is a row of the + sheet and of the account sheet. `/scan` (signed in only) is a full-screen camera on the stage surface: a code that is not a same-origin `/qr/<token>` link shows "Đây không phải mã đăng nhập Nexus" and scanning goes on; the torch shows only when the camera has one; "Chọn ảnh có mã" reads a picture; a blocked camera explains how to allow it. `/qr/<token>` (also opened by the phone's own camera) scans the code and asks "Đăng nhập Nexus trên máy tính?" with the browser and OS, the time the code was made, the person and their workspace, a permanent warning against codes sent by someone else, Đăng nhập (primary) and Huỷ; × counts as Huỷ. Neither the token nor any id is shown.
+
+#### Scenario: Signed out on the phone
+- **WHEN** the phone opens `/qr/<token>` while signed out
+- **THEN** it says "Đăng nhập trên điện thoại trước"; after a code or Google sign-in it returns to the same confirm screen
+
+#### Scenario: Code no longer usable
+- **WHEN** the server answers `qr_unavailable`, or the two minutes pass on the confirm screen
+- **THEN** the phone shows "Mã này không còn dùng được" with "Quét lại"
+
+#### Scenario: Left the workspace
+- **WHEN** scanning or approving is refused with `access_denied`
+- **THEN** the phone shows "Không đăng nhập được vào <tổ chức>" with "Đổi tổ chức"

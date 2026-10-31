@@ -63,10 +63,11 @@ describe('AccountSheet', () => {
     expect(within(sheet).getByText('Phiên bản 2026.10.18 · 6368e8e')).toBeInTheDocument()
   })
 
-  it('lists the notification settings, the account, Cài đặt and Đăng xuất', async () => {
+  it('lists the notification settings, the QR scanner, the account, Cài đặt and Đăng xuất', async () => {
     const { sheet } = await openSheet()
     expect(within(sheet).getAllByRole('link').map((a) => a.textContent)).toEqual([
       'Cài đặt thông báoGiờ yên lặng và các loại thông báo',
+      'Quét mã QRĐăng nhập Nexus trên máy tính',
       'Cài đặt tài khoản',
       'Cài đặt',
     ])

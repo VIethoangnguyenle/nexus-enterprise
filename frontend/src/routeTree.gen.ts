@@ -9,9 +9,11 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ScanRouteImport } from './routes/scan'
 import { Route as WorkspaceRouteImport } from './routes/_workspace'
 import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as QrTokenRouteImport } from './routes/qr.$token'
 import { Route as AssetsTypesRouteImport } from './routes/assets/types'
 import { Route as AssetsRequestsRouteImport } from './routes/assets/requests'
 import { Route as AssetsListRouteImport } from './routes/assets/list'
@@ -45,6 +47,11 @@ import { Route as WorkspaceAdminRolesRouteImport } from './routes/_workspace/adm
 import { Route as WorkspaceAdminDirectoryRouteImport } from './routes/_workspace/admin/directory'
 import { Route as WorkspaceCalendarEventEventIdRouteImport } from './routes/_workspace/calendar.event.$eventId'
 
+const ScanRoute = ScanRouteImport.update({
+  id: '/scan',
+  path: '/scan',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const WorkspaceRoute = WorkspaceRouteImport.update({
   id: '/_workspace',
   getParentRoute: () => rootRouteImport,
@@ -56,6 +63,11 @@ const AuthRoute = AuthRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QrTokenRoute = QrTokenRouteImport.update({
+  id: '/qr/$token',
+  path: '/qr/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AssetsTypesRoute = AssetsTypesRouteImport.update({
@@ -225,6 +237,7 @@ const WorkspaceCalendarEventEventIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/scan': typeof ScanRoute
   '/login': typeof AuthLoginRoute
   '/onboarding': typeof AuthOnboardingRoute
   '/register': typeof AuthRegisterRoute
@@ -240,6 +253,7 @@ export interface FileRoutesByFullPath {
   '/assets/list': typeof AssetsListRoute
   '/assets/requests': typeof AssetsRequestsRoute
   '/assets/types': typeof AssetsTypesRoute
+  '/qr/$token': typeof QrTokenRoute
   '/admin/directory': typeof WorkspaceAdminDirectoryRoute
   '/admin/roles': typeof WorkspaceAdminRolesRoute
   '/admin/users': typeof WorkspaceAdminUsersRoute
@@ -260,6 +274,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/scan': typeof ScanRoute
   '/login': typeof AuthLoginRoute
   '/onboarding': typeof AuthOnboardingRoute
   '/register': typeof AuthRegisterRoute
@@ -274,6 +289,7 @@ export interface FileRoutesByTo {
   '/assets/list': typeof AssetsListRoute
   '/assets/requests': typeof AssetsRequestsRoute
   '/assets/types': typeof AssetsTypesRoute
+  '/qr/$token': typeof QrTokenRoute
   '/admin/directory': typeof WorkspaceAdminDirectoryRoute
   '/admin/roles': typeof WorkspaceAdminRolesRoute
   '/admin/users': typeof WorkspaceAdminUsersRoute
@@ -297,6 +313,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_auth': typeof AuthRouteWithChildren
   '/_workspace': typeof WorkspaceRouteWithChildren
+  '/scan': typeof ScanRoute
   '/_auth/login': typeof AuthLoginRoute
   '/_auth/onboarding': typeof AuthOnboardingRoute
   '/_auth/register': typeof AuthRegisterRoute
@@ -312,6 +329,7 @@ export interface FileRoutesById {
   '/assets/list': typeof AssetsListRoute
   '/assets/requests': typeof AssetsRequestsRoute
   '/assets/types': typeof AssetsTypesRoute
+  '/qr/$token': typeof QrTokenRoute
   '/_workspace/admin/directory': typeof WorkspaceAdminDirectoryRoute
   '/_workspace/admin/roles': typeof WorkspaceAdminRolesRoute
   '/_workspace/admin/users': typeof WorkspaceAdminUsersRoute
@@ -334,6 +352,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/scan'
     | '/login'
     | '/onboarding'
     | '/register'
@@ -349,6 +368,7 @@ export interface FileRouteTypes {
     | '/assets/list'
     | '/assets/requests'
     | '/assets/types'
+    | '/qr/$token'
     | '/admin/directory'
     | '/admin/roles'
     | '/admin/users'
@@ -369,6 +389,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/scan'
     | '/login'
     | '/onboarding'
     | '/register'
@@ -383,6 +404,7 @@ export interface FileRouteTypes {
     | '/assets/list'
     | '/assets/requests'
     | '/assets/types'
+    | '/qr/$token'
     | '/admin/directory'
     | '/admin/roles'
     | '/admin/users'
@@ -405,6 +427,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_auth'
     | '/_workspace'
+    | '/scan'
     | '/_auth/login'
     | '/_auth/onboarding'
     | '/_auth/register'
@@ -420,6 +443,7 @@ export interface FileRouteTypes {
     | '/assets/list'
     | '/assets/requests'
     | '/assets/types'
+    | '/qr/$token'
     | '/_workspace/admin/directory'
     | '/_workspace/admin/roles'
     | '/_workspace/admin/users'
@@ -443,17 +467,26 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRouteWithChildren
   WorkspaceRoute: typeof WorkspaceRouteWithChildren
+  ScanRoute: typeof ScanRoute
   AssetsAssetIdRoute: typeof AssetsAssetIdRoute
   AssetsDashboardRoute: typeof AssetsDashboardRoute
   AssetsListRoute: typeof AssetsListRoute
   AssetsRequestsRoute: typeof AssetsRequestsRoute
   AssetsTypesRoute: typeof AssetsTypesRoute
+  QrTokenRoute: typeof QrTokenRoute
   AssetsRequestNewRoute: typeof AssetsRequestNewRoute
   AuthGoogleDoneRoute: typeof AuthGoogleDoneRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/scan': {
+      id: '/scan'
+      path: '/scan'
+      fullPath: '/scan'
+      preLoaderRoute: typeof ScanRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_workspace': {
       id: '/_workspace'
       path: ''
@@ -473,6 +506,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/qr/$token': {
+      id: '/qr/$token'
+      path: '/qr/$token'
+      fullPath: '/qr/$token'
+      preLoaderRoute: typeof QrTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/assets/types': {
@@ -784,11 +824,13 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRouteWithChildren,
   WorkspaceRoute: WorkspaceRouteWithChildren,
+  ScanRoute: ScanRoute,
   AssetsAssetIdRoute: AssetsAssetIdRoute,
   AssetsDashboardRoute: AssetsDashboardRoute,
   AssetsListRoute: AssetsListRoute,
   AssetsRequestsRoute: AssetsRequestsRoute,
   AssetsTypesRoute: AssetsTypesRoute,
+  QrTokenRoute: QrTokenRoute,
   AssetsRequestNewRoute: AssetsRequestNewRoute,
   AuthGoogleDoneRoute: AuthGoogleDoneRoute,
 }

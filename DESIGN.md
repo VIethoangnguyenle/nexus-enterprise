@@ -998,6 +998,14 @@ Danh bạ kiểu Lark: list panel chọn danh mục (§5), content duyệt danh 
   xong thì toast. Trong picker, mục đã có quy tắc bị vô hiệu kèm nhãn ("Đã ẩn", "Ẩn theo <phòng cha>", "Đã giới hạn").
   Dưới 768 picker là bottom sheet.
 
+### Đăng nhập bằng mã QR (mockup `design/mockups/qr-login.html`, duyệt 2026-11-01)
+
+- Máy tính: nút góc phải trang đăng nhập (secondary, icon + chữ) đổi giữa form và mã QR; lựa chọn nhớ trên máy. Trạng thái
+  của mã (đã quét, đang đăng nhập, bị huỷ, hết hạn) phủ lên chính mã, khung không đổi kích thước.
+- Điện thoại: "Quét mã QR" trong sheet nút + và sheet tài khoản; máy quét toàn màn trên nền stage; màn xác nhận nói máy nào xin
+  vào, tài khoản và tổ chức, luôn có cảnh báo lừa đảo, nút Đăng nhập ở vùng ngón cái.
+- Ngoại lệ màu có ghi chú: mã QR dùng trắng thật và đen thật ở cả hai chế độ (camera cần vùng sáng); máy quét luôn tối (token stage).
+
 ## 7. Motion
 
 Mọi duration/easing là token. Chỉ animate `transform` và `opacity` (cộng `background-color` cho
