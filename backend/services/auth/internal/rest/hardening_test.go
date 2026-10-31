@@ -216,12 +216,25 @@ func TestPublicPosts_AllOfThemAreCovered(t *testing.T) {
 		}
 	}
 	// And the sweep: no public POST under /api/auth escapes the limiter.
+	// Routes that need a session are not public: the JWT answers before the limiter.
+	authenticated := map[string]bool{
+		"/api/auth/switch-tenant": true,
+		"/api/auth/qr/scan":       true, "/api/auth/qr/approve": true, "/api/auth/qr/decline": true,
+	}
 	for _, r := range a.e.Routes() {
-		if r.Method != http.MethodPost || !strings.HasPrefix(r.Path, "/api/auth/") || r.Path == "/api/auth/switch-tenant" {
+		if r.Method != http.MethodPost || !strings.HasPrefix(r.Path, "/api/auth/") || authenticated[r.Path] {
 			continue
 		}
+		// The QR status route is polled by the sign-in page, so it has twice the
+		// allowance; it is still limited.
+		allowance := 1
+		if r.Path == "/api/auth/qr/status" {
+			allowance = 2
+		}
 		remote := uniqueRemote()
-		a.postFrom(r.Path, remote)
+		for i := 0; i < allowance; i++ {
+			a.postFrom(r.Path, remote)
+		}
 		if rec := a.postFrom(r.Path, remote); rec.Code != http.StatusTooManyRequests {
 			t.Errorf("public POST %s is not behind the limiter (%d)", r.Path, rec.Code)
 		}

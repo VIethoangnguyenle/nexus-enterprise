@@ -71,6 +71,9 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	api.POST("/me/workspaces", h.CreateMyWorkspace)
 	api.GET("/workspaces/:id/contacts", h.ListContacts)
 	api.POST("/workspaces/:id/contacts/resolve", h.ResolveContacts)
+
+	// Sign-in by QR code: public routes for the computer, JWT routes for the phone.
+	h.registerQRRoutes(e, api)
 }
 
 // Providers handles GET /api/auth/providers — which sign-in methods the login
@@ -350,6 +353,9 @@ func mapError(err error) *echo.HTTPError {
 		return apiError(http.StatusBadRequest, "avatar_not_image", err.Error())
 	case errors.Is(err, domain.ErrAvatarTooManyPixels):
 		return apiError(http.StatusBadRequest, "avatar_too_many_pixels", err.Error())
+	case errors.Is(err, domain.ErrQRUnavailable):
+		// One answer for never issued, expired, used and someone else's code.
+		return apiError(http.StatusGone, "qr_unavailable", err.Error())
 	case errors.Is(err, domain.ErrAvatarBusy):
 		return apiError(http.StatusServiceUnavailable, "avatar_busy", err.Error())
 	default:
