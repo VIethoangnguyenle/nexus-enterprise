@@ -71,7 +71,8 @@ export function CalendarSettings() {
   const durations = withValue(DURATIONS, settings.defaultDuration, (n) => `${n} phút`)
   const reminders = withValue(REMINDERS, settings.defaultReminder, (n) => `${n} phút`)
   const shown = calendars.data?.filter((c) => calendarShown(c, settings.visibleCalendars)).length
-  // Tìm giờ suggests times inside everyone's working hours, the person's own included: a new pair refreshes it.
+  // Tìm giờ suggests times inside everyone's working hours, the person's own included, read in their zone: a new
+  // pair of hours or a new zone refreshes it.
   const saveHours = useCallback(async (patch: CalendarOptions) => {
     const saved = await save(patch)
     if (saved) void queryClient.invalidateQueries({ queryKey: keys.calendar.freeBusyAll(workspaceId) })
@@ -84,7 +85,7 @@ export function CalendarSettings() {
     case 'week':
       return <ChoicePage title="Tuần bắt đầu vào" value={settings.weekStart} choices={WEEK_STARTS} onPick={(weekStart) => void save({ weekStart })} onBack={done} />
     case 'zone':
-      return <ChoicePage title="Múi giờ" value={settings.tzid} choices={zones} onPick={(tzid) => void save({ tzid })} onBack={done} />
+      return <ChoicePage title="Múi giờ" value={settings.tzid} choices={zones} onPick={(tzid) => void saveHours({ tzid })} onBack={done} />
     case 'hours':
       return <WorkHoursPage settings={settings} save={saveHours} onBack={done} />
     case 'duration':
@@ -109,7 +110,7 @@ export function CalendarSettings() {
       <SettingsGroup title="Hiển thị">
         {!wide && <SettingsRow label="Chế độ xem mặc định" value={choiceLabel(VIEWS, settings.defaultView)} onPress={() => setPage('view')} />}
         <SettingsChoice label="Tuần bắt đầu vào" value={settings.weekStart} choices={WEEK_STARTS} onPick={(weekStart) => void save({ weekStart })} onOpen={() => setPage('week')} />
-        <SettingsChoice label="Múi giờ" value={settings.tzid} choices={zones} onPick={(tzid) => void save({ tzid })} onOpen={() => setPage('zone')} />
+        <SettingsChoice label="Múi giờ" value={settings.tzid} choices={zones} onPick={(tzid) => void saveHours({ tzid })} onOpen={() => setPage('zone')} />
         {wide
           ? <WorkHoursRow settings={settings} save={saveHours} />
           : <SettingsRow label="Giờ làm việc" value={workHoursLabel(settings)} onPress={() => setPage('hours')} />}
