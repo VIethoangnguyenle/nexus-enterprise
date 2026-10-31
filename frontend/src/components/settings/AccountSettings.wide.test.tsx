@@ -1,10 +1,12 @@
 import '@testing-library/jest-dom/vitest'
-import { cleanup, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, apiFetch, apiUpload, logoutSession } from '../../api/client'
 import { loadPreferences, switchPreferencesTo } from '../../lib/preferences'
 import * as pushLib from '../../lib/push'
+import { keys } from '../../hooks/keys'
+import { queryClient } from '../../lib/query-client'
 import { resetClient } from '../../test/render'
 import { expectNoIds } from '../../test/no-ids'
 import { useToastStore } from '../primitives'
@@ -34,6 +36,7 @@ afterEach(() => {
   resetClient()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
+  vi.useRealTimers()
 })
 
 const page = (name: string) => screen.findByRole('region', { name })
@@ -94,6 +97,22 @@ describe('Tài khoản và hồ sơ on a wide screen', () => {
     await user.type(title, 'Giám đốc tài chính')
     await user.click(screen.getByRole('button', { name: 'Lưu thay đổi' }))
     await waitFor(() => expect(profilePatches()).toEqual([{ title: 'Giám đốc tài chính' }]))
+  })
+
+  it('in an organization a save never sends the title, even when the stored one changed meanwhile', async () => {
+    const user = userEvent.setup()
+    const form = await accountForm()
+    const name = within(form).getByLabelText('Tên hiển thị')
+    await user.clear(name)
+    await user.type(name, 'Hoa Lê')
+    // Someone sets another title while this form is being edited; the form is not where the title lives.
+    server.profile.title = 'Giám đốc'
+    const reads = () => api.mock.calls.filter(([p]) => String(p).startsWith('/me?')).length
+    const before = reads()
+    await queryClient.invalidateQueries({ queryKey: keys.auth.profile(WS) })
+    await waitFor(() => expect(reads()).toBeGreaterThan(before))
+    await user.click(within(form).getByRole('button', { name: 'Lưu thay đổi' }))
+    await waitFor(() => expect(profilePatches()).toEqual([{ display_name: 'Hoa Lê' }]))
   })
 
   it('reads the person from their own record, never by searching the directory', async () => {
@@ -373,6 +392,9 @@ describe('Thông báo on a wide screen', () => {
   })
 
   it('picking a pause changes only pause_until, then the box says until when', async () => {
+    // A fixed morning: an hour later is still today, so the label has no date whatever the clock says.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 9, 20, 10, 0))
     const user = userEvent.setup()
     await renderSettings(`/settings/notifications?ws=${WS}`)
     const before = structuredClone(server.push)
@@ -383,7 +405,7 @@ describe('Thông báo on a wide screen', () => {
     expect(Date.parse(sent.pause_until!) - Date.now()).toBeGreaterThan(59 * 60_000)
     expect(sent.kinds).toEqual(before.kinds)
     expect(sent.quiet_hours).toEqual(before.quiet_hours)
-    await waitFor(() => expect((box as HTMLSelectElement).selectedOptions[0]!.textContent).toMatch(/^Đến \d{2}:\d{2}$/))
+    await waitFor(() => expect((box as HTMLSelectElement).selectedOptions[0]!.textContent).toBe('Đến 11:00'))
 
     await user.selectOptions(box, 'off')
     await waitFor(() => expect(pushPuts()).toHaveLength(2))
@@ -411,6 +433,29 @@ describe('Thông báo on a wide screen', () => {
     expect((pushPuts()[1]!.body as typeof server.push).quiet_hours.enabled).toBe(false)
     await waitFor(() => expect(screen.getByRole('switch', { name: 'Giờ yên lặng' })).toHaveAttribute('aria-checked', 'false'))
     expect(start.closest('.opacity-50')).not.toBeNull()
+  })
+
+  it('the pause and the quiet hours are off while the stored preferences are still being read', async () => {
+    let answer!: () => void
+    api.mockImplementation(((path: string, init?: RequestInit) => {
+      if (path === '/me/push-preferences' && (init?.method ?? 'GET') === 'GET') {
+        return new Promise<unknown>((resolve) => { answer = () => resolve(settingsAnswer(path, init)) })
+      }
+      return settingsAnswer(path, init)
+    }) as typeof apiFetch)
+    await renderSettings(`/settings/notifications?ws=${WS}`)
+    const pause = await screen.findByRole('combobox', { name: 'Tạm dừng thông báo' })
+    const start = screen.getByRole('combobox', { name: 'Bắt đầu' })
+    const end = screen.getByRole('combobox', { name: 'Kết thúc' })
+    const quiet = screen.getByRole('switch', { name: 'Giờ yên lặng' })
+    for (const control of [pause, start, end, quiet]) expect(control).toBeDisabled()
+    fireEvent.change(pause, { target: { value: '1h' } })
+    fireEvent.change(start, { target: { value: '21:00' } })
+    expect(pushPuts()).toEqual([])
+
+    answer()
+    await waitFor(() => expect(start).toHaveValue('22:00'))
+    for (const control of [pause, start, end, quiet]) expect(control).toBeEnabled()
   })
 
   it('a Theo phân hệ row opens that module’s section', async () => {

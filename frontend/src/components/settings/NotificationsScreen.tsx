@@ -32,7 +32,7 @@ export function NotificationsScreen() {
   const [quietOpen, setQuietOpen] = useState(false)
   const quiet = push.prefs?.quiet_hours
 
-  if (!wide && quietOpen && push.prefs) return <QuietHoursPage onBack={() => setQuietOpen(false)} />
+  if (!wide && quietOpen && push.prefs && !push.isLoading) return <QuietHoursPage onBack={() => setQuietOpen(false)} />
 
   return (
     <SettingsPage title="Thông báo" lead={ACCOUNT_LEAD} onBack={back}>
@@ -81,7 +81,7 @@ export function NotificationsScreen() {
             label="Giờ yên lặng"
             hint={QUIET_HINT}
             value={!push.prefs ? undefined : quiet?.enabled ? `${quiet.start}–${quiet.end}` : 'Tắt'}
-            onPress={push.prefs ? () => setQuietOpen(true) : undefined}
+            onPress={push.prefs && !push.isLoading ? () => setQuietOpen(true) : undefined}
           />
         )}
       </SettingsGroup>
@@ -116,9 +116,11 @@ export function NotificationsScreen() {
 function PauseRow() {
   const push = usePushPreferences()
   const paused = isPaused(push.prefs)
+  // While the stored preferences are read the defaults stand in; a save then would send them over the stored kinds.
+  const ready = !!push.prefs && !push.isLoading
   const pick = (value: string) => {
     const choice = PAUSE_CHOICES.find((c) => c.value === value)
-    if (!choice || (choice.value === 'off' && !paused)) return
+    if (!ready || !choice || (choice.value === 'off' && !paused)) return
     void push.save((p) => ({ ...p, pause_until: pauseUntil(choice.value) }))
   }
   return (
@@ -128,7 +130,7 @@ function PauseRow() {
       hint="Không đẩy thông báo nào tới bạn trong khoảng này."
       trailing={
         <div className="w-60 shrink-0">
-          <Select aria-label="Tạm dừng thông báo" value={paused ? 'paused' : 'off'} disabled={!push.prefs} onChange={(e) => pick(e.target.value)}>
+          <Select aria-label="Tạm dừng thông báo" value={paused ? 'paused' : 'off'} disabled={!ready} onChange={(e) => pick(e.target.value)}>
             {paused && <option value="paused" disabled>{pauseLabel(push.prefs?.pause_until)}</option>}
             {PAUSE_CHOICES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
           </Select>
@@ -145,7 +147,8 @@ function PauseRow() {
 function useQuietHours() {
   const push = usePushPreferences()
   const [error, setError] = useState<string | null>(null)
-  const quiet = push.prefs?.quiet_hours
+  // Nothing to change until the stored hours are in: the defaults shown meanwhile are not the person's.
+  const quiet = push.isLoading ? undefined : push.prefs?.quiet_hours
 
   const change = (patch: Partial<PushPreferences['quiet_hours']>) => {
     if (!quiet) return

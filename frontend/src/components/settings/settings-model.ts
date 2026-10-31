@@ -42,12 +42,19 @@ export function validateProfile(form: ProfileForm): ProfileErrors {
 /**
  * Only the fields that differ from what is stored. Sending a field that did not
  * change would overwrite whatever someone else (an administrator) set in the
- * meantime. Null when nothing changed.
+ * meantime. `fields` are the ones a form shows: one it does not show is never
+ * sent, even when the stored value moved on while the form was being edited.
+ * Null when nothing changed.
  */
-export function profileChanges(initial: ProfileForm, form: ProfileForm): ProfileChanges | null {
+export function profileChanges(
+  initial: ProfileForm,
+  form: ProfileForm,
+  fields: readonly (keyof ProfileForm)[] = ['displayName', 'title', 'location'],
+): ProfileChanges | null {
   const out: ProfileChanges = {}
-  if (form.displayName.trim() !== initial.displayName.trim()) out.display_name = form.displayName.trim()
-  if (form.title.trim() !== initial.title.trim()) out.title = form.title.trim()
-  if (form.location.trim() !== initial.location.trim()) out.location = form.location.trim()
+  const differs = (key: keyof ProfileForm) => fields.includes(key) && form[key].trim() !== initial[key].trim()
+  if (differs('displayName')) out.display_name = form.displayName.trim()
+  if (differs('title')) out.title = form.title.trim()
+  if (differs('location')) out.location = form.location.trim()
   return Object.keys(out).length ? out : null
 }

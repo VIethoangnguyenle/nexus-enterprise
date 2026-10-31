@@ -48,12 +48,12 @@ export function useProfileForm(fields: readonly (keyof ProfileForm)[] = ['displa
   const seeded = useRef<ProfileForm | null>(null)
   useEffect(() => {
     if (!person) return
-    const pristine = !seeded.current || !profileChanges(seeded.current, form)
+    const pristine = !seeded.current || !profileChanges(seeded.current, form, fields)
     seeded.current = initial
     if (pristine) setForm(initial)
   }, [initial, person])
 
-  const changes = profileChanges(initial, form)
+  const changes = profileChanges(initial, form, fields)
   const set = (key: keyof ProfileForm) => (value: string) => {
     setForm((f) => ({ ...f, [key]: value }))
     if (errors[key]) setErrors((e) => ({ ...e, [key]: validateProfile({ ...form, [key]: value })[key] }))
