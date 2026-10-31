@@ -136,10 +136,13 @@ export interface SettingsRowProps {
   /** Extra ARIA for rows that are radios. */
   role?: 'radio'
   checked?: boolean
+  /** A row that opens content in place: whether it is open, and the id of what it opens. */
+  expanded?: boolean
+  controls?: string
 }
 
 export function SettingsRow({
-  icon, label, hint, value, onPress, disabled, locked, danger, center, trailing, role, checked,
+  icon, label, hint, value, onPress, disabled, locked, danger, center, trailing, role, checked, expanded, controls,
 }: SettingsRowProps) {
   const pressable = !!onPress && !disabled && !locked
   const wide = useSettingsWide()
@@ -176,6 +179,8 @@ export function SettingsRow({
       <Pressable
         role={role}
         aria-checked={role ? !!checked : undefined}
+        aria-expanded={expanded}
+        aria-controls={controls}
         onClick={onPress}
         className={`${base} hover:bg-hover active:bg-line transition-colors duration-quick`}
       >

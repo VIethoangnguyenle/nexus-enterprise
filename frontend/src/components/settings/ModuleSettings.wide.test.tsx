@@ -3,6 +3,8 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { apiFetch } from '../../api/client'
+import { keys } from '../../hooks/keys'
+import { queryClient } from '../../lib/query-client'
 import { resetClient } from '../../test/render'
 import { expectNoIds } from '../../test/no-ids'
 import { useToastStore } from '../primitives'
@@ -220,6 +222,19 @@ describe('Lịch on a wide screen', () => {
     await waitFor(() => expect(putsOfSettings()).toEqual([{ defaultReminder: 30 }, { tzid: 'Asia/Tokyo' }]))
   })
 
+  it('a new zone refreshes Tìm giờ, as a new pair of working hours does', async () => {
+    const user = userEvent.setup()
+    const busy = [...keys.calendar.freeBusyAll(WS), 'u-hoa']
+    queryClient.setQueryData(busy, { people: [] })
+    await renderSettings(`/settings/calendar?ws=${WS}`)
+    const zone = await screen.findByRole('combobox', { name: 'Múi giờ' })
+    await waitFor(() => expect(zone).toHaveValue('Asia/Ho_Chi_Minh'))
+    expect(queryClient.getQueryState(busy)?.isInvalidated).toBe(false)
+    await user.selectOptions(zone, 'Asia/Tokyo')
+    await waitFor(() => expect(putsOfSettings()).toEqual([{ tzid: 'Asia/Tokyo' }]))
+    await waitFor(() => expect(queryClient.getQueryState(busy)?.isInvalidated).toBe(true))
+  })
+
   it('Lịch đang hiện unticks the same checkbox as the calendar column', async () => {
     const user = userEvent.setup()
     await renderSettings(`/settings/calendar?ws=${WS}`)
@@ -291,6 +306,42 @@ describe('SettingsChoice', () => {
     )
     await userEvent.setup().selectOptions(screen.getByRole('combobox', { name: 'Nhắc trước' }), '30')
     expect(onPick).toHaveBeenCalledWith(30)
+  })
+
+  it('wide: Home and End jump to the first and the last choice', async () => {
+    const onPick = vi.fn()
+    const three = FOUR.slice(0, 3)
+    render(
+      <SettingsLayoutContext value="wide">
+        <SettingsChoice label="Thứ tự" value="b" choices={three} onPick={onPick} onOpen={() => {}} />
+      </SettingsLayoutContext>,
+    )
+    const user = userEvent.setup()
+    screen.getByRole('radio', { name: 'Hai' }).focus()
+    await user.keyboard('{End}')
+    expect(onPick).toHaveBeenLastCalledWith('c')
+    expect(screen.getByRole('radio', { name: 'Ba' })).toHaveFocus()
+    await user.keyboard('{Home}')
+    expect(onPick).toHaveBeenLastCalledWith('a')
+    expect(screen.getByRole('radio', { name: 'Một' })).toHaveFocus()
+  })
+
+  it('wide and disabled: neither control can pick', async () => {
+    const onPick = vi.fn()
+    const { rerender } = render(
+      <SettingsLayoutContext value="wide">
+        <SettingsChoice label="Thứ tự" value="b" choices={FOUR} onPick={onPick} onOpen={() => {}} disabled />
+      </SettingsLayoutContext>,
+    )
+    expect(screen.getByRole('combobox', { name: 'Thứ tự' })).toBeDisabled()
+    rerender(
+      <SettingsLayoutContext value="wide">
+        <SettingsChoice label="Thứ tự" value="b" choices={FOUR.slice(0, 3)} onPick={onPick} onOpen={() => {}} disabled />
+      </SettingsLayoutContext>,
+    )
+    for (const radio of screen.getAllByRole('radio')) expect(radio).toBeDisabled()
+    await userEvent.setup().click(screen.getByRole('radio', { name: 'Ba' }))
+    expect(onPick).not.toHaveBeenCalled()
   })
 
   it('wide and locked: the value and who set it, no control', () => {

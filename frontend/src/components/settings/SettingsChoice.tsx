@@ -22,6 +22,8 @@ export interface SettingsChoiceProps<T extends string | number> {
    * (Mức mặc định cho nhóm mới in the mockup).
    */
   menu?: boolean
+  /** Wide: the control is shown but cannot pick (a save of it is on its way). */
+  disabled?: boolean
 }
 
 /**
@@ -30,7 +32,7 @@ export interface SettingsChoiceProps<T extends string | number> {
  * a Segmented for two or three choices, a drop-down from four (§6 "Cài đặt trên máy tính").
  */
 export function SettingsChoice<T extends string | number>({
-  label, hint, icon, value, choices, onPick, onOpen, locked, valueLabel, menu,
+  label, hint, icon, value, choices, onPick, onOpen, locked, valueLabel, menu, disabled,
 }: SettingsChoiceProps<T>) {
   const wide = useSettingsWide()
   const shown = valueLabel ?? choiceLabel(choices, value)
@@ -44,6 +46,7 @@ export function SettingsChoice<T extends string | number>({
         <Select
           aria-label={label}
           value={value == null ? '' : String(value)}
+          disabled={disabled}
           onChange={(e) => {
             const next = choices.find((c) => String(c.value) === e.target.value)
             if (next) pick(next.value)
@@ -54,23 +57,32 @@ export function SettingsChoice<T extends string | number>({
         </Select>
       </div>
     )
-    : <Segmented label={label} value={value} choices={choices} onPick={pick} />
+    : <Segmented label={label} value={value} choices={choices} onPick={pick} disabled={disabled} />
   return <SettingsRow icon={icon} label={label} hint={hint} trailing={control} />
 }
 
-/** Two or three exclusive choices side by side, with arrow-key movement (mockup settings-desktop.html `.seg`). */
-export function Segmented<T extends string | number>({ label, value, choices, onPick }: {
+/**
+ * Two or three exclusive choices side by side, with the radio group's keys: the arrows move round, Home and End go to
+ * the first and the last (mockup settings-desktop.html `.seg`).
+ */
+export function Segmented<T extends string | number>({ label, value, choices, onPick, disabled }: {
   label: string
   value: T | undefined
   choices: Choice<T>[]
   onPick: (value: T) => void
+  disabled?: boolean
 }) {
   const refs = useRef(new Map<string, HTMLButtonElement | null>())
   const current = choices.findIndex((c) => c.value === value)
+  const targetOf = (key: string) => {
+    if (key === 'Home') return choices[0]
+    if (key === 'End') return choices[choices.length - 1]
+    const step = key === 'ArrowRight' || key === 'ArrowDown' ? 1 : key === 'ArrowLeft' || key === 'ArrowUp' ? -1 : 0
+    return step ? choices[(Math.max(current, 0) + step + choices.length) % choices.length] : undefined
+  }
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    const step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0
-    if (!step) return
-    const target = choices[(Math.max(current, 0) + step + choices.length) % choices.length]
+    if (disabled) return
+    const target = targetOf(e.key)
     if (!target) return
     e.preventDefault()
     onPick(target.value)
@@ -88,6 +100,7 @@ export function Segmented<T extends string | number>({ label, value, choices, on
             aria-checked={on}
             // One stop in the tab order: the chosen value, or the first when none is.
             tabIndex={on || (current < 0 && i === 0) ? 0 : -1}
+            disabled={disabled}
             onClick={() => onPick(c.value)}
             className={`min-h-9 px-3 rounded-md text-[0.8125rem] font-semibold transition-colors duration-quick
               ${on ? 'bg-raised text-ink' : 'text-ink-muted hover:text-ink'}`}

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import {
   CircleAlert, ClipboardCheck, Database, Layers, Package, Plus, Shield, ShieldCheck, User, UserPlus, Users,
@@ -18,6 +18,7 @@ import { workspaceDisplayName } from '../../lib/workspace'
 import { useAuthStore } from '../../stores/auth.store'
 import { Avatar, Button, spaceLetter } from '../primitives'
 import { InviteDialog } from '../admin/InviteDialog'
+import { ConfirmDialog } from '../composites/ConfirmDialog'
 import { useWorkspaceKindLine } from '../patterns/WorkspaceSwitcherSheet'
 import { EmptyState } from '../spaces/EmptyState'
 import { EditFieldScreen } from './EditFieldScreen'
@@ -26,7 +27,9 @@ import { LeaveWorkspace } from './LeaveWorkspace'
 import { ReadOnlyField } from './ReadOnlyField'
 import { SettingsChoice } from './SettingsChoice'
 import { ChoicePage, SettingsGroup, SettingsPage, SettingsRow } from './SettingsGroup'
-import { DESCRIPTION_MAX, NAME_MAX, WorkspaceDetailsForm, WorkspaceTypeCard, checkDescription, checkName } from './WorkspaceInfo'
+import {
+  DESCRIPTION_MAX, NAME_MAX, WorkspaceDetailsForm, WorkspaceTypeCard, checkDescription, checkName, editableName,
+} from './WorkspaceInfo'
 import { useWorkspaceLead } from './modules/workspace-lead'
 import { useSettingsWide } from './settings-layout'
 import { useSettingsNav } from './settings-nav'
@@ -36,6 +39,8 @@ const ICON = { size: 18, strokeWidth: 1.75 } as const
 const count = (n: number) => (Number.isFinite(n) ? n : 0).toLocaleString('vi-VN')
 const SET_BY_ADMIN = 'Do quản trị viên đặt'
 const ADMINS_NOTE = 'Nhờ một quản trị viên khi bạn cần mời người, đổi vai trò hay phòng ban.'
+/** What locking group creation does: the words the phone's choice page shows under Chỉ quản trị viên. */
+const LOCK_HINT = GROUP_CREATION_CHOICES.find((c) => c.value === 'admins')?.hint
 
 /** Phone only: the subpages a row opens. On a wide screen there is no way back from one, so all of it is inline. */
 type Page = 'name' | 'description' | 'groupCreation' | 'admins' | null
@@ -68,6 +73,8 @@ export function WorkspaceSettingsScreen() {
   const [page, setPage] = useState<Page>(null)
   const [inviting, setInviting] = useState(false)
   const [adminsOpen, setAdminsOpen] = useState(false)
+  const [confirmLock, setConfirmLock] = useState(false)
+  const adminsId = useId()
 
   const admin = !isPersonal && details.data?.can_manage === true
   const member = !isPersonal && details.data?.can_manage === false
@@ -83,7 +90,7 @@ export function WorkspaceSettingsScreen() {
   const setRule = useSetGroupCreation(wsId)
   const update = useUpdateWorkspaceDetails(wsId)
 
-  const name = details.data?.name || workspaceDisplayName(workspaceName)
+  const name = workspaceDisplayName(details.data?.name || workspaceName)
   const role = profile.data?.current_tenant?.role
   const tenant = profile.data?.current_tenant
   const person = profile.data?.user
@@ -117,7 +124,7 @@ export function WorkspaceSettingsScreen() {
     return (
       <EditFieldScreen
         title="Tên workspace"
-        initial={details.data.name}
+        initial={editableName(details.data.name)}
         maxLength={NAME_MAX + 20}
         validate={checkName}
         hint="Mọi người trong workspace thấy tên này."
@@ -224,10 +231,12 @@ export function WorkspaceSettingsScreen() {
               </span>
             }
             onPress={wide ? () => setAdminsOpen((o) => !o) : () => setPage('admins')}
+            expanded={wide ? adminsOpen : undefined}
+            controls={wide ? adminsId : undefined}
           />
         )}
         {wide && member && adminsOpen && (
-          <div className="grid pl-4 pb-3">
+          <div id={adminsId} className="grid pl-4 pb-3">
             {owners.map((n) => <SettingsRow key={n} icon={<Avatar name={n} size={24} />} label={n} />)}
             <p className="m-0 pt-1 text-[0.8125rem] text-ink-muted">{ADMINS_NOTE}</p>
           </div>
@@ -282,8 +291,10 @@ export function WorkspaceSettingsScreen() {
               hint={wide ? 'Khoá cho cả tổ chức: thành viên không đổi được.' : undefined}
               value={locks.data.group_creation}
               choices={GROUP_CREATION_CHOICES}
-              onPick={(rule) => setRule.mutate(rule)}
+              // Locking is org-wide and not fully undone by opening again: it is asked first. Opening is not.
+              onPick={(rule) => (rule === 'admins' ? setConfirmLock(true) : setRule.mutate(rule))}
               onOpen={() => setPage('groupCreation')}
+              disabled={setRule.isPending}
               menu
             />
           ) : (
@@ -336,6 +347,18 @@ export function WorkspaceSettingsScreen() {
       )}
 
       {!isPersonal && <LeaveWorkspace variant={wide ? 'section' : 'row'} />}
+
+      {admin && (
+        <ConfirmDialog
+          open={confirmLock}
+          onClose={() => { if (!setRule.isPending) setConfirmLock(false) }}
+          onConfirm={() => setRule.mutate('admins', { onSettled: () => setConfirmLock(false) })}
+          title="Khoá quyền tạo nhóm?"
+          description={LOCK_HINT}
+          confirmLabel="Khoá"
+          loading={setRule.isPending}
+        />
+      )}
 
       {admin && (
         <InviteDialog

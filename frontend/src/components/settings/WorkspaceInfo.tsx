@@ -4,6 +4,7 @@ import { Building2, Key, User } from 'lucide-react'
 import type { WorkspaceDetails } from '../../api/workspaces'
 import { useUpdateWorkspaceDetails } from '../../hooks/useWorkspaces'
 import { formatDateTime, formatRelative } from '../../lib/format'
+import { workspaceDisplayName } from '../../lib/workspace'
 import { Avatar, Button, Textarea, TextField, toast } from '../primitives'
 
 // The parts of a workspace's own information that both Cài đặt pages share: the rules for its name and description,
@@ -20,6 +21,12 @@ export const checkName = (value: string) => {
 }
 export const checkDescription = (value: string) =>
   Array.from(value.trim()).length > DESCRIPTION_MAX ? `Mô tả dài tối đa ${DESCRIPTION_MAX} ký tự.` : undefined
+
+/**
+ * The name an edit starts from. A personal workspace created under an internal handle ("user_42's workspace") starts
+ * from the phrase shown everywhere else, so the handle never reaches a field; left as it is, nothing is sent.
+ */
+export const editableName = (name: string | undefined) => (name ? workspaceDisplayName(name) : '')
 
 /** Name and description are the only parts of a workspace that the form can change. */
 interface Form { name: string; description: string }
@@ -40,7 +47,7 @@ export interface WorkspaceDetailsFormProps {
  */
 export function WorkspaceDetailsForm({ wsId, details, label, withDescription = true }: WorkspaceDetailsFormProps) {
   const save = useUpdateWorkspaceDetails(wsId)
-  const initial: Form = { name: details.name ?? '', description: details.description ?? '' }
+  const initial: Form = { name: editableName(details.name), description: details.description ?? '' }
   const [form, setForm] = useState<Form>(initial)
   const [nameError, setNameError] = useState<string | undefined>()
   const nameRef = useRef<HTMLInputElement>(null)

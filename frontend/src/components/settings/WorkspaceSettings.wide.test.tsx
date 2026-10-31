@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest'
-import { cleanup, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, apiFetch } from '../../api/client'
@@ -8,6 +8,7 @@ import { queryClient } from '../../lib/query-client'
 import { resetClient } from '../../test/render'
 import { expectNoIds } from '../../test/no-ids'
 import { useToastStore } from '../primitives'
+import { GROUP_CREATION_CHOICES } from './GroupCreationRow'
 import { WS, renderSettings, resetSettingsServer, server, settingsAnswer, viewport } from './settings-test-server'
 
 vi.mock('../../api/client', async (orig) => ({
@@ -135,14 +136,70 @@ describe('Cài đặt workspace on a wide screen: an organization administrator'
     expect(router.state.location.pathname).toBe('/settings/workspace')
   })
 
-  it('who creates groups is picked from the drop-down and saved to the locks at once', async () => {
+  it('locking who creates groups asks first, in the words of the choice, and saves only on Khoá', async () => {
     const user = userEvent.setup()
     await renderSettings(`/settings/workspace?ws=${WS}`)
-    await user.selectOptions(await screen.findByRole('combobox', { name: 'Ai được tạo nhóm' }), 'admins')
+    const box = await screen.findByRole('combobox', { name: 'Ai được tạo nhóm' })
+    await waitFor(() => expect(box).toHaveValue('everyone'))
+    await user.selectOptions(box, 'admins')
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(GROUP_CREATION_CHOICES[1]!.hint!)).toBeInTheDocument()
+    expect(writesTo('/locks')).toEqual([])
+    expect(box).toHaveValue('everyone')
+
+    await user.click(within(dialog).getByRole('button', { name: 'Khoá' }))
     await waitFor(() => expect(writesTo('/locks')).toEqual([
       { method: 'PUT', path: `/workspaces/${encodeURIComponent(WS)}/locks`, body: { group_creation: 'admins' } },
     ]))
-    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Ai được tạo nhóm' })).toHaveValue('admins'))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await waitFor(() => expect(box).toHaveValue('admins'))
+  })
+
+  it('a change of the closed drop-down (an arrow key) to admins sends nothing; Huỷ keeps the old value', async () => {
+    const user = userEvent.setup()
+    await renderSettings(`/settings/workspace?ws=${WS}`)
+    const box = await screen.findByRole('combobox', { name: 'Ai được tạo nhóm' })
+    await waitFor(() => expect(box).toHaveValue('everyone'))
+    fireEvent.change(box, { target: { value: 'admins' } })
+    const dialog = await screen.findByRole('dialog')
+    expect(writesTo('/locks')).toEqual([])
+    await user.click(within(dialog).getByRole('button', { name: 'Huỷ' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(box).toHaveValue('everyone')
+    expect(writesTo('/locks')).toEqual([])
+  })
+
+  it('opening it again to every member saves at once, without asking', async () => {
+    const user = userEvent.setup()
+    server.groupCreation = 'admins'
+    await renderSettings(`/settings/workspace?ws=${WS}`)
+    const box = await screen.findByRole('combobox', { name: 'Ai được tạo nhóm' })
+    await waitFor(() => expect(box).toHaveValue('admins'))
+    await user.selectOptions(box, 'everyone')
+    expect(screen.queryByRole('dialog')).toBeNull()
+    await waitFor(() => expect(writesTo('/locks')).toEqual([
+      { method: 'PUT', path: `/workspaces/${encodeURIComponent(WS)}/locks`, body: { group_creation: 'everyone' } },
+    ]))
+  })
+
+  it('the drop-down is off while the rule is being saved, so a second pick cannot fire', async () => {
+    const user = userEvent.setup()
+    server.groupCreation = 'admins'
+    let release!: () => void
+    api.mockImplementation(((path: string, init?: RequestInit) => {
+      if (path.split('?')[0]!.endsWith('/locks') && init?.method === 'PUT') {
+        return new Promise<unknown>((resolve) => { release = () => resolve(settingsAnswer(path, init)) })
+      }
+      return settingsAnswer(path, init)
+    }) as typeof apiFetch)
+    await renderSettings(`/settings/workspace?ws=${WS}`)
+    const box = await screen.findByRole('combobox', { name: 'Ai được tạo nhóm' })
+    await waitFor(() => expect(box).toHaveValue('admins'))
+    await user.selectOptions(box, 'everyone')
+    await waitFor(() => expect(box).toBeDisabled())
+    release()
+    await waitFor(() => expect(box).toBeEnabled())
+    expect(writesTo('/locks')).toHaveLength(1)
   })
 
   it('the rows lead to the existing desktop screens, keeping the workspace', async () => {
@@ -210,6 +267,22 @@ describe('Cài đặt workspace on a wide screen: an organization member', () =>
     for (const name of server.ownerNames) expect(screen.queryByText(name), name).toBeNull()
   })
 
+  it('Quản trị viên says whether its list is open, and which list it opens', async () => {
+    const user = userEvent.setup()
+    await renderSettings(`/settings/workspace?ws=${WS}`)
+    const row = await screen.findByRole('button', { name: /^Quản trị viên/ })
+    expect(row).toHaveAttribute('aria-expanded', 'false')
+    const controls = row.getAttribute('aria-controls')
+    expect(controls).toBeTruthy()
+    await user.click(row)
+    expect(row).toHaveAttribute('aria-expanded', 'true')
+    const list = document.getElementById(controls!)
+    expect(list).not.toBeNull()
+    expect(within(list!).getByText(server.ownerNames[0]!)).toBeInTheDocument()
+    await user.click(row)
+    expect(row).toHaveAttribute('aria-expanded', 'false')
+  })
+
   it('Hồ sơ trong tổ chức opens its section', async () => {
     const user = userEvent.setup()
     const router = await renderSettings(`/settings/workspace?ws=${WS}`)
@@ -234,6 +307,38 @@ describe('Cài đặt workspace on a wide screen: a personal workspace', () => {
     expect(within(ws).queryByText(/^Rời/)).toBeNull()
     expect(within(ws).queryByRole('button', { name: 'Rời workspace' })).toBeNull()
     expect(api.mock.calls.some(([p]) => String(p).includes('/locks'))).toBe(false)
+    expectNoIds()
+  })
+
+  it('a legacy name made from an internal handle never reaches the screen, not even in the form', async () => {
+    const user = userEvent.setup()
+    server.personal = true
+    server.workspaceName = "user_42's workspace"
+    await renderSettings(`/settings/workspace?ws=${WS}`)
+    const ws = await page()
+    const name = await within(ws).findByRole('textbox', { name: 'Tên workspace' })
+    expect(name).toHaveValue('Không gian của bạn')
+    expect(within(ws).getByText('Không gian của bạn', { selector: 'b' })).toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/user_42/)
+    expect(screen.queryByDisplayValue(/user_42/)).toBeNull()
+    expectNoIds()
+    // Nothing changed, nothing to save; a real new name is sent as typed.
+    expect(within(ws).getByRole('button', { name: 'Lưu thay đổi' })).toBeDisabled()
+    await user.clear(name)
+    await user.type(name, 'Việc riêng')
+    await user.click(within(ws).getByRole('button', { name: 'Lưu thay đổi' }))
+    await waitFor(() => expect(writesTo('/details').map((w) => w.body)).toEqual([{ name: 'Việc riêng' }]))
+  })
+
+  it('an organization member reads the display name, not a legacy one', async () => {
+    server.canManage = false
+    server.role = 'member'
+    server.workspaceName = "user_42's workspace"
+    await renderSettings(`/settings/workspace?ws=${WS}`)
+    const ws = await page()
+    expect(await within(ws).findByText('Bạn là Thành viên')).toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/user_42/)
+    expect(screen.queryByDisplayValue(/user_42/)).toBeNull()
     expectNoIds()
   })
 })
