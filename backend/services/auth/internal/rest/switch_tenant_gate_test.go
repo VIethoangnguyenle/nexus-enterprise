@@ -1,20 +1,28 @@
 package rest
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"ngac-platform/services/auth/internal/auth"
+	"ngac-platform/services/auth/internal/domain"
 	"ngac-platform/services/auth/internal/store"
 )
 
 func (a *refreshApp) switchTo(t *testing.T, id, tenant string) *httptest.ResponseRecorder {
 	t.Helper()
 	u := a.st.users[id]
-	tok, _, err := auth.GenerateToken(u.ID, u.Username, u.NGACNodeID, "ws-1")
+	// A live session of its own: a switch ends the session it was made from.
+	tok, sid, err := auth.GenerateToken(u.ID, u.Username, u.NGACNodeID, "ws-1")
 	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.svc.AttachRefreshToken(context.Background(), domain.RefreshIdentity{
+		UserID: u.ID, Username: u.Username, NGACNodeID: u.NGACNodeID, TenantID: "ws-1", SessionID: sid,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/switch-tenant", strings.NewReader(`{"tenant_id":"`+tenant+`"}`))
@@ -50,6 +58,34 @@ func TestSwitchTenant_FollowsTheGraphAndAnOutageIs503(t *testing.T) {
 	}
 	if strings.Contains(rec.Body.String(), "access_token") {
 		t.Error("a token was issued without an answer from the graph")
+	}
+}
+
+// A signed-out or revoked session is refused although its access token still
+// verifies: switching would otherwise mint a new seven-day session from it.
+func TestSwitchTenant_RefusesAnEndedSession(t *testing.T) {
+	a := newRefreshApp(t)
+	id := uniq("sw-ended")
+	a.sessionIn(t, id)
+	u := a.st.users[id]
+	// sessionIn's session, signed out; its access token still verifies.
+	tok, err := auth.GenerateTokenForSession(u.ID, u.Username, u.NGACNodeID, "ws-1", "sess-"+id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.svc.EndSession(context.Background(), "sess-"+id); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/switch-tenant", strings.NewReader(`{"tenant_id":"ws-1"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+tok)
+	rec := httptest.NewRecorder()
+	a.e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized || decode(t, rec)["code"] != "session_invalid" {
+		t.Fatalf("ended session: status %d (%s), want 401 session_invalid", rec.Code, rec.Body)
+	}
+	if strings.Contains(rec.Body.String(), "access_token") || cookieOf(rec) != nil {
+		t.Error("an ended session was handed a new one")
 	}
 }
 

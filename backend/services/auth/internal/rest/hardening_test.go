@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"context"
 	"encoding/json"
 	"net"
 	"net/http"
@@ -13,6 +14,8 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"ngac-platform/pkg/httputil"
+	"ngac-platform/services/auth/internal/auth"
+	"ngac-platform/services/auth/internal/domain"
 )
 
 // --- every error has one shape ---
@@ -100,8 +103,18 @@ func TestSessionEndpointsAnswerWithCodes(t *testing.T) {
 }
 
 func TestSwitchTenantRefusalsAnswerWithCodes(t *testing.T) {
-	a := newAcctApp(t, false, nil)
-	a.st.add("u1", "a@example.test")
+	a := newAcctApp(t, true, nil)
+	u := a.st.add(uniq("u1"), "a@example.test")
+	// A live session: switching refuses an ended one before anything else.
+	tok, sid, err := auth.GenerateToken(u.ID, u.Username, u.NGACNodeID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.svc.AttachRefreshToken(context.Background(), domain.RefreshIdentity{
+		UserID: u.ID, Username: u.Username, NGACNodeID: u.NGACNodeID, SessionID: sid,
+	}); err != nil {
+		t.Fatal(err)
+	}
 	for body, want := range map[string]struct {
 		status int
 		code   string
@@ -110,7 +123,7 @@ func TestSwitchTenantRefusalsAnswerWithCodes(t *testing.T) {
 		`{}`:                       {403, "access_denied"},
 		`tenant_id=x`:              {400, "invalid_input"},
 	} {
-		rec := a.do(http.MethodPost, "/api/auth/switch-tenant", a.token("u1"), body)
+		rec := a.do(http.MethodPost, "/api/auth/switch-tenant", tok, body)
 		if got := errBody(t, rec); rec.Code != want.status || got["code"] != want.code {
 			t.Errorf("%s: %d %v, want %d %q", body, rec.Code, got, want.status, want.code)
 		}

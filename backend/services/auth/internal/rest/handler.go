@@ -107,6 +107,10 @@ func (h *Handler) SwitchTenant(c echo.Context) error {
 		return badBody()
 	}
 
+	// A signed-out or revoked session must not mint a fresh one by switching.
+	if err := h.svc.RequireLiveSession(c.Request().Context(), claims.UserID, claims.SessionID); err != nil {
+		return fail(c, err)
+	}
 	token, sessionID, tenant, err := h.svc.SwitchTenant(c.Request().Context(), claims.UserID, claims.NGACNodeID, claims.Username, body.TenantID)
 	if err != nil {
 		return fail(c, err)
@@ -356,8 +360,8 @@ func mapError(err error) *echo.HTTPError {
 		return apiError(http.StatusBadRequest, "avatar_not_image", err.Error())
 	case errors.Is(err, domain.ErrAvatarTooManyPixels):
 		return apiError(http.StatusBadRequest, "avatar_too_many_pixels", err.Error())
-	case errors.Is(err, domain.ErrQRSessionEnded):
-		// The phone's session was ended under a still-valid access token.
+	case errors.Is(err, domain.ErrSessionEnded):
+		// The caller's session was ended under a still-valid access token.
 		return apiError(http.StatusUnauthorized, "session_invalid", err.Error())
 	case errors.Is(err, domain.ErrQRUnavailable):
 		// One answer for never issued, expired, used and someone else's code.

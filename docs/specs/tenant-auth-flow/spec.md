@@ -227,7 +227,7 @@ The web client SHALL call the switch-tenant endpoint, clear its query cache and 
 - **THEN** the token is re-issued for it and only then is the previous workspace's cached data dropped
 
 ### Requirement: Switch tenant re-issues JWT
-The system SHALL provide a switch-tenant endpoint that verifies membership and issues a new JWT scoped to the target tenant.
+The system SHALL provide a switch-tenant endpoint that verifies membership and issues a new JWT scoped to the target tenant. The caller's session MUST still be live (its refresh family exists and no user-wide revocation postdates it): a signed-out or revoked session whose access token has not yet expired is refused `401 session_invalid` and gets no new token or cookie.
 
 #### Scenario: Valid switch
 - **WHEN** authenticated user requests switch to tenant they belong to

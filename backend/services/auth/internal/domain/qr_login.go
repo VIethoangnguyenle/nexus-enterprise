@@ -35,11 +35,6 @@ const QRLoginTTL = 2 * time.Minute
 
 const qrLoginKeyPrefix = "qr_login:"
 
-// ErrQRSessionEnded means the phone's session was ended (signed out, revoked)
-// although its access token has not expired yet. Such a session must not hand
-// a new one to a computer.
-var ErrQRSessionEnded = errors.New("session has ended")
-
 // ErrQRUnavailable means the code cannot be used: never issued, expired, used,
 // scanned by someone else, or asked about by a browser that did not create it.
 // Every one of those answers the same, so probing tokens learns nothing.
@@ -445,15 +440,11 @@ func (s *Service) qrScannedBy(ctx context.Context, token string, phone QRPhone) 
 }
 
 // qrMemberTenant is the name of the phone's tenant when the phone's session is
-// still live and its person an active member of the tenant: ErrQRSessionEnded
+// still live and its person an active member of the tenant: ErrSessionEnded
 // for an ended session, ErrAccessDenied for anyone not a member.
 func (s *Service) qrMemberTenant(ctx context.Context, phone QRPhone) (string, error) {
-	live, err := s.refresh.SessionLive(ctx, phone.UserID, phone.SessionID)
-	if err != nil {
+	if err := s.RequireLiveSession(ctx, phone.UserID, phone.SessionID); err != nil {
 		return "", err
-	}
-	if !live {
-		return "", ErrQRSessionEnded
 	}
 	if phone.TenantID == "" {
 		return "", ErrAccessDenied

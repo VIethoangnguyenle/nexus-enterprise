@@ -232,8 +232,8 @@ func TestQRLogin_AnEndedPhoneSessionCannotHandOutANewOne(t *testing.T) {
 	if err := q.svc.EndSession(ctx, phone.SessionID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := q.svc.ScanQRLogin(ctx, ticket.Token, phone); !errors.Is(err, domain.ErrQRSessionEnded) {
-		t.Errorf("scan from an ended session: err = %v, want ErrQRSessionEnded", err)
+	if _, err := q.svc.ScanQRLogin(ctx, ticket.Token, phone); !errors.Is(err, domain.ErrSessionEnded) {
+		t.Errorf("scan from an ended session: err = %v, want ErrSessionEnded", err)
 	}
 
 	// Ended between scan and approve.
@@ -244,8 +244,8 @@ func TestQRLogin_AnEndedPhoneSessionCannotHandOutANewOne(t *testing.T) {
 	if err := q.svc.EndSession(ctx, phone.SessionID); err != nil {
 		t.Fatal(err)
 	}
-	if err := q.svc.ApproveQRLogin(ctx, ticket.Token, phone); !errors.Is(err, domain.ErrQRSessionEnded) {
-		t.Fatalf("approve from an ended session: err = %v, want ErrQRSessionEnded", err)
+	if err := q.svc.ApproveQRLogin(ctx, ticket.Token, phone); !errors.Is(err, domain.ErrSessionEnded) {
+		t.Fatalf("approve from an ended session: err = %v, want ErrSessionEnded", err)
 	}
 	if _, err := q.svc.ClaimQRLogin(ctx, ticket.Token, ticket.PollSecret); !errors.Is(err, domain.ErrQRUnavailable) {
 		t.Fatalf("an ended session must not leave a session to claim: %v", err)
@@ -257,15 +257,15 @@ func TestQRLogin_AnEndedPhoneSessionCannotHandOutANewOne(t *testing.T) {
 	if err := q.svc.RevokeAllSessions(ctx, q.phone.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := q.svc.ScanQRLogin(ctx, ticket.Token, phone); !errors.Is(err, domain.ErrQRSessionEnded) {
-		t.Errorf("scan after a user-wide revocation: err = %v, want ErrQRSessionEnded", err)
+	if _, err := q.svc.ScanQRLogin(ctx, ticket.Token, phone); !errors.Is(err, domain.ErrSessionEnded) {
+		t.Errorf("scan after a user-wide revocation: err = %v, want ErrSessionEnded", err)
 	}
 
 	// A token with no session at all.
 	phone = q.phoneOf(q.phone, q.tenant)
 	phone.SessionID = ""
-	if _, err := q.svc.ScanQRLogin(ctx, ticket.Token, phone); !errors.Is(err, domain.ErrQRSessionEnded) {
-		t.Errorf("scan with no session: err = %v, want ErrQRSessionEnded", err)
+	if _, err := q.svc.ScanQRLogin(ctx, ticket.Token, phone); !errors.Is(err, domain.ErrSessionEnded) {
+		t.Errorf("scan with no session: err = %v, want ErrSessionEnded", err)
 	}
 }
 

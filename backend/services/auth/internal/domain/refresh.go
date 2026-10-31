@@ -614,6 +614,25 @@ func (s *RefreshStore) SessionLive(ctx context.Context, userID, sessionID string
 	return false, nil
 }
 
+// ErrSessionEnded means the caller's session was ended (signed out, revoked)
+// although its access token has not expired yet.
+var ErrSessionEnded = errors.New("session has ended")
+
+// RequireLiveSession refuses, with ErrSessionEnded, a caller whose session can no
+// longer mint tokens. Anything that hands out a new session in the caller's name
+// (switching workspace, approving a QR sign-in) asks here first: the access token
+// alone outlives a sign-out by up to AccessTokenTTL.
+func (s *Service) RequireLiveSession(ctx context.Context, userID, sessionID string) error {
+	live, err := s.refresh.SessionLive(ctx, userID, sessionID)
+	if err != nil {
+		return err
+	}
+	if !live {
+		return ErrSessionEnded
+	}
+	return nil
+}
+
 // revokeLogged ends a session on the way to refusing a refresh. The refusal does
 // not depend on the revocation succeeding, but a session that could not be
 // revoked is still live and the log must say so.
