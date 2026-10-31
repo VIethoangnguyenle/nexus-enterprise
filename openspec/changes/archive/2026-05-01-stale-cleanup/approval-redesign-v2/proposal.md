@@ -10,7 +10,7 @@ Tôi là CEO Samsung Vietnam. Công ty có 500+ nhân viên, 8 phòng ban (Kinh 
 - HR cần phiếu nghỉ phép, phiếu tuyển dụng → Manager duyệt
 - Mỗi loại phiếu có **form fields khác nhau** (đề xuất mua vật phẩm cần: tên sản phẩm, số lượng, đơn giá, tổng tiền, lý do; tờ trình cần: tiêu đề, nội dung, ngân sách, deadline)
 
-**User thực:** viethoangnguyenle@gmail.com — member company, vai trò Sales Executive trong phòng Kinh doanh
+**User thực:** owner@example.com — member company, vai trò Sales Executive trong phòng Kinh doanh
 
 ## Evidence Summary
 
