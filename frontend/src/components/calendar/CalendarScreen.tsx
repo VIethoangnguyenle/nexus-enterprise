@@ -25,12 +25,12 @@ import { validateCalendarSearch, type CalendarSearch, type NewEventSearch } from
 import { workspaceDisplayName } from '../../lib/workspace'
 import { useAuthStore } from '../../stores/auth.store'
 import { Button, Pressable } from '../primitives'
+import { useSettingsNav } from '../settings/settings-nav'
 import type { CalendarSummary } from '../../api/calendar'
 import { AddCalendarPicker } from './AddCalendarPicker'
 import { AgendaList } from './AgendaList'
 import { CalendarList } from './CalendarList'
 import { CalendarSearchBar } from './CalendarSearchBar'
-import { CalendarSettingsDialog } from './CalendarSettingsDialog'
 import { CalendarEmpty, CalendarError, GridSkeleton } from './CalendarStates'
 import { CalendarTopBar } from './CalendarTopBar'
 import { EventPopover } from './EventPopover'
@@ -89,6 +89,7 @@ export function CalendarScreen() {
   const { workspaceId: wsId, workspaceName } = useActiveWorkspace()
   const search = useSearch({ strict: false }) as CalendarSearch
   const navigate = useNavigate()
+  const settingsNav = useSettingsNav()
   const userId = useAuthStore((s) => s.user?.id)
   const now = useNow()
   const phone = usePhone()
@@ -204,7 +205,6 @@ export function CalendarScreen() {
   }, [])
 
   // --- Dialogs and the editor --------------------------------------------------------------
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const [sharing, setSharing] = useState<CalendarSummary | null>(null)
   const toEditor = useCallback(
     (next: NewEventSearch) =>
@@ -487,7 +487,7 @@ export function CalendarScreen() {
             onToday={() => go({ date: new Date() })}
             onStep={(steps) => go({ date: shiftDate(shownView, date, steps) })}
             onSearch={() => setSearching(true)}
-            onSettings={() => setSettingsOpen(true)}
+            onSettings={() => settingsNav.open('calendar')}
           />
         )}
         {showEmptyHint && (
@@ -534,7 +534,6 @@ export function CalendarScreen() {
         onClose={() => setPending(null)}
         onConfirm={confirmScope}
       />
-      <CalendarSettingsDialog open={settingsOpen} wsId={wsId} onClose={() => setSettingsOpen(false)} />
       <ShareCalendarDialog open={!!sharing} wsId={wsId} workspaceName={workspaceDisplayName(workspaceName)} calendar={sharing} onClose={() => setSharing(null)} />
       {tablet && drawer && (
         <NavSheet label="Lịch đang hiện" onClose={() => setDrawer(false)}>

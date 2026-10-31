@@ -8,7 +8,7 @@ import { expectNoIds } from '../../test/no-ids'
 import { useToastStore } from '../primitives'
 import { SettingsChoice } from './SettingsChoice'
 import { SettingsLayoutContext } from './settings-layout'
-import { WS, renderSettings, resetSettingsServer, server, settingsAnswer, viewport } from './settings-test-server'
+import { CAL_TEAM, WS, renderSettings, resetSettingsServer, server, settingsAnswer, viewport } from './settings-test-server'
 
 vi.mock('../../api/client', async (orig) => ({
   ...(await orig<typeof import('../../api/client')>()),
@@ -130,6 +130,83 @@ describe('Tài liệu on a wide screen', () => {
     await waitFor(() => expect(within(sort).getByRole('radio', { name: 'Sửa gần nhất' })).toHaveAttribute('aria-checked', 'true'))
     expect(within(sort).getByRole('radio', { name: 'Dung lượng' })).toHaveAttribute('aria-checked', 'false')
     await waitFor(() => expect(useToastStore.getState().toasts.map((t) => t.message).join(' ')).toMatch(/chưa lưu cài đặt được/i))
+  })
+})
+
+describe('Lịch on a wide screen', () => {
+  const putsOfSettings = () => putsTo(`/workspaces/${WS}/calendar/settings`).map((w) => w.body)
+
+  it('every option of the phone inline, the working hours on one row; no default view or duration', async () => {
+    await renderSettings(`/settings/calendar?ws=${WS}`)
+    const cal = await page('Lịch')
+    expect(within(cal).getByRole('heading', { level: 1, name: 'Lịch' })).toBeInTheDocument()
+    expect(within(cal).getByText('Trong NovaPay')).toBeInTheDocument()
+    const week = within(cal).getByRole('radiogroup', { name: 'Tuần bắt đầu vào' })
+    expect(within(week).getByRole('radio', { name: 'Thứ Hai' })).toHaveAttribute('aria-checked', 'true')
+    await waitFor(() => expect(within(cal).getByRole('combobox', { name: 'Múi giờ' })).toHaveValue('Asia/Ho_Chi_Minh'))
+    expect(within(cal).getByRole('combobox', { name: 'Bắt đầu làm việc' })).toHaveValue('08:00')
+    expect(within(cal).getByRole('combobox', { name: 'Kết thúc làm việc' })).toHaveValue('17:30')
+    expect(await within(cal).findByRole('checkbox', { name: 'Lê Thị Hoa' })).toBeChecked()
+    expect(within(cal).getByRole('checkbox', { name: 'NovaPay' })).toBeChecked()
+    expect(within(cal).getByRole('combobox', { name: 'Nhắc trước' })).toHaveValue('10')
+    for (const label of ['Lời mời mới', 'Thay đổi sự kiện', 'Nhắc sự kiện']) {
+      expect(within(cal).getByRole('switch', { name: label }), label).toBeInTheDocument()
+    }
+    for (const label of ['Chế độ xem mặc định', 'Thời lượng mặc định']) expect(within(cal).queryByText(label), label).toBeNull()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expectNoIds()
+  })
+
+  it('a later end of the working day saves only the end', async () => {
+    const user = userEvent.setup()
+    await renderSettings(`/settings/calendar?ws=${WS}`)
+    const end = await screen.findByRole('combobox', { name: 'Kết thúc làm việc' })
+    await waitFor(() => expect(end).toHaveValue('17:30'))
+    await user.selectOptions(end, '18:00')
+    await waitFor(() => expect(putsOfSettings()).toEqual([{ workEnd: '18:00' }]))
+    expect(end).toHaveValue('18:00')
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('an end not after the start is refused here and nothing is sent', async () => {
+    const user = userEvent.setup()
+    await renderSettings(`/settings/calendar?ws=${WS}`)
+    const end = await screen.findByRole('combobox', { name: 'Kết thúc làm việc' })
+    await waitFor(() => expect(end).toHaveValue('17:30'))
+    await user.selectOptions(end, '07:30')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Giờ kết thúc phải sau giờ bắt đầu.')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Bắt đầu làm việc' }), '07:30')
+    expect(screen.getByRole('alert')).toHaveTextContent('Giờ kết thúc phải sau giờ bắt đầu.')
+    expect(putsOfSettings()).toEqual([])
+
+    // Moving the start back makes the pair good: both changed fields go in one save.
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Bắt đầu làm việc' }), '07:00')
+    await waitFor(() => expect(putsOfSettings()).toEqual([{ workStart: '07:00', workEnd: '07:30' }]))
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('the reminder and the zone each save only their key', async () => {
+    const user = userEvent.setup()
+    await renderSettings(`/settings/calendar?ws=${WS}`)
+    const reminder = await screen.findByRole('combobox', { name: 'Nhắc trước' })
+    await waitFor(() => expect(reminder).toHaveValue('10'))
+    await user.selectOptions(reminder, '30')
+    await waitFor(() => expect(putsOfSettings()).toEqual([{ defaultReminder: 30 }]))
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Múi giờ' }), 'Asia/Tokyo')
+    await waitFor(() => expect(putsOfSettings()).toEqual([{ defaultReminder: 30 }, { tzid: 'Asia/Tokyo' }]))
+  })
+
+  it('Lịch đang hiện unticks the same checkbox as the calendar column', async () => {
+    const user = userEvent.setup()
+    await renderSettings(`/settings/calendar?ws=${WS}`)
+    const team = await screen.findByRole('checkbox', { name: 'NovaPay' })
+    await user.click(team)
+    await waitFor(() => expect(putsTo(`/workspaces/${WS}/calendar/calendars/${CAL_TEAM}/subscription`).map((w) => w.body))
+      .toEqual([{ visible: false }]))
+    await waitFor(() => expect(team).not.toBeChecked())
+    expect(server.calendars.find((c) => c.id === CAL_TEAM)!.visible).toBe(false)
+    expect(screen.getByRole('checkbox', { name: 'Lê Thị Hoa' })).toBeChecked()
+    expect(putsOfSettings()).toEqual([])
   })
 })
 

@@ -206,7 +206,7 @@ describe('module pages', () => {
     resetClient()
 
     await renderSettings(`/settings/calendar?ws=${WS}`)
-    await screen.findByRole('button', { name: /^Tuần bắt đầu vào/ })
+    await screen.findByRole('radiogroup', { name: 'Tuần bắt đầu vào' })
     for (const label of ['Chế độ xem mặc định', 'Thời lượng mặc định']) expect(screen.queryByRole('button', { name: new RegExp(`^${label}`) }), label).toBeNull()
     cleanup()
     resetClient()
@@ -214,6 +214,33 @@ describe('module pages', () => {
     await renderSettings(`/settings/approval?ws=${WS}`)
     await screen.findByRole('switch', { name: 'Đề nghị chờ bạn duyệt' })
     expect(screen.queryByRole('button', { name: /^Sắp xếp/ })).toBeNull()
+  })
+
+  it('Lịch: Giờ làm việc shows the hours and its page saves only the end picked', async () => {
+    const user = userEvent.setup()
+    await renderSettings(`/settings/calendar?ws=${WS}`)
+    await user.click(await screen.findByRole('button', { name: /^Giờ làm việc\s*08:00–17:30/ }))
+    expect(await screen.findByRole('heading', { name: 'Giờ làm việc' })).toBeInTheDocument()
+    const start = screen.getByRole('radiogroup', { name: 'Bắt đầu' })
+    expect(within(start).getByRole('radio', { name: '08:00' })).toHaveAttribute('aria-checked', 'true')
+    const end = screen.getByRole('radiogroup', { name: 'Kết thúc' })
+    await user.click(within(end).getByRole('radio', { name: '18:00' }))
+    await waitFor(() => expect(server.writes).toEqual([
+      { method: 'PUT', path: `/workspaces/${WS}/calendar/settings`, body: { workEnd: '18:00' } },
+    ]))
+    expect(within(end).getByRole('radio', { name: '18:00' })).toHaveAttribute('aria-checked', 'true')
+    await user.click(screen.getByRole('button', { name: 'Quay lại' }))
+    expect(await screen.findByRole('button', { name: /^Giờ làm việc\s*08:00–18:00/ })).toBeInTheDocument()
+  })
+
+  it('Lịch: an end not after the start is refused on the page and nothing is sent', async () => {
+    const user = userEvent.setup()
+    await renderSettings(`/settings/calendar?ws=${WS}`)
+    await user.click(await screen.findByRole('button', { name: /^Giờ làm việc/ }))
+    const end = await screen.findByRole('radiogroup', { name: 'Kết thúc' })
+    await user.click(within(end).getByRole('radio', { name: '08:00' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Giờ kết thúc phải sau giờ bắt đầu.')
+    expect(server.writes).toEqual([])
   })
 
   it('Tài liệu: a refused save puts the old value back', async () => {

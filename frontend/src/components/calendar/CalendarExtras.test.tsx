@@ -7,7 +7,7 @@ import {
 import { renderWithClient, resetClient } from '../../test/render'
 import { touchSwipe } from '../../test/gesture-events'
 import {
-  CAL, E, NOW, OCCURRENCES, PEOPLE, UUID_RE, calendarFixtureApi, calls, enableGroupCalendar, resetFixtures,
+  CAL, E, NOW, OCCURRENCES, PEOPLE, UUID_RE, WS_ID, calendarFixtureApi, calls, enableGroupCalendar, resetFixtures,
 } from '../../test/calendar-fixtures'
 import { CH } from '../../test/chat-fixtures'
 import { validateCalendarSearch, validateEditEventSearch, validateNewEventSearch } from '../../lib/calendar-search'
@@ -235,36 +235,15 @@ describe('search', () => {
 })
 
 describe('settings', () => {
-  it('saves the zone, the working hours and the default reminder', async () => {
+  it('the ⚙ opens Cài đặt Lịch, keeping the workspace; Lịch has no settings dialog of its own', async () => {
     const user = setup()
-    await renderCalendar()
+    const router = await renderCalendar(`/calendar?ws=${WS_ID}`)
     await block(/^Báo cáo tuần/)
     await user.click(screen.getByRole('button', { name: 'Cài đặt lịch' }))
-    const dialog = await screen.findByRole('dialog', { name: 'Cài đặt lịch' })
-    await waitFor(() => expect(within(dialog).getByLabelText('Kết thúc làm việc')).toHaveValue('17:00'))
-    const end = within(dialog).getByLabelText('Kết thúc làm việc')
-    await user.clear(end)
-    await user.type(end, '18:30')
-    await user.selectOptions(within(dialog).getByLabelText('Lời nhắc mặc định'), '30')
-    await user.click(within(dialog).getByRole('button', { name: 'Lưu' }))
-    await waitFor(() => expect(writes('PUT').some((c) => c.path.endsWith('/calendar/settings'))).toBe(true))
-    expect(writes('PUT').find((c) => c.path.endsWith('/calendar/settings'))!.body).toEqual({
-      tzid: 'Asia/Ho_Chi_Minh', workStart: '08:00', workEnd: '18:30', defaultReminder: 30,
-    })
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Cài đặt lịch' })).toBeNull())
-  })
-
-  it('refuses working hours that end before they start', async () => {
-    const user = setup()
-    await renderCalendar()
-    await user.click(await screen.findByRole('button', { name: 'Cài đặt lịch' }))
-    const dialog = await screen.findByRole('dialog', { name: 'Cài đặt lịch' })
-    await waitFor(() => expect(within(dialog).getByLabelText('Kết thúc làm việc')).toHaveValue('17:00'))
-    const end = within(dialog).getByLabelText('Kết thúc làm việc')
-    await user.clear(end)
-    await user.type(end, '07:00')
-    expect(within(dialog).getByRole('alert')).toHaveTextContent('Giờ kết thúc phải sau giờ bắt đầu')
-    expect(within(dialog).getByRole('button', { name: 'Lưu' })).toBeDisabled()
+    await waitFor(() => expect(router.state.location.pathname).toBe('/settings/calendar'))
+    expect(router.state.location.search).toEqual({ ws: WS_ID })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(writes('PUT').filter((c) => c.path.endsWith('/calendar/settings'))).toEqual([])
   })
 })
 

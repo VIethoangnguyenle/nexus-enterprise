@@ -1,15 +1,22 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import type { CalendarSettings as CalendarOptions } from '../../../api/settings'
+import { keys } from '../../../hooks/keys'
 import { useActiveWorkspace } from '../../../hooks/useActiveWorkspace'
 import { useCalendars } from '../../../hooks/useCalendar'
 import { useCalendarVisibility } from '../../../hooks/useCalendarVisibility'
-import { useBottomBarLayout } from '../../../hooks/usePhone'
 import { useServerSettings } from '../../../hooks/useServerSettings'
 import { calendarShown } from '../../../lib/calendar-format'
+import { colorStyle } from '../../../lib/calendar-color'
 import { CALENDAR_DEFAULTS } from '../../../lib/settings-defaults'
 import { zoneLabel, zoneNames } from '../../calendar/editor-ui'
+import { Checkbox } from '../../primitives'
 import { ChoicePage, SettingsGroup, SettingsPage, SettingsRow, SettingsSwitch, choiceLabel, type Choice } from '../SettingsGroup'
+import { SettingsChoice } from '../SettingsChoice'
+import { useSettingsWide } from '../settings-layout'
 import { useSettingsNav } from '../settings-nav'
+import { WorkHoursPage, WorkHoursRow, workHoursLabel } from './CalendarWorkHours'
+import { useWorkspaceLead } from './workspace-lead'
 
 export { CALENDAR_DEFAULTS }
 
@@ -40,28 +47,36 @@ const REMINDERS: Choice<number>[] = [
 const withValue = (choices: Choice<number>[], v: number | undefined, label: (n: number) => string) =>
   v == null || choices.some((c) => c.value === v) ? choices : [...choices, { value: v, label: label(v) }]
 
-type Page = 'view' | 'week' | 'zone' | 'calendars' | 'duration' | 'reminder' | null
+type Page = 'view' | 'week' | 'zone' | 'hours' | 'calendars' | 'duration' | 'reminder' | null
 
 /**
- * Cài đặt Lịch (DESIGN.md §6, mockup mobile-shell.html §4): view, week start, zone and the calendars shown; what a
- * new event starts with; and the three notification switches. Kept in `calendar_user_settings`; Lịch's own
- * settings dialog reads the same value.
+ * Cài đặt Lịch (DESIGN.md §6, mockup mobile-shell.html §4; desktop: settings-desktop.html §4): view, week start,
+ * zone, working hours and the calendars shown; what a new event starts with; and the three notification switches.
+ * Kept in `calendar_user_settings`. This is Lịch's only settings place: the ⚙ in Lịch opens it.
  *
  * The default view and duration apply below 1024px only (a wide screen keeps opening on its week and making
- * one-hour events), so a wide screen does not offer them.
+ * one-hour events), so the desktop shell does not offer them.
  */
 export function CalendarSettings() {
   const { back } = useSettingsNav()
   const { workspaceId } = useActiveWorkspace()
-  const compact = useBottomBarLayout()
+  const wide = useSettingsWide()
+  const lead = useWorkspaceLead()
   const { settings, save } = useServerSettings('calendar', workspaceId, CALENDAR_DEFAULTS)
   const calendars = useCalendars(workspaceId)
+  const queryClient = useQueryClient()
   const [page, setPage] = useState<Page>(null)
   const done = () => setPage(null)
   const zones = useMemo(() => zoneNames(settings.tzid ?? '').map((z) => ({ value: z, label: zoneLabel(z) })), [settings.tzid])
   const durations = withValue(DURATIONS, settings.defaultDuration, (n) => `${n} phút`)
   const reminders = withValue(REMINDERS, settings.defaultReminder, (n) => `${n} phút`)
   const shown = calendars.data?.filter((c) => calendarShown(c, settings.visibleCalendars)).length
+  // Tìm giờ suggests times inside everyone's working hours, the person's own included: a new pair refreshes it.
+  const saveHours = useCallback(async (patch: CalendarOptions) => {
+    const saved = await save(patch)
+    if (saved) void queryClient.invalidateQueries({ queryKey: keys.calendar.freeBusyAll(workspaceId) })
+    return saved
+  }, [save, queryClient, workspaceId])
 
   switch (page) {
     case 'view':
@@ -70,6 +85,8 @@ export function CalendarSettings() {
       return <ChoicePage title="Tuần bắt đầu vào" value={settings.weekStart} choices={WEEK_STARTS} onPick={(weekStart) => void save({ weekStart })} onBack={done} />
     case 'zone':
       return <ChoicePage title="Múi giờ" value={settings.tzid} choices={zones} onPick={(tzid) => void save({ tzid })} onBack={done} />
+    case 'hours':
+      return <WorkHoursPage settings={settings} save={saveHours} onBack={done} />
     case 'duration':
       return <ChoicePage title="Thời lượng mặc định" value={settings.defaultDuration} choices={durations} onPick={(defaultDuration) => void save({ defaultDuration })} onBack={done} />
     case 'reminder':
@@ -88,20 +105,27 @@ export function CalendarSettings() {
   }
 
   return (
-    <SettingsPage title="Cài đặt Lịch" onBack={back}>
+    <SettingsPage title={wide ? 'Lịch' : 'Cài đặt Lịch'} lead={lead} onBack={back}>
       <SettingsGroup title="Hiển thị">
-        {compact && <SettingsRow label="Chế độ xem mặc định" value={choiceLabel(VIEWS, settings.defaultView)} onPress={() => setPage('view')} />}
-        <SettingsRow label="Tuần bắt đầu vào" value={choiceLabel(WEEK_STARTS, settings.weekStart)} onPress={() => setPage('week')} />
-        <SettingsRow label="Múi giờ" value={settings.tzid ? zoneLabel(settings.tzid) : undefined} onPress={() => setPage('zone')} />
-        <SettingsRow
-          label="Lịch đang hiện"
-          value={shown == null ? undefined : `${shown} lịch`}
-          onPress={calendars.data ? () => setPage('calendars') : undefined}
-        />
+        {!wide && <SettingsRow label="Chế độ xem mặc định" value={choiceLabel(VIEWS, settings.defaultView)} onPress={() => setPage('view')} />}
+        <SettingsChoice label="Tuần bắt đầu vào" value={settings.weekStart} choices={WEEK_STARTS} onPick={(weekStart) => void save({ weekStart })} onOpen={() => setPage('week')} />
+        <SettingsChoice label="Múi giờ" value={settings.tzid} choices={zones} onPick={(tzid) => void save({ tzid })} onOpen={() => setPage('zone')} />
+        {wide
+          ? <WorkHoursRow settings={settings} save={saveHours} />
+          : <SettingsRow label="Giờ làm việc" value={workHoursLabel(settings)} onPress={() => setPage('hours')} />}
+        {wide ? (
+          <ShownCalendarsRow />
+        ) : (
+          <SettingsRow
+            label="Lịch đang hiện"
+            value={shown == null ? undefined : `${shown} lịch`}
+            onPress={calendars.data ? () => setPage('calendars') : undefined}
+          />
+        )}
       </SettingsGroup>
       <SettingsGroup title="Sự kiện mới">
-        {compact && <SettingsRow label="Thời lượng mặc định" value={choiceLabel(durations, settings.defaultDuration)} onPress={() => setPage('duration')} />}
-        <SettingsRow label="Nhắc trước" value={choiceLabel(reminders, settings.defaultReminder)} onPress={() => setPage('reminder')} />
+        {!wide && <SettingsRow label="Thời lượng mặc định" value={choiceLabel(durations, settings.defaultDuration)} onPress={() => setPage('duration')} />}
+        <SettingsChoice label="Nhắc trước" value={settings.defaultReminder} choices={reminders} onPick={(defaultReminder) => void save({ defaultReminder })} onOpen={() => setPage('reminder')} />
       </SettingsGroup>
       <SettingsGroup title="Thông báo">
         <SettingsSwitch label="Lời mời mới" checked={settings.notifyInvites !== false} onChange={(notifyInvites) => void save({ notifyInvites })} />
@@ -112,7 +136,7 @@ export function CalendarSettings() {
   )
 }
 
-/** Lịch đang hiện: a switch per calendar, the same one as the calendar's checkbox in Lịch (`useCalendarVisibility`). */
+/** Phone: Lịch đang hiện, a switch per calendar, the same one as the calendar's checkbox in Lịch (`useCalendarVisibility`). */
 function ShownCalendarsPage({ onBack }: { onBack: () => void }) {
   const { workspaceId } = useActiveWorkspace()
   const calendars = useCalendars(workspaceId)
@@ -130,5 +154,32 @@ function ShownCalendarsPage({ onBack }: { onBack: () => void }) {
         ))}
       </SettingsGroup>
     </SettingsPage>
+  )
+}
+
+/**
+ * Wide: Lịch đang hiện as checkboxes in the row, each in its calendar's colour (mockup settings-desktop.html §4,
+ * `.cals`); the same visibility as the checkboxes of Lịch's side column.
+ */
+function ShownCalendarsRow() {
+  const { workspaceId } = useActiveWorkspace()
+  const calendars = useCalendars(workspaceId)
+  const { isShown, setShown } = useCalendarVisibility(workspaceId)
+  return (
+    <div className="grid gap-2 py-3.5">
+      <span className="grid gap-0.5">
+        <span className="text-[0.9375rem] font-semibold leading-snug text-ink">Lịch đang hiện</span>
+        <span className="text-[0.8125rem] leading-snug text-ink-muted">Bỏ chọn để ẩn sự kiện của lịch đó.</span>
+      </span>
+      <div role="group" aria-label="Lịch đang hiện" className="grid gap-2 pt-1">
+        {(calendars.data ?? []).map((c) => (
+          <label key={c.id} style={colorStyle(c.color)} className="flex items-center gap-2.5 min-h-8 text-[0.9375rem] text-ink cursor-pointer">
+            <Checkbox label={c.name} checked={isShown(c)} onChange={(e) => setShown(c, e.target.checked)} className="shrink-0" />
+            <span aria-hidden="true" className="size-2.5 shrink-0 rounded-sm bg-(--c)" />
+            <span className="truncate">{c.name}</span>
+          </label>
+        ))}
+      </div>
+    </div>
   )
 }

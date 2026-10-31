@@ -165,10 +165,16 @@ and only a list the body carries is checked against the calendars the caller can
 `pause_until` when they are omitted (`null` for `pause_until` resumes). Screens therefore send only the change, so a stale
 copy of the other fields on one device never overwrites a change made on another.
 
-#### Scenario: The desktop calendar dialog saves its four fields
+#### Scenario: Working hours from Cài đặt Lịch
 - **WHEN** a person who turned off invitation, change and reminder notices and chose a week start, default view, default
-  duration and visible calendars on the phone then saves the zone, working hours and reminder in the desktop dialog
-- **THEN** the zone, hours and reminder change and the other seven settings keep their values
+  duration and visible calendars on the phone then moves the end of their working day to 18:00 in Cài đặt Lịch (the
+  inline pair on a desktop, the Giờ làm việc page on a phone)
+- **THEN** the body is `{"workEnd": "18:00"}`, only `workEnd` changes and every other setting keeps its value
+- **AND** an end not after the start is refused on the page ("Giờ kết thúc phải sau giờ bắt đầu.") and nothing is sent
+
+#### Scenario: Lịch has one settings place
+- **WHEN** a person presses ⚙ in Lịch on a desktop
+- **THEN** `/settings/calendar` opens with the workspace kept; Lịch has no settings dialog of its own
 
 #### Scenario: One switch from a module page
 - **WHEN** a person turns off "Được chia sẻ tài liệu" in Cài đặt Tài liệu

@@ -15,6 +15,8 @@ import { SettingsSectionScreen } from './SettingsSectionScreen'
 export const WS = '7a1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d'
 export const SESSION_HERE = '1b2c3d4e-5f60-4718-89ab-cdef01234567'
 export const SESSION_OTHER = '2c3d4e5f-6071-4829-9abc-def012345678'
+export const CAL_MINE = '3d4e5f60-7182-493a-abcd-ef0123456789'
+export const CAL_TEAM = '4e5f6071-8293-4a4b-bcde-f01234567890'
 
 const fresh = () => ({
   personal: false,
@@ -28,6 +30,14 @@ const fresh = () => ({
   approval: { default_tab: 'pending', sort: 'newest', notify_pending: true, notify_result: true } as Record<string, unknown>,
   asset: { default_tab: 'overview', sort: 'name', notify_requests: true, notify_maintenance: true } as Record<string, unknown>,
   chat: { enter_to_send: false, link_preview: true, open_at: 'all', sort: 'activity', double_tap: '👍', default_level: null } as Record<string, unknown>,
+  calendar: {
+    tzid: 'Asia/Ho_Chi_Minh', workStart: '08:00', workEnd: '17:30', defaultReminder: 10, defaultView: 'agenda', weekStart: 1,
+    visibleCalendars: [], defaultDuration: 30, notifyInvites: true, notifyChanges: true, notifyReminders: true,
+  } as Record<string, unknown>,
+  calendars: [
+    { id: CAL_MINE, kind: 'personal', name: 'Lê Thị Hoa', color: 7, visible: true, access: 'manage', isMine: true },
+    { id: CAL_TEAM, kind: 'workspace', name: 'NovaPay', color: -1, visible: true, access: 'read', isMine: false },
+  ],
   push: {
     kinds: { direct: true, mention: true, thread_reply: true, incoming_call: true },
     quiet_hours: { enabled: true, start: '22:00', end: '07:00', time_zone: 'Asia/Ho_Chi_Minh' },
@@ -103,6 +113,21 @@ export function settingsAnswer(path: string, init?: RequestInit): Promise<unknow
       server.chat = { ...server.chat, ...body }
     }
     return ok(server.chat)
+  }
+  if (p === `/workspaces/${WS}/calendar/settings`) {
+    if (method === 'PUT') {
+      if (server.settingsDown) return fail(500)
+      server.calendar = { ...server.calendar, ...body }
+    }
+    return ok(server.calendar)
+  }
+  if (p === `/workspaces/${WS}/calendar/calendars`) return ok({ calendars: server.calendars })
+  const sub = p.match(new RegExp(`^/workspaces/${WS}/calendar/calendars/([^/]+)/subscription$`))
+  if (sub && method === 'PUT') {
+    const cal = server.calendars.find((c) => c.id === sub[1])
+    if (!cal) return fail(404)
+    Object.assign(cal, body)
+    return ok(cal)
   }
   if (p === '/approval/settings') {
     if (method === 'PUT') {
