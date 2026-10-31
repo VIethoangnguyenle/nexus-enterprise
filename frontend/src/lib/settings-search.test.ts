@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { tabOf, tabSearch, validateSettingsSearch } from './settings-search'
+import { sectionOfTab, tabOf, tabSearch, validateSettingsSearch } from './settings-search'
 
 describe('settings search', () => {
+  it('names the section that holds each old tab\'s options', () => {
+    expect(sectionOfTab('ho-so')).toBe('account')
+    expect(sectionOfTab('workspace')).toBe('workspace')
+    expect(sectionOfTab('giao-dien')).toBe('appearance')
+    expect(sectionOfTab('thong-bao')).toBe('notifications')
+  })
+
   it('opens Hồ sơ unless a known tab is named', () => {
     expect(tabOf(validateSettingsSearch({}))).toBe('ho-so')
     expect(tabOf(validateSettingsSearch({ tab: 'giao-dien' }))).toBe('giao-dien')

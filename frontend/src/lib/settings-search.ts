@@ -25,6 +25,19 @@ export function validateSettingsSearch(search: Record<string, unknown>): Setting
 export const tabOf = (s: SettingsSearch): SettingsTab =>
   (SETTINGS_TABS as readonly unknown[]).includes(s.tab) ? (s.tab as SettingsTab) : 'ho-so'
 
+/**
+ * The `/settings/<section>` that holds an old tab's options now. Desktop Cài đặt is a section list, so an address
+ * from the tab days (`?tab=giao-dien`) is sent on to the section rather than broken.
+ */
+export function sectionOfTab(tab: SettingsTab): 'account' | 'workspace' | 'appearance' | 'notifications' {
+  switch (tab) {
+    case 'workspace': return 'workspace'
+    case 'giao-dien': return 'appearance'
+    case 'thong-bao': return 'notifications'
+    default: return 'account'
+  }
+}
+
 /** Search that opens a tab, keeping the workspace. Hồ sơ is the default and leaves no `tab` behind. */
 export function tabSearch(prev: SettingsSearch, tab: SettingsTab): SettingsSearch {
   const { tab: _t, ...rest } = prev

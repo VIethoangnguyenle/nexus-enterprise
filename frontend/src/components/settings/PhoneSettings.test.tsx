@@ -77,10 +77,10 @@ describe('Tôi', () => {
     expect(await screen.findByRole('button', { name: /^Tạm dừng thông báo\s*Đến \d\d:\d\d/ })).toBeInTheDocument()
   })
 
-  it('on a wide screen /settings stays the tabs', async () => {
+  it('on a wide screen /settings is the section list, not Tôi', async () => {
     viewport(false)
     await renderSettings(`/settings?ws=${WS}`)
-    expect(await screen.findByRole('tablist', { name: 'Cài đặt' })).toBeInTheDocument()
+    expect(await screen.findByRole('navigation', { name: 'Mục cài đặt' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Tôi' })).toBeNull()
   })
 })

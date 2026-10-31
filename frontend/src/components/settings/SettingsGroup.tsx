@@ -1,10 +1,13 @@
 import { Children, useId, type ReactNode } from 'react'
 import { Check, ChevronLeft, ChevronRight, Shield } from 'lucide-react'
-import { Pressable } from '../primitives'
+import { Heading, Pressable } from '../primitives'
+import { useSettingsWide } from './settings-layout'
 
 // The settings list of the phone (DESIGN.md §6 "Cài đặt", mockup mobile-shell.html §3, §4, §8, §11): groups on
 // `--color-raised` radius 16, 16 from the edges, the title 13/600 muted outside; rows ≥ 52 with an icon box 32
 // radius 9 on `--color-sunk`, label 15/500 and a 13px line, the current value muted on the right and a chevron.
+// Inside the desktop shell (`useSettingsWide`, DESIGN.md §6 "Cài đặt trên máy tính", mockup settings-desktop.html)
+// the same pieces lay out for the right pane: no back bar, a title with a lead line, flat rows with dividers.
 
 // ---------------------------------------------------------------------------
 // SettingsPage — a full-screen settings page: back, title, an optional action.
@@ -12,7 +15,10 @@ import { Pressable } from '../primitives'
 
 export interface SettingsPageProps {
   title: string
+  /** Back from the page. Not shown on a wide screen, where the section list is the way out. */
   onBack: () => void
+  /** Wide screen only: the muted line under the title, "Dùng chung mọi workspace" or "Trong <workspace>". */
+  lead?: string
   /** Name of the back button; "Quay lại" by default. */
   backLabel?: string
   /** At the right of the title: Lưu on a page that edits one field. */
@@ -21,7 +27,24 @@ export interface SettingsPageProps {
 }
 
 /** A settings page that fills the screen: the bar with back and title, then the groups scrolling under it. */
-export function SettingsPage({ title, onBack, backLabel = 'Quay lại', action, children }: SettingsPageProps) {
+export function SettingsPage({ title, onBack, lead, backLabel = 'Quay lại', action, children }: SettingsPageProps) {
+  const wide = useSettingsWide()
+  if (wide) {
+    return (
+      <section className="flex-1 min-h-0 overflow-y-auto" aria-label={title}>
+        <div className="grid gap-5 max-w-170 px-8 pt-5 pb-8">
+          <header className="flex items-start gap-3">
+            <div className="grid gap-0.5 min-w-0 flex-1">
+              <Heading as="h1" look="panel">{title}</Heading>
+              {lead && <p className="m-0 text-[0.8125rem] text-ink-muted">{lead}</p>}
+            </div>
+            {action && <div className="flex items-center shrink-0">{action}</div>}
+          </header>
+          {children}
+        </div>
+      </section>
+    )
+  }
   return (
     <section className="flex-1 flex flex-col min-w-0 min-h-0 bg-base" aria-label={title}>
       <header className="flex items-center gap-1 min-h-14 px-2 pt-safe">
@@ -60,10 +83,11 @@ export interface SettingsGroupProps {
 
 export function SettingsGroup({ title, note, children, role, label }: SettingsGroupProps) {
   const id = useId()
+  const wide = useSettingsWide()
   return (
     <section aria-labelledby={title ? id : undefined} className="grid gap-1.5">
       {title && (
-        <h2 id={id} className="m-0 px-1 text-[0.8125rem] font-semibold text-ink-muted">
+        <h2 id={id} className={`m-0 text-[0.8125rem] font-semibold text-ink-muted ${wide ? '' : 'px-1'}`}>
           {title}
         </h2>
       )}
@@ -72,12 +96,12 @@ export function SettingsGroup({ title, note, children, role, label }: SettingsGr
           role={role}
           aria-labelledby={role && title ? id : undefined}
           aria-label={!title ? label : undefined}
-          className="rounded-xl bg-raised divide-y divide-line overflow-hidden"
+          className={wide ? 'divide-y divide-line' : 'rounded-xl bg-raised divide-y divide-line overflow-hidden'}
         >
           {children}
         </div>
       )}
-      {note && <p className="m-0 px-1 text-[0.8125rem] text-ink-muted">{note}</p>}
+      {note && <p className={`m-0 text-[0.8125rem] text-ink-muted ${wide ? '' : 'px-1'}`}>{note}</p>}
     </section>
   )
 }
@@ -118,6 +142,7 @@ export function SettingsRow({
   icon, label, hint, value, onPress, disabled, locked, danger, center, trailing, role, checked,
 }: SettingsRowProps) {
   const pressable = !!onPress && !disabled && !locked
+  const wide = useSettingsWide()
 
   const content = (
     <>
@@ -127,7 +152,7 @@ export function SettingsRow({
         </span>
       )}
       <span className={`grid gap-0.5 min-w-0 flex-1 ${center ? 'justify-items-center' : ''}`}>
-        <span className={`text-[0.9375rem] font-medium leading-snug truncate ${danger ? 'text-danger' : 'text-ink'}`}>{label}</span>
+        <span className={`text-[0.9375rem] ${wide ? 'font-semibold' : 'font-medium'} leading-snug truncate ${danger ? 'text-danger' : 'text-ink'}`}>{label}</span>
         {hint && <span className="text-[0.8125rem] leading-snug text-ink-muted">{hint}</span>}
         {locked && (
           <span className="flex items-center gap-1 text-[0.8125rem] leading-snug text-ink-muted">
@@ -145,7 +170,7 @@ export function SettingsRow({
     </>
   )
 
-  const base = 'flex items-center gap-3 w-full min-h-13 px-4 py-2.5 text-left'
+  const base = `flex items-center w-full min-h-13 text-left ${wide ? 'gap-4 py-3.5' : 'gap-3 px-4 py-2.5'}`
   if (pressable) {
     return (
       <Pressable

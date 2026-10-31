@@ -3,21 +3,26 @@ import { cleanup, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  Outlet, RouterProvider, createMemoryHistory, createRootRoute, createRoute, createRouter,
+  Outlet, RouterProvider, createMemoryHistory, createRootRoute, createRoute, createRouter, useSearch,
 } from '@tanstack/react-router'
 import { renderWithClient, resetClient } from '../../test/render'
 import { CONTACTS, U, WS_ID } from '../../test/chat-fixtures'
 import { expectNoIds } from '../../test/no-ids'
 import { ApiError, apiFetch, apiUpload } from '../../api/client'
 import type { WorkspaceDetails } from '../../api/workspaces'
-import { validateSettingsSearch } from '../../lib/settings-search'
+import { tabOf, validateSettingsSearch, type SettingsSearch } from '../../lib/settings-search'
 import { loadPreferences, switchPreferencesTo } from '../../lib/preferences'
 import { queryClient } from '../../lib/query-client'
 import { keys } from '../../hooks/keys'
 import { useToastStore } from '../primitives'
 import { AppSidebar } from '../patterns/AppSidebar'
 import { PhoneSearchBar } from '../patterns/PhoneSearchBar'
+import { AppearanceTab } from './AppearanceTab'
+import { NotificationSettings } from './NotificationSettings'
+import { ProfileTab } from './ProfileTab'
 import { SettingsScreen } from './SettingsScreen'
+import { SettingsSectionScreen } from './SettingsSectionScreen'
+import { WorkspaceTab } from './WorkspaceTab'
 
 vi.mock('../../api/client', async (orig) => ({ ...(await orig<typeof import('../../api/client')>()), apiFetch: vi.fn(), apiUpload: vi.fn() }))
 const api = vi.mocked(apiFetch)
@@ -104,15 +109,47 @@ function fixtureApi(path: string, init?: RequestInit): Promise<unknown> {
   return Promise.reject(new Error(`unexpected ${method} ${path}`))
 }
 
+/**
+ * The panes of the former desktop tabs (Hồ sơ, Workspace, Giao diện, Thông báo), at the address that used to open
+ * each. Desktop Cài đặt is now a section list; these panes stay in the tree, and are tested here on their own, until
+ * their options are shown on the sections that replace them.
+ */
+function TabPane() {
+  const tab = tabOf(useSearch({ strict: false }) as SettingsSearch)
+  return (
+    <>
+      {tab === 'ho-so' && <ProfileTab />}
+      {tab === 'workspace' && <WorkspaceTab />}
+      {tab === 'giao-dien' && <AppearanceTab />}
+      {tab === 'thong-bao' && <NotificationSettings />}
+    </>
+  )
+}
+
 async function renderSettings(url = '/settings', { withNav = false } = {}) {
   const root = createRootRoute(withNav
     ? { component: () => (<><AppSidebar workspaceName={details.name} /><PhoneSearchBar scope={null} /><Outlet /></>) }
     : undefined)
-  const settings = createRoute({ getParentRoute: () => root, path: '/settings', validateSearch: validateSettingsSearch, component: SettingsScreen })
+  const settings = createRoute({ getParentRoute: () => root, path: '/settings', validateSearch: validateSettingsSearch, component: TabPane })
   const admin = createRoute({ getParentRoute: () => root, path: '/admin', component: () => <p>Quản trị</p> })
   const picker = createRoute({ getParentRoute: () => root, path: '/workspace-select', component: () => <p>Chọn workspace</p> })
   const router = createRouter({
     routeTree: root.addChildren([settings, admin, picker]),
+    history: createMemoryHistory({ initialEntries: [url] }),
+  })
+  await router.load()
+  renderWithClient(<RouterProvider router={router} />)
+  return router
+}
+
+/** Desktop Cài đặt as the app mounts it: `/settings` and `/settings/<section>`. */
+async function renderShell(url = '/settings') {
+  const root = createRootRoute()
+  const settings = createRoute({ getParentRoute: () => root, path: '/settings', validateSearch: validateSettingsSearch, component: () => <Outlet /> })
+  const index = createRoute({ getParentRoute: () => settings, path: '/', component: SettingsScreen })
+  const section = createRoute({ getParentRoute: () => settings, path: '$section', component: SettingsSectionScreen })
+  const router = createRouter({
+    routeTree: root.addChildren([settings.addChildren([index, section])]),
     history: createMemoryHistory({ initialEntries: [url] }),
   })
   await router.load()
@@ -151,40 +188,53 @@ afterEach(() => {
 const patch = (path: string) => calls.filter((c) => c.method === 'PATCH' && c.path === path)
 const toasts = () => useToastStore.getState().toasts.map((t) => t.message)
 
-describe('SettingsScreen: tabs', () => {
-  it('opens Hồ sơ, with the three tabs in the mockup\'s order', async () => {
-    await renderSettings()
+describe('SettingsScreen: section list', () => {
+  const sections = () => screen.findByRole('navigation', { name: 'Mục cài đặt' })
+
+  it('opens Tài khoản và hồ sơ beside the section list, in place of the old tabs', async () => {
+    await renderShell()
     expect(await screen.findByRole('heading', { level: 1, name: 'Cài đặt' })).toBeInTheDocument()
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Hồ sơ', 'Workspace', 'Giao diện', 'Thông báo'])
-    expect(screen.getByRole('tab', { name: 'Hồ sơ' })).toHaveAttribute('aria-selected', 'true')
-    expect(await screen.findByRole('form', { name: 'Hồ sơ' })).toBeInTheDocument()
+    const list = await sections()
+    expect(within(list).getByRole('link', { name: 'Tài khoản và hồ sơ' })).toHaveAttribute('aria-current', 'page')
+    for (const name of ['Thông báo', 'Giao diện, ngôn ngữ', 'Cài đặt workspace']) {
+      expect(within(list).getByRole('link', { name })).toBeInTheDocument()
+    }
+    expect(screen.queryByRole('tab')).toBeNull()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Tài khoản và hồ sơ' })).toBeInTheDocument()
   })
 
-  it('ends with the build the person is running, on every tab', async () => {
+  it('ends with the build the person is running, whatever section is open', async () => {
     vi.stubEnv('VITE_APP_VERSION', '2026.10.18 · 6368e8e')
-    await renderSettings()
-    expect(await screen.findByText('Phiên bản 2026.10.18 · 6368e8e')).toBeInTheDocument()
+    const user = userEvent.setup()
+    await renderShell()
+    expect(within(await sections()).getByText('Giới thiệu · 2026.10.18 · 6368e8e')).toBeInTheDocument()
+    await user.click(within(await sections()).getByRole('link', { name: 'Giao diện, ngôn ngữ' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Giao diện, ngôn ngữ' })).toBeInTheDocument()
+    expect(within(await sections()).getByText('Giới thiệu · 2026.10.18 · 6368e8e')).toBeInTheDocument()
   })
 
-  it('keeps the tab in the address, so a link or reload lands on it', async () => {
+  it('keeps the section in the address, so a link or reload lands on it', async () => {
     const user = userEvent.setup()
-    const router = await renderSettings()
-    await user.click(await screen.findByRole('tab', { name: 'Giao diện' }))
-    expect(router.state.location.search).toEqual({ tab: 'giao-dien' })
-    expect(await screen.findByRole('radiogroup', { name: 'Chủ đề' })).toBeInTheDocument()
+    const router = await renderShell()
+    await user.click(within(await sections()).getByRole('link', { name: 'Giao diện, ngôn ngữ' }))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/settings/appearance'))
+    expect(await screen.findByRole('switch', { name: 'Giảm chuyển động' })).toBeInTheDocument()
 
-    await user.click(screen.getByRole('tab', { name: 'Hồ sơ' }))
+    await user.click(within(await sections()).getByRole('link', { name: 'Tài khoản và hồ sơ' }))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/settings/account'))
     expect(router.state.location.search).toEqual({})
   })
 
-  it('opens the tab a link names', async () => {
-    await renderSettings('/settings?tab=giao-dien')
-    expect(await screen.findByRole('tab', { name: 'Giao diện', selected: true })).toBeInTheDocument()
+  it('opens the section that holds what an old tab link names', async () => {
+    const router = await renderShell('/settings?tab=giao-dien')
+    await waitFor(() => expect(router.state.location.pathname).toBe('/settings/appearance'))
+    expect(within(await sections()).getByRole('link', { name: 'Giao diện, ngôn ngữ' })).toHaveAttribute('aria-current', 'page')
   })
 
-  it('opens Hồ sơ for a tab it does not know', async () => {
-    await renderSettings('/settings?tab=nope')
-    expect(await screen.findByRole('tab', { name: 'Hồ sơ', selected: true })).toBeInTheDocument()
+  it('opens Tài khoản và hồ sơ for a tab it does not know', async () => {
+    const router = await renderShell('/settings?tab=nope')
+    await waitFor(() => expect(router.state.location.pathname).toBe('/settings/account'))
+    expect(within(await sections()).getByRole('link', { name: 'Tài khoản và hồ sơ' })).toHaveAttribute('aria-current', 'page')
   })
 })
 
