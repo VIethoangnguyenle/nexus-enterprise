@@ -38,7 +38,12 @@ Built (2026-10-19, plan `plans/261018-1742-mobile-ux-overhaul`, phases 04 and 05
 - Screens: Tôi, the module settings pages and Cài đặt workspace at `/settings/<section>` (below), opened from Tôi, from
   each module's ⋯, from the ⚙ of the workspace block in Thêm, from the ⋯ of the open workspace in the workspace picker and
   from the search action Cài đặt <phân hệ>. The phone's bottom bar is hidden on `/settings/*` and `/admin/*`; Quản trị
-  left the Thêm grid. The desktop Cài đặt tabs read and write the same settings.
+  left the Thêm grid.
+
+Built (2026-11-01, plan `plans/261101-0200-desktop-settings-parity`): desktop Cài đặt (1024px and wider) is a section
+list at the phone's addresses, replacing the tabs (Hồ sơ, Workspace, Giao diện, Thông báo). Each section renders the
+phone page's component and reads and writes the same stores; only the touch-only rows are left out. Lịch's settings
+dialog is gone: Cài đặt Lịch is its one settings place on both layouts.
 
 ## Requirements
 
@@ -58,17 +63,27 @@ not offered (no "seen by" screen exists). Theme and reduced motion stay device-o
 - **THEN** both screens show the same value, because both read the one stored option
 
 ### Requirement: One workspace settings page, rows by permission
-Below 1024px a workspace's own settings — name, description, members and invitations, departments, roles and
+A workspace's own settings — name, description, members and invitations, departments, roles and
 permissions, contacts scope, the group-creation rule, approval templates, asset types, storage — SHALL live on one
-"Cài đặt workspace" page, reached from the workspace block, the workspace picker and Tôi; it replaces the phone's
-Cài đặt → Workspace and the Quản trị entry. Each row SHALL appear only to people who can act on it, using the existing
-admin checks, and the server SHALL decide on every screen. A personal workspace shows only its name and storage. Changing
-a workspace's kind is never offered.
+"Cài đặt workspace" page (`/settings/workspace`, on a phone and a desktop), reached from the workspace block, the
+workspace picker and Tôi on a phone and from the section list on a desktop; it replaces the phone's Cài đặt → Workspace
+and Quản trị entry, and the desktop's Workspace tab. Each row SHALL appear only to people who can act on it, using the
+existing admin checks, and the server SHALL decide on every screen. A personal workspace shows only its name and storage.
+Changing a workspace's kind is never offered. On a desktop the same rows are on the page itself, nothing on a page of its
+own: the name and description are a form (read only, with who sets them, for a member), Ai được tạo nhóm is a drop-down,
+Mời opens the invite dialog in place, Quản trị viên opens its list in place, a row with a count opens the existing Quản trị,
+Phê duyệt or Tài sản screen with the workspace kept, and the Loại workspace card and Rời follow.
 
 #### Scenario: Member opens workspace settings
 - **WHEN** a member who is not an administrator opens Cài đặt workspace in an organization
 - **THEN** they see the name, description, administrators, the rules (read only), their profile in the organization and
   Rời; no member, role, department, template or storage management is offered, and crafted requests to them are refused
+
+#### Scenario: Administrator on a desktop
+- **WHEN** an organization administrator opens `/settings/workspace` at 1440px and renames the workspace
+- **THEN** the page shows Thông tin as a form, Thành viên, Phòng ban, Vai trò và quyền, Mẫu phê duyệt and Loại tài sản
+  with their counts, pending invitations, Phạm vi danh bạ, Ai được tạo nhóm, storage, the Loại workspace card and Rời;
+  saving sends only `{"name": …}` and the switcher shows the new name
 
 ### Requirement: Only a member reads or writes their settings in a workspace
 Every settings route that names a workspace SHALL require the caller to be a member of it; a person SHALL only ever read
@@ -165,10 +180,16 @@ and only a list the body carries is checked against the calendars the caller can
 `pause_until` when they are omitted (`null` for `pause_until` resumes). Screens therefore send only the change, so a stale
 copy of the other fields on one device never overwrites a change made on another.
 
-#### Scenario: The desktop calendar dialog saves its four fields
+#### Scenario: Working hours from Cài đặt Lịch
 - **WHEN** a person who turned off invitation, change and reminder notices and chose a week start, default view, default
-  duration and visible calendars on the phone then saves the zone, working hours and reminder in the desktop dialog
-- **THEN** the zone, hours and reminder change and the other seven settings keep their values
+  duration and visible calendars on the phone then moves the end of their working day to 18:00 in Cài đặt Lịch (the
+  inline pair on a desktop, the Giờ làm việc page on a phone)
+- **THEN** the body is `{"workEnd": "18:00"}`, only `workEnd` changes and every other setting keeps its value
+- **AND** an end not after the start is refused on the page ("Giờ kết thúc phải sau giờ bắt đầu.") and nothing is sent
+
+#### Scenario: Lịch has one settings place
+- **WHEN** a person presses ⚙ in Lịch on a desktop
+- **THEN** `/settings/calendar` opens with the workspace kept; Lịch has no settings dialog of its own
 
 #### Scenario: One switch from a module page
 - **WHEN** a person turns off "Được chia sẻ tài liệu" in Cài đặt Tài liệu
@@ -178,14 +199,35 @@ copy of the other fields on one device never overwrites a change made on another
 - **WHEN** a save carries one invalid field (an unknown view, an end of the working day before its start)
 - **THEN** the answer is 400 or 422 and nothing is written
 
-### Requirement: Settings pages have their own address on a phone
+### Requirement: Settings pages have their own address on a phone and a desktop
 The settings pages SHALL be addressed as `/settings/<section>` with the workspace in `?ws=`: `account`, `org-profile`,
 `notifications`, `appearance`, `sessions`, `workspace` (Cài đặt workspace), and one per module — `chat`, `calendar`,
-`drive`, `approval`, `assets`. Below 1024px `/settings` itself is Tôi; on a desktop it is the tabbed Cài đặt
-(`?tab=workspace`, `giao-dien`, `thong-bao`). Each page is the same whichever entry point opened it, and going back
-returns to that entry point (Tôi when there is no history). An address naming no page, or a page the workspace does not
-have (`org-profile`, `approval` and `assets` in a personal workspace), lands on `/settings` instead of an error. Danh bạ
-has no settings page. Neither the settings pages nor the administration screens (`/admin/*`) show the phone's bottom bar.
+`drive`, `approval`, `assets`. Both layouts use the same addresses. Each page is the same whichever entry point opened
+it. Danh bạ has no settings page. Neither the settings pages nor the administration screens (`/admin/*`) show the phone's
+bottom bar.
+
+Below 1024px `/settings` itself is Tôi, each page fills the screen, and going back returns to the entry point (Tôi when
+there is no history). An address naming no page, or a page the workspace does not have (`org-profile`, `approval` and
+`assets` in a personal workspace), lands on `/settings`.
+
+At 1024px and wider, Cài đặt SHALL be a section list beside the open section (DESIGN.md §6 "Cài đặt trên máy tính"). The
+list has two groups, as Tôi does: *Tài khoản* (Tài khoản và hồ sơ, Thông báo, Giao diện và ngôn ngữ, Thiết bị và phiên)
+and *Trong <workspace>* (an organization: Hồ sơ trong tổ chức, Chat, Lịch, Tài liệu, Phê duyệt, Tài sản, Cài đặt
+workspace; a personal workspace: Chat, Lịch, Tài liệu, Cài đặt workspace). The list ends with Giới thiệu and the build.
+Each item SHALL be a link to its `/settings/<section>` that keeps the workspace, so reload and Back keep the section.
+`/settings` opens Tài khoản và hồ sơ. An old tab address (`?tab=ho-so`, `workspace`, `giao-dien`, `thong-bao`) SHALL be
+replaced by the section that holds its options (`account`, `workspace`, `appearance`, `notifications`), and a tab it does
+not know by `account`. A page the workspace does not have lands on `/settings/account`. A section has no back button.
+
+A desktop section SHALL offer every option of the phone page, except rows that only shape a touch screen: Enter để gửi,
+Mở Chat ở, Sắp xếp Chat, Cảm xúc khi chạm đúp, Thanh đáy, Tải ảnh xem trước bằng dữ liệu di động, Lịch's Chế độ xem and
+Thời lượng mặc định, and Phê duyệt's Sắp xếp. Those rows stay on the phone, unchanged. A choice among 4 or more values is a
+drop-down and among 2–3 a segmented control; both save on change, as a switch saves on press. A refused save puts the
+old value back and says so. Text fields are a form with Lưu thay đổi (Tài khoản và hồ sơ, Hồ sơ trong tổ chức, the
+workspace's Thông tin), and the form sends only the fields that changed. The "Báo cho tôi khi" switches for each kind of
+event are in that module's section (Chat: direct messages, mentions, followed threads, incoming calls). Thông báo keeps
+Tạm dừng thông báo, push on this device (with the steps to allow it when the browser blocks it), Giờ yên lặng and the
+Theo phân hệ rows that open each module's section.
 
 #### Scenario: A module's ⋯
 - **WHEN** a person opens the ⋯ on the title of Chat, Lịch, Tài liệu, Phê duyệt or Tài sản on a phone
@@ -197,7 +239,37 @@ has no settings page. Neither the settings pages nor the administration screens 
 
 #### Scenario: A page a personal workspace does not have
 - **WHEN** someone in a personal workspace opens `/settings/approval`
-- **THEN** they land on `/settings`
+- **THEN** on a phone they land on `/settings`; on a desktop they land on `/settings/account`, and the section list has
+  no Hồ sơ trong tổ chức, Phê duyệt or Tài sản
+
+#### Scenario: Desktop Cài đặt opens on Tài khoản và hồ sơ
+- **WHEN** a person opens `/settings` at 1440px
+- **THEN** the section list shows both groups and ends with Giới thiệu and the build, Tài khoản và hồ sơ is the current
+  item and is open beside it, and there are no tabs
+
+#### Scenario: A section keeps its address
+- **WHEN** a person on a desktop picks Thiết bị và phiên in the section list, then reloads
+- **THEN** the address is `/settings/sessions` with the workspace kept, and the same section is open and current after
+  the reload
+
+#### Scenario: An old tab link
+- **WHEN** a person on a desktop opens `/settings?tab=giao-dien` (or `workspace`, `thong-bao`, `ho-so`, or an unknown tab)
+- **THEN** the address is replaced by `/settings/appearance` (`workspace`, `notifications`, `account`, `account`), with
+  the workspace kept, and Back does not return to the tab address
+
+#### Scenario: Touch-only rows are phone-only
+- **WHEN** a person opens Cài đặt Chat on a desktop and then on a phone
+- **THEN** the desktop shows the four "Báo cho tôi khi" switches and Mức mặc định cho nhóm mới, with no Enter để gửi, Mở
+  Chat ở, Sắp xếp or Cảm xúc khi chạm đúp; the phone shows those rows as before
+
+#### Scenario: Kinds of notification live in the module
+- **WHEN** a person on a desktop turns off Cuộc gọi đến in Cài đặt Chat
+- **THEN** push preferences are saved with `incoming_call` off and every other kind and the quiet hours as they were, and
+  desktop Thông báo shows no per-kind switch, only Tạm dừng, push on this device, Giờ yên lặng and Theo phân hệ
+
+#### Scenario: A refused save on a desktop
+- **WHEN** a save of a drop-down, segmented choice or switch in a desktop section is refused
+- **THEN** the control shows the old value again and a toast says it was not saved
 
 ### Requirement: A person lists only their own sessions
 `GET /api/auth/sessions` (auth service) SHALL list the signed-in sessions of the caller only — the user comes from the

@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import type { ChatSettings as ChatOptions } from '../../../api/settings'
 import { useActiveWorkspace } from '../../../hooks/useActiveWorkspace'
-import { useBottomBarLayout } from '../../../hooks/usePhone'
 import { usePushPreferences } from '../../../hooks/usePushPreferences'
 import { useServerSettings } from '../../../hooks/useServerSettings'
 import { useWorkspaceLocks } from '../../../hooks/useWorkspaces'
@@ -11,7 +10,10 @@ import { levelOptions } from '../../../lib/notification-level-copy'
 import { CHAT_DEFAULTS } from '../../../lib/settings-defaults'
 import type { PushPreferences } from '../../../lib/push'
 import { ChoicePage, SettingsGroup, SettingsPage, SettingsRow, SettingsSwitch, choiceLabel, type Choice } from '../SettingsGroup'
+import { SettingsChoice } from '../SettingsChoice'
+import { useSettingsWide } from '../settings-layout'
 import { useSettingsNav } from '../settings-nav'
+import { useWorkspaceLead } from './workspace-lead'
 import { GroupCreationRow } from '../GroupCreationRow'
 
 export { CHAT_DEFAULTS }
@@ -52,15 +54,17 @@ const KINDS: { kind: Kind; label: string; hint?: string }[] = [
  * toast when the server refuses.
  *
  * Enter để gửi, Mở Chat ở and Sắp xếp change the composer and the chip list below 1024px only (a wide screen keeps
- * Enter sends and its own list), so a wide screen does not offer them. Xem trước liên kết is not offered: messages
- * have no link previews yet, so the switch would change nothing.
+ * Enter sends and its own list), and a double tap is a touch gesture, so the desktop shell (`useSettingsWide`) does
+ * not offer them (DESIGN.md §6 "Cài đặt trên máy tính"). Xem trước liên kết is not offered: messages have no link
+ * previews yet, so the switch would change nothing.
  */
 export function ChatSettings() {
   const { back } = useSettingsNav()
   const navigate = useNavigate()
   const { workspaceId } = useActiveWorkspace()
   const { isPersonal } = useWorkspaceType()
-  const compact = useBottomBarLayout()
+  const wide = useSettingsWide()
+  const lead = useWorkspaceLead()
   const { settings, save } = useServerSettings('chat', workspaceId, CHAT_DEFAULTS)
   const push = usePushPreferences()
   const locks = useWorkspaceLocks(isPersonal ? '' : workspaceId)
@@ -99,7 +103,7 @@ export function ChatSettings() {
 
   const kinds = push.prefs?.kinds
   return (
-    <SettingsPage title="Cài đặt Chat" onBack={back}>
+    <SettingsPage title={wide ? 'Chat' : 'Cài đặt Chat'} lead={lead} onBack={back}>
       <SettingsGroup title="Thông báo" note={push.isError ? 'Không tải được thông báo đẩy. Thử lại sau.' : undefined}>
         {KINDS.map(({ kind, label, hint }) => (
           <SettingsSwitch
@@ -111,31 +115,36 @@ export function ChatSettings() {
             onChange={(on) => void push.save((p) => ({ ...p, kinds: { ...p.kinds, [kind]: on } }))}
           />
         ))}
-        <SettingsRow
+        <SettingsChoice
           label="Mức mặc định cho nhóm mới"
-          value={LEVEL_SHORT[levelOf(settings.default_level)]}
-          onPress={() => setChoosing('level')}
+          hint={wide ? 'Mỗi nhóm đổi được trong cài đặt của nhóm đó.' : undefined}
+          value={levelOf(settings.default_level)}
+          valueLabel={LEVEL_SHORT[levelOf(settings.default_level)]}
+          choices={LEVELS}
+          menu
+          onPick={(default_level) => void save({ default_level })}
+          onOpen={() => setChoosing('level')}
         />
       </SettingsGroup>
 
-      <SettingsGroup title="Soạn và đọc">
-        {compact && (
+      {!wide && (
+        <SettingsGroup title="Soạn và đọc">
           <SettingsSwitch
             label="Enter để gửi"
             hint="Tắt: Enter xuống dòng, chạm nút Gửi để gửi"
             checked={!!settings.enter_to_send}
             onChange={(enter_to_send) => void save({ enter_to_send })}
           />
-        )}
-        <SettingsRow
-          label="Cảm xúc khi chạm đúp"
-          value={settings.double_tap ? settings.double_tap : 'Tắt'}
-          onPress={() => setChoosing('doubleTap')}
-        />
-      </SettingsGroup>
+          <SettingsRow
+            label="Cảm xúc khi chạm đúp"
+            value={settings.double_tap ? settings.double_tap : 'Tắt'}
+            onPress={() => setChoosing('doubleTap')}
+          />
+        </SettingsGroup>
+      )}
 
       <SettingsGroup title="Danh sách">
-        {compact && (
+        {!wide && (
           <>
             <SettingsRow
               label="Mở Chat ở"

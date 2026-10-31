@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
-import { ArrowLeft, Check, CircleAlert, ClipboardCheck, FileText, History, MoreHorizontal, Plus, SearchX, Settings2, Undo2 } from 'lucide-react'
+import { ArrowLeft, Check, CircleAlert, ClipboardCheck, FileText, History, MoreHorizontal, Plus, SearchX, Settings, Settings2, Undo2 } from 'lucide-react'
 import { useRegisterCreateAction } from '../../hooks/useModuleCreateAction'
 import { useModuleSettings } from '../../hooks/useModuleSettings'
 import type { ApprovalRequest, ApprovalTemplate } from '../../api/approval'
@@ -34,6 +34,7 @@ import { ModuleHeader } from '../patterns/ModuleHeader'
 import { ScrollTabs } from '../patterns/ScrollTabs'
 import { PullToRefresh } from '../patterns/PullToRefresh'
 import type { SwipeAction } from '../patterns/SwipeRow'
+import { useSettingsNav } from '../settings/settings-nav'
 import { EmptyState } from '../spaces/EmptyState'
 import { ApprovalDetailPanel } from './ApprovalDetailPanel'
 import { ApprovalTable, type RealtimeTag } from './ApprovalTable'
@@ -239,6 +240,7 @@ export function ApprovalScreen() {
 
   // Before anything is typed: Tìm gần đây, what waits on me and my own requests (DESIGN.md "Gợi ý trong ô tìm").
   const phone = useBottomBarLayout()
+  const settingsNav = useSettingsNav()
   const searchRef = useRef<HTMLInputElement>(null)
   const suggestRequest = (row: ApprovalRow, meta: string, icon: ReactNode) => ({
     key: row.request.id,
@@ -508,6 +510,11 @@ export function ApprovalScreen() {
                 </>
               ) : (
                 newRequest
+              )}
+              {!phone && (
+                <IconButton size="lg" shape="round" aria-label="Cài đặt Phê duyệt" title="Cài đặt Phê duyệt" onClick={() => settingsNav.open('approval')}>
+                  <Settings size={20} strokeWidth={1.75} />
+                </IconButton>
               )}
             </div>
           </header>

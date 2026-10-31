@@ -77,11 +77,59 @@ describe('Tôi', () => {
     expect(await screen.findByRole('button', { name: /^Tạm dừng thông báo\s*Đến \d\d:\d\d/ })).toBeInTheDocument()
   })
 
-  it('on a wide screen /settings stays the tabs', async () => {
+  it('on a wide screen /settings is the section list, not Tôi', async () => {
     viewport(false)
     await renderSettings(`/settings?ws=${WS}`)
-    expect(await screen.findByRole('tablist', { name: 'Cài đặt' })).toBeInTheDocument()
+    expect(await screen.findByRole('navigation', { name: 'Mục cài đặt' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Tôi' })).toBeNull()
+  })
+})
+
+describe('Tài khoản và hồ sơ and Hồ sơ trong tổ chức', () => {
+  const profilePatches = () => server.writes.filter((w) => w.method === 'PATCH' && w.path === '/me/profile').map((w) => w.body)
+
+  it('in an organization the account page keeps the name, place and email; title, department and role are not on it', async () => {
+    await renderSettings(`/settings/account?ws=${WS}`)
+    const account = await screen.findByRole('region', { name: 'Tài khoản và hồ sơ' })
+    await within(account).findByText('Lê Thị Hoa')
+    for (const label of ['Tên hiển thị', 'Nơi làm việc', 'Email đăng nhập']) expect(within(account).getByText(label), label).toBeInTheDocument()
+    for (const label of ['Chức danh', 'Phòng ban', 'Vai trò']) expect(within(account).queryByText(label), label).toBeNull()
+    expect(within(account).queryByText('Kế toán trưởng')).toBeNull()
+    expect(within(account).queryByText('Phòng Tài chính')).toBeNull()
+    expect(within(account).queryByText('Chủ sở hữu')).toBeNull()
+    expectNoIds()
+  })
+
+  it('in an organization Hồ sơ trong tổ chức holds the title, and the department and role an administrator set', async () => {
+    await renderSettings(`/settings/org-profile?ws=${WS}`)
+    const org = await screen.findByRole('region', { name: 'Hồ sơ trong tổ chức' })
+    expect(await within(org).findByRole('button', { name: /^Chức danh.*Kế toán trưởng/ })).toBeInTheDocument()
+    expect(within(org).getByText('Phòng ban')).toBeInTheDocument()
+    expect(await within(org).findByText('Phòng Tài chính')).toBeInTheDocument()
+    expect(within(org).getByText('Vai trò')).toBeInTheDocument()
+    expect(within(org).getByText('Chủ sở hữu')).toBeInTheDocument()
+    expectNoIds()
+  })
+
+  it('in an organization the title is changed from Hồ sơ trong tổ chức, sending only the title', async () => {
+    const user = userEvent.setup()
+    await renderSettings(`/settings/org-profile?ws=${WS}`)
+    await user.click(await screen.findByRole('button', { name: /^Chức danh.*Kế toán trưởng/ }))
+    const field = await screen.findByRole('textbox', { name: 'Chức danh' })
+    await user.clear(field)
+    await user.type(field, 'Giám đốc tài chính')
+    await user.click(screen.getByRole('button', { name: 'Lưu' }))
+    await waitFor(() => expect(profilePatches()).toEqual([{ title: 'Giám đốc tài chính' }]))
+  })
+
+  it('in a personal workspace the account page keeps the title, with no department or role', async () => {
+    server.personal = true
+    await renderSettings(`/settings/account?ws=${WS}`)
+    const account = await screen.findByRole('region', { name: 'Tài khoản và hồ sơ' })
+    expect(await within(account).findByRole('button', { name: /^Chức danh.*Kế toán trưởng/ })).toBeInTheDocument()
+    for (const label of ['Tên hiển thị', 'Nơi làm việc', 'Email đăng nhập']) expect(within(account).getByText(label), label).toBeInTheDocument()
+    expect(within(account).queryByText('Phòng ban')).toBeNull()
+    expect(within(account).queryByText('Vai trò')).toBeNull()
   })
 })
 
@@ -199,15 +247,14 @@ describe('module pages', () => {
   it('on a wide screen the options that only shape the phone are not offered', async () => {
     viewport(false)
     await renderSettings(`/settings/chat?ws=${WS}`)
-    await screen.findByRole('heading', { name: 'Cài đặt Chat' })
+    await screen.findByRole('heading', { level: 1, name: 'Chat' })
     expect(screen.queryByRole('switch', { name: /^Enter để gửi/ })).toBeNull()
-    for (const label of ['Mở Chat ở', 'Sắp xếp']) expect(screen.queryByRole('button', { name: new RegExp(`^${label}`) }), label).toBeNull()
-    expect(screen.getByRole('button', { name: /^Cảm xúc khi chạm đúp/ })).toBeInTheDocument()
+    for (const label of ['Mở Chat ở', 'Sắp xếp', 'Cảm xúc khi chạm đúp']) expect(screen.queryByRole('button', { name: new RegExp(`^${label}`) }), label).toBeNull()
     cleanup()
     resetClient()
 
     await renderSettings(`/settings/calendar?ws=${WS}`)
-    await screen.findByRole('button', { name: /^Tuần bắt đầu vào/ })
+    await screen.findByRole('radiogroup', { name: 'Tuần bắt đầu vào' })
     for (const label of ['Chế độ xem mặc định', 'Thời lượng mặc định']) expect(screen.queryByRole('button', { name: new RegExp(`^${label}`) }), label).toBeNull()
     cleanup()
     resetClient()
@@ -215,6 +262,33 @@ describe('module pages', () => {
     await renderSettings(`/settings/approval?ws=${WS}`)
     await screen.findByRole('switch', { name: 'Đề nghị chờ bạn duyệt' })
     expect(screen.queryByRole('button', { name: /^Sắp xếp/ })).toBeNull()
+  })
+
+  it('Lịch: Giờ làm việc shows the hours and its page saves only the end picked', async () => {
+    const user = userEvent.setup()
+    await renderSettings(`/settings/calendar?ws=${WS}`)
+    await user.click(await screen.findByRole('button', { name: /^Giờ làm việc\s*08:00–17:30/ }))
+    expect(await screen.findByRole('heading', { name: 'Giờ làm việc' })).toBeInTheDocument()
+    const start = screen.getByRole('radiogroup', { name: 'Bắt đầu' })
+    expect(within(start).getByRole('radio', { name: '08:00' })).toHaveAttribute('aria-checked', 'true')
+    const end = screen.getByRole('radiogroup', { name: 'Kết thúc' })
+    await user.click(within(end).getByRole('radio', { name: '18:00' }))
+    await waitFor(() => expect(server.writes).toEqual([
+      { method: 'PUT', path: `/workspaces/${WS}/calendar/settings`, body: { workEnd: '18:00' } },
+    ]))
+    expect(within(end).getByRole('radio', { name: '18:00' })).toHaveAttribute('aria-checked', 'true')
+    await user.click(screen.getByRole('button', { name: 'Quay lại' }))
+    expect(await screen.findByRole('button', { name: /^Giờ làm việc\s*08:00–18:00/ })).toBeInTheDocument()
+  })
+
+  it('Lịch: an end not after the start is refused on the page and nothing is sent', async () => {
+    const user = userEvent.setup()
+    await renderSettings(`/settings/calendar?ws=${WS}`)
+    await user.click(await screen.findByRole('button', { name: /^Giờ làm việc/ }))
+    const end = await screen.findByRole('radiogroup', { name: 'Kết thúc' })
+    await user.click(within(end).getByRole('radio', { name: '08:00' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Giờ kết thúc phải sau giờ bắt đầu.')
+    expect(server.writes).toEqual([])
   })
 
   it('Tài liệu: a refused save puts the old value back', async () => {

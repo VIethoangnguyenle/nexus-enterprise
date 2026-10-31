@@ -191,7 +191,7 @@ mã backend, email và tài liệu kỹ thuật không đổi.
     khoản: tên, vai trò, trạng thái, Cài đặt tài khoản, Đăng xuất.
   - *Phiên bản (2026-10-18):* để người dùng biết máy mình đã nhận bản mới sau một lần triển khai. Dạng
     `2026.10.18 · 6368e8e` (ngày build giờ Việt Nam · 7 ký tự commit), chạy máy dev ghi `dev`. Một dòng "Phiên bản …"
-    `text-xs` `--color-ink-muted`, chọn chép được, ở cuối màn Cài đặt (mọi tab), cuối menu tài khoản (máy tính, sau
+    `text-xs` `--color-ink-muted`, chọn chép được, ở cuối danh mục Cài đặt (máy tính), cuối menu tài khoản (máy tính, sau
     divider) và dòng Giới thiệu của trang Tôi (điện thoại). Thanh "Có bản mới" không đổi.
   - *Đổi workspace:* bấm ô chữ cái (hay tên khi mở rộng) mở cùng một menu; đầu menu ghi đầy đủ tên workspace
     đang mở (xuống dòng, không cắt) + dòng phụ ("Workspace cá nhân" hoặc tên tổ chức) · vai trò; danh sách
@@ -608,8 +608,8 @@ màn Được nhắc và Đã gắn sao giữ nguyên route của chúng.
   thôi. Cho phép → toast success; chặn → toast + hướng dẫn trong Cài đặt. iPhone chưa thêm vào màn hình chính: thẻ đổi
   thành lời mời thêm vào màn hình chính.
 - **Cài đặt → Thông báo (máy tính):** là bản máy tính của các tuỳ chọn thông báo theo phân hệ ở §6 "Cài đặt" (cùng một nơi lưu, hai lối vào); điện thoại dùng Tôi → Thông báo. Nhóm "Thiết bị này" (Switch thông báo đẩy, khoá + banner `danger-wash` có 3 bước mở lại khi
-  trình duyệt chặn; banner `info-wash` cho iPhone chưa cài), "Báo cho tôi khi" (5 Switch theo loại, icon 32 radius 9 nền
-  sunk), "Nội dung và giờ" (Xem trước nội dung, Giờ yên lặng + hai select từ/đến; giờ yên lặng chặn push trừ khi bạn được nhắc tên, kể cả @Tất cả). Lưu ngay, không hộp xác nhận; tắt
+  trình duyệt chặn; banner `info-wash` cho iPhone chưa cài), Tạm dừng thông báo, Giờ yên lặng + hai select từ/đến (giờ yên lặng chặn push trừ khi bạn được nhắc tên, kể cả @Tất cả),
+  và "Theo phân hệ" dẫn tới mục của từng phân hệ, nơi có các Switch theo loại việc (từ 2026-11-01, xem §6 "Cài đặt trên máy tính"). Lưu ngay, không hộp xác nhận; tắt
   thiết bị thì các mục dưới mờ 50% nhưng giữ giá trị. Hàng ≥ 56, Switch 44 × 26.
 - **Cài app:** Android — thanh nổi trên thanh đáy (icon app 44, "Cài Nexus vào màn hình chính" + một dòng mờ, Để sau /
   Cài đặt) từ lần mở thứ hai, chỉ ở danh sách, không trong cuộc trò chuyện; iPhone — sheet một lần với 3 bước có số
@@ -1057,7 +1057,31 @@ Danh bạ kiểu Lark: list panel chọn danh mục (§5), content duyệt danh 
 ### Cài đặt: Tôi, cài đặt phân hệ, workspace cá nhân và tổ chức (mockup `design/mockups/mobile-shell.html` §3, §4, §8, duyệt 2026-10-19)
 
 Mỗi tuỳ chọn có **một chỗ ở**; lối vào khác nhau mở cùng một trang. Cài đặt chia hai lớp: **Tài khoản** (theo người, mọi
-workspace dùng chung) và **Trong workspace này** (theo workspace). Máy tính giữ trang Cài đặt có tab, đọc cùng dữ liệu.
+workspace dùng chung) và **Trong workspace này** (theo workspace). Máy tính có cùng các mục, cùng dữ liệu (xem "Cài đặt trên máy tính" dưới).
+- **Cài đặt trên máy tính (≥ 1024; mockup `design/mockups/settings-desktop.html`, duyệt 2026-11-01):** thay thanh tab cũ
+  bằng **danh mục bên trái** 248px trong trang Cài đặt, hai nhóm như Tôi: *Tài khoản* (Tài khoản và hồ sơ · Thông báo ·
+  Giao diện và ngôn ngữ · Thiết bị và phiên) và *Trong <workspace>* (tổ chức: Hồ sơ trong tổ chức · Chat · Lịch · Tài
+  liệu · Phê duyệt · Tài sản · Cài đặt workspace; cá nhân: Chat · Lịch · Tài liệu · Cài đặt workspace), cuối danh mục là
+  dòng Giới thiệu (phiên bản). Mục đang mở nền `--color-accent-wash`, chữ accent. Mỗi mục là `/settings/<mục>` như điện
+  thoại; `/settings` mở Tài khoản và hồ sơ; `?tab=ho-so|workspace|giao-dien|thong-bao` cũ mở mục tương ứng. Bên phải:
+  tiêu đề mục (display 19/700) + dòng mờ "Dùng chung mọi workspace" / "Trong <workspace>", rồi các nhóm: tiêu đề nhóm 13/600
+  mờ, hàng phẳng có divider (không thẻ), rộng tối đa 680. Chọn giá trị: ô chọn thả xuống (từ 4 lựa chọn) hoặc Segmented
+  (2–3), lưu ngay; công tắc lưu ngay; trường chữ là biểu mẫu với Lưu thay đổi (Tài khoản và hồ sơ, Hồ sơ trong tổ chức,
+  Thông tin của workspace). Giờ yên lặng và Giờ làm việc: hai ô giờ trên một dòng. Lịch đang hiện: ô đánh dấu ngay trong
+  dòng. Dòng chỉ có nghĩa trên màn cảm ứng không hiện: Enter để gửi, Mở Chat ở, Sắp xếp Chat, Cảm xúc khi chạm đúp, Thanh
+  đáy, Tải ảnh xem trước bằng dữ liệu di động, Chế độ xem và Thời lượng mặc định của Lịch, Sắp xếp Phê duyệt. Các công
+  tắc "Báo cho tôi khi" theo loại việc nằm ở mục phân hệ (Chat…), Thông báo chỉ giữ Tạm dừng, thông báo đẩy trên máy này
+  (banner 3 bước khi trình duyệt chặn), Giờ yên lặng và nhóm Theo phân hệ dẫn tới từng mục. Cài đặt workspace trên máy tính
+  có đủ các dòng của §11 (dòng có chevron mở màn Quản trị hiện có; Mời mở hộp thoại mời) và giữ thẻ Loại workspace.
+  Lịch chỉ có một chỗ cài đặt: Giờ làm việc vào mục Lịch (cả điện thoại), hộp thoại cài đặt trong Lịch bỏ, nút ⚙ của Lịch
+  mở `/settings/calendar`.
+- **Lối vào Cài đặt từ phân hệ trên máy tính (mockup `settings-desktop.html` §7, duyệt 2026-11-01):** máy tính không có ⋯ của
+  phân hệ, nên mỗi phân hệ có nút ⚙ như của Lịch (`IconButton` tròn, icon 20, tên "Cài đặt <phân hệ>"), mở
+  `/settings/<phân hệ>` giữ workspace. Chat: cạnh nút Mới ở đầu cột danh sách. Tài liệu, Phê duyệt, Tài sản: nút cuối bên
+  phải đầu trang. Danh bạ không có.
+- **Hồ sơ trong tổ chức là chỗ duy nhất của thông tin theo tổ chức (duyệt 2026-11-01, cả điện thoại và máy tính):** ở
+  workspace tổ chức, Chức danh (sửa), Phòng ban và Vai trò (chỉ đọc) chỉ nằm ở Hồ sơ trong tổ chức; Tài khoản và hồ sơ giữ
+  ảnh, Tên hiển thị, Nơi làm việc, Email. Workspace cá nhân không có Hồ sơ trong tổ chức nên Chức danh ở Tài khoản và hồ sơ.
 - **Tôi (dưới 1024; chạm avatar ở thanh trên):** trang toàn màn trượt từ phải, ẩn thanh đáy; thay bốn lối vào cũ (☰ → Cài
   đặt, sheet tài khoản với Cài đặt thông báo / Cài đặt tài khoản / Cài đặt, Thêm → Thông báo của Chat). Từ trên: thẻ hồ sơ
   (avatar 64, tên display 18/700, dòng phụ — tổ chức: "chức danh · phòng"; cá nhân: email — pill trạng thái, pill loại

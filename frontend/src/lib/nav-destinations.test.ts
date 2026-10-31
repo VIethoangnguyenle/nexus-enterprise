@@ -3,6 +3,7 @@ import {
   barModules, chatTabOf, defaultBar, footDestinations, footNavItems, isModuleBarPath, isPhoneDetailPath, mainDestinations,
   moduleOfPath, phoneNameOf, resolveBar, searchHintOf, validateChannelsSearch, chatOverlayOf,
 } from './nav-destinations'
+import { SETTINGS_SECTIONS } from '../components/settings/settings-nav'
 
 describe('destinations by workspace type', () => {
   it('offers the six main destinations to an organization, Lịch right after Tin nhắn', () => {
@@ -59,6 +60,18 @@ describe('moduleOfPath', () => {
 
   it('knows nothing of a path outside the modules', () => {
     expect(moduleOfPath('/workspace-select')).toBeUndefined()
+  })
+
+  // A module's settings page lives under Cài đặt, so the menu marks Cài đặt, not the module it configures.
+  it.each(SETTINGS_SECTIONS.map((s) => `/settings/${s}`))('%s belongs to Cài đặt', (path) => {
+    expect(moduleOfPath(path)).toBe('settings')
+  })
+
+  it('keeps a module path that is not under Cài đặt with its module', () => {
+    expect(moduleOfPath('/settings/')).toBe('settings')
+    expect(moduleOfPath('/calendar')).toBe('calendar')
+    expect(moduleOfPath('/drive/folder/settings')).toBe('drive')
+    expect(moduleOfPath('/admin/settings')).toBe('admin')
   })
 })
 

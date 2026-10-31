@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithClient, resetClient } from '../../test/render'
 import { routerState } from '../../test/router-mock'
-import { CH, UUID_RE } from '../../test/chat-fixtures'
+import { CH, UUID_RE, WS_ID } from '../../test/chat-fixtures'
 import { useNavCollapseStore } from '../../stores/nav-collapse.store'
 import { ChatNavigator } from './ChatNavigator'
 
@@ -95,6 +95,40 @@ describe('ChatNavigator', () => {
     expect(within(menu).getByRole('menuitem', { name: 'Tạo nhóm' })).toBeInTheDocument()
     // Browse spaces needs a backend that does not exist yet: hidden, not stubbed.
     expect(within(menu).queryByText('Duyệt nhóm')).toBeNull()
+  })
+
+  it('on a wide screen a gear beside "Mới" opens Cài đặt Chat in the same workspace', async () => {
+    const user = userEvent.setup()
+    routerState.navigate.mockClear()
+    renderWithClient(<ChatNavigator />)
+    const nav = await screen.findByRole('navigation', { name: 'Trò chuyện' })
+    const create = within(nav).getByRole('button', { name: 'Trò chuyện mới' })
+    const gear = within(nav).getByRole('button', { name: 'Cài đặt Chat' })
+    expect(gear).toHaveAttribute('title', 'Cài đặt Chat')
+    expect(gear.parentElement).toBe(create.parentElement)
+    await user.click(gear)
+    expect(routerState.navigate).toHaveBeenCalledTimes(1)
+    const call = routerState.navigate.mock.calls[0]?.[0] as {
+      to: string; params: { section: string }; search: (prev: Record<string, unknown>) => unknown
+    }
+    expect(call.to).toBe('/settings/$section')
+    expect(call.params).toEqual({ section: 'chat' })
+    // Only the workspace follows; the open conversation stays behind.
+    expect(call.search({ ws: WS_ID, thread: 'x' })).toEqual({ ws: WS_ID })
+  })
+
+  it('a phone has no gear: its ⋯ already leads there', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query.includes('max-width'), media: query, addEventListener: () => {}, removeEventListener: () => {},
+    }))
+    try {
+      renderWithClient(<ChatNavigator />)
+      const nav = await screen.findByRole('navigation', { name: 'Trò chuyện' })
+      expect(within(nav).getByRole('button', { name: 'Trò chuyện mới' })).toBeInTheDocument()
+      expect(within(nav).queryByRole('button', { name: 'Cài đặt Chat' })).toBeNull()
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 
   it('never renders an identifier', async () => {

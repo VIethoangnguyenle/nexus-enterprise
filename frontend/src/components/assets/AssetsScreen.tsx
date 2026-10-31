@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
-import { CircleAlert, ClipboardList, Package, Plus, Tag } from 'lucide-react'
+import { CircleAlert, ClipboardList, Package, Plus, Settings, Tag } from 'lucide-react'
 import { useRegisterCreateAction } from '../../hooks/useModuleCreateAction'
 import type { Asset, AssetType } from '../../api/assets'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
@@ -24,11 +24,12 @@ import { useMotionPresets } from '../../lib/motion'
 import { ASSET_DEFAULTS } from '../../lib/settings-defaults'
 import { workspaceDisplayName } from '../../lib/workspace'
 import { useAuthStore } from '../../stores/auth.store'
-import { Avatar, Button, FilterChip, Heading, ScrollFade, TabBar, type TabItem } from '../primitives'
+import { Avatar, Button, FilterChip, Heading, IconButton, ScrollFade, TabBar, type TabItem } from '../primitives'
 import { ModuleHeader } from '../patterns/ModuleHeader'
 import { ScrollTabs } from '../patterns/ScrollTabs'
 import { PullToRefresh } from '../patterns/PullToRefresh'
 import { SearchSuggestions } from '../patterns/SearchSuggestions'
+import { useSettingsNav } from '../settings/settings-nav'
 import { CountPill } from '../approval/StatusPill'
 import { EmptyState } from '../spaces/EmptyState'
 import { ApproveDialog } from './ApproveDialog'
@@ -142,6 +143,7 @@ export function AssetsScreen() {
   // Before anything is typed: Tìm gần đây, what I hold and the assets something happened to lately (DESIGN.md
   // "Gợi ý trong ô tìm"). What I hold is asked for only once the box is focused.
   const phone = useBottomBarLayout()
+  const settingsNav = useSettingsNav()
   const searchRef = useRef<HTMLInputElement>(null)
   const recent = useRecentSearches('assets')
   const [wantsHeld, setWantsHeld] = useState(false)
@@ -465,6 +467,11 @@ export function AssetsScreen() {
               </Button>
             )}
             {newRequest}
+            {!phone && (
+              <IconButton size="lg" shape="round" aria-label="Cài đặt Tài sản" title="Cài đặt Tài sản" onClick={() => settingsNav.open('assets')}>
+                <Settings size={20} strokeWidth={1.75} />
+              </IconButton>
+            )}
           </div>
         </header>
 

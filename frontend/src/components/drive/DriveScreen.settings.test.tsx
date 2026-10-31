@@ -1,4 +1,5 @@
 import { cleanup, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   RouterProvider, createMemoryHistory, createRootRoute, createRoute, createRouter,
@@ -27,7 +28,10 @@ async function renderDrive(url = '/drive') {
   const drive = createRoute({
     getParentRoute: () => root, path: '/drive', validateSearch: validateDriveSearch, component: DriveScreen,
   })
-  const router = createRouter({ routeTree: root.addChildren([drive]), history: createMemoryHistory({ initialEntries: [url] }) })
+  const settings = createRoute({ getParentRoute: () => root, path: '/settings/$section', component: () => null })
+  const router = createRouter({
+    routeTree: root.addChildren([drive, settings]), history: createMemoryHistory({ initialEntries: [url] }),
+  })
   await router.load()
   renderWithClient(<RouterProvider router={router} />)
   return router
@@ -80,6 +84,28 @@ async function openFolder() {
   await renderDrive(`/drive?folder=${D.doisoat}`)
   await within(await screen.findByRole('table')).findByText('doi-soat-08-10.xlsx')
 }
+
+describe('DriveScreen: the desktop gear to Cài đặt Tài liệu', () => {
+  it('on a wide screen the header ends with the gear, which opens Cài đặt Tài liệu in the same workspace', async () => {
+    const user = userEvent.setup()
+    const router = await renderDrive(`/drive?ws=${WS_ID}&folder=${D.doisoat}`)
+    const gear = await screen.findByRole('button', { name: 'Cài đặt Tài liệu' })
+    expect(gear).toHaveAttribute('title', 'Cài đặt Tài liệu')
+    await user.click(gear)
+    await waitFor(() => expect(router.state.location.pathname).toBe('/settings/drive'))
+    // Only the workspace follows; the open folder stays behind.
+    expect(router.state.location.search).toEqual({ ws: WS_ID })
+  })
+
+  it('a phone has no gear: its ⋯ already leads there', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query.includes('max-width'), media: query, addEventListener: () => {}, removeEventListener: () => {},
+    }))
+    await renderDrive()
+    await screen.findByRole('heading', { name: 'Tài liệu', level: 1 })
+    expect(screen.queryByRole('button', { name: 'Cài đặt Tài liệu' })).toBeNull()
+  })
+})
 
 describe('DriveScreen: Cài đặt Tài liệu', () => {
   it('at the defaults the list is as before: folders first, last change first', async () => {

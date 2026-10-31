@@ -17,8 +17,9 @@ const isLastOwner = (err: unknown) =>
  * "Rời workspace" (mockup §6): always available, and said plainly: leaving
  * cannot be undone from here, and the last Owner stays. A confirm dialog states
  * the consequence (one sentence and a red button; no retyping of the name).
- * After leaving, the person goes to the workspace picker. `row` is the phone's
- * form, a danger row of Cài đặt workspace (mockup mobile-shell.html §11).
+ * After leaving, the person goes to the workspace picker. `section` is the
+ * desktop's danger zone (mockup settings-desktop.html screen 5); `row` is the
+ * phone's form, a danger row of Cài đặt workspace (mockup mobile-shell.html §11).
  */
 export function LeaveWorkspace({ variant = 'section' }: { variant?: 'section' | 'row' }) {
   const navigate = useNavigate()
@@ -58,18 +59,15 @@ export function LeaveWorkspace({ variant = 'section' }: { variant?: 'section' | 
             onPress={() => setOpen(true)}
           />
         </SettingsGroup>
-      ) : (<>
-      <hr className="w-full m-0 border-0 border-t border-line" />
-      <div className="flex items-center gap-4">
-        <div className="grid flex-1 min-w-0">
-          <span className="font-semibold text-ink">Rời {name}</span>
-          <span className="text-sm text-ink-muted">
-            Bạn mất quyền truy cập tin nhắn, tài liệu và đề nghị của workspace này. Chủ sở hữu cuối cùng không rời được.
-          </span>
+      ) : (
+        <div className="flex items-center gap-4 px-4 py-3.5 rounded-lg bg-danger-wash">
+          <div className="grid gap-0.5 flex-1 min-w-0">
+            <span className="font-semibold text-ink">Rời {name}</span>
+            <span className="text-[0.8125rem] text-ink-muted">Bạn mất quyền vào các nhóm và tài liệu của workspace này.</span>
+          </div>
+          <Button type="button" variant="danger" onClick={() => setOpen(true)}>Rời workspace</Button>
         </div>
-        <Button type="button" variant="danger" onClick={() => setOpen(true)}>Rời workspace</Button>
-      </div>
-      </>)}
+      )}
       <ConfirmDialog
         open={open}
         onClose={close}

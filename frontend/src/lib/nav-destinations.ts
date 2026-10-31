@@ -47,8 +47,12 @@ export function footDestinations(isPersonal: boolean): NavDestination[] {
 /** What the number on a destination counts, for the hidden text read after its name. */
 export const countUnit = (id: string) => (id === 'approval' ? 'chờ bạn' : 'chưa đọc')
 
-/** The module a path belongs to; Văn bản is a group inside Tài liệu, so its pages belong to Tài liệu. */
+/**
+ * The module a path belongs to; Văn bản is a group inside Tài liệu, so its pages belong to Tài liệu. Everything
+ * under `/settings` is Cài đặt, including a module's own settings page such as `/settings/calendar`.
+ */
 export function moduleOfPath(pathname: string): ModuleId | undefined {
+  if (/^\/settings(\/|$)/.test(pathname)) return 'settings'
   if (pathname.includes('/admin')) return 'admin'
   if (pathname.includes('/contacts')) return 'contacts'
   if (pathname.includes('/drive')) return 'drive'

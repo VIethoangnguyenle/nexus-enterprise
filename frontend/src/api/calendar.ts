@@ -283,6 +283,4 @@ export const calendarApi = {
 
   // Settings
   getSettings: (ws: string) => apiFetch<CalendarSettings>(`/workspaces/${ws}/calendar/settings`),
-  updateSettings: (ws: string, s: CalendarSettings) =>
-    apiFetch<CalendarSettings>(`/workspaces/${ws}/calendar/settings`, json('PUT', s)),
 }

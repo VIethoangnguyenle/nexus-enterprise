@@ -1,20 +1,27 @@
 import { useId, useRef, type KeyboardEvent } from 'react'
+import type { AccountLanguage } from '../../api/auth'
 import { useAccountLanguage } from '../../hooks/useAccountLanguage'
 import { useBottomBarLayout } from '../../hooks/usePhone'
 import { usePreferences } from '../../hooks/usePreferences'
 import type { MotionPref, ThemePref } from '../../lib/preferences'
 import { Pressable } from '../primitives'
-import { LANGUAGE_CHOICES } from './AppearanceScreen'
+import type { Choice } from './SettingsGroup'
+import { Segmented } from './SettingsChoice'
 
-const THEMES: { id: ThemePref; label: string }[] = [
-  { id: 'system', label: 'Theo hệ thống' },
-  { id: 'light', label: 'Sáng' },
-  { id: 'dark', label: 'Tối' },
+export const THEME_CHOICES: Choice<ThemePref>[] = [
+  { value: 'system', label: 'Theo hệ thống' },
+  { value: 'light', label: 'Sáng' },
+  { value: 'dark', label: 'Tối' },
 ]
 
-const MOTIONS: { id: MotionPref; label: string }[] = [
-  { id: 'system', label: 'Theo hệ thống' },
-  { id: 'reduce', label: 'Luôn bật' },
+export const LANGUAGE_CHOICES: Choice<AccountLanguage>[] = [
+  { value: 'vi', label: 'Tiếng Việt' },
+  { value: 'en', label: 'English' },
+]
+
+const MOTION_CHOICES: Choice<MotionPref>[] = [
+  { value: 'system', label: 'Theo hệ thống' },
+  { value: 'reduce', label: 'Luôn bật' },
 ]
 
 /** A miniature app window drawn in one theme's own surfaces. */
@@ -51,55 +58,13 @@ function SystemThumbnail() {
   )
 }
 
-/** A set of exclusive choices drawn as a segmented control, with arrow-key movement. */
-function Segmented<T extends string>({ label, value, options, onChange }: {
-  label: string
-  value: T
-  options: { id: T; label: string }[]
-  onChange: (id: T) => void
-}) {
-  const refs = useRef<Record<string, HTMLButtonElement | null>>({})
-  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    const i = options.findIndex((o) => o.id === value)
-    let next = -1
-    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = (i + 1) % options.length
-    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = (i - 1 + options.length) % options.length
-    const target = options[next]
-    if (!target) return
-    e.preventDefault()
-    onChange(target.id)
-    refs.current[target.id]?.focus()
-  }
-  return (
-    <div role="radiogroup" aria-label={label} onKeyDown={onKeyDown} className="inline-flex gap-1 p-0.75 rounded-lg bg-sunk justify-self-start">
-      {options.map((o) => {
-        const on = o.id === value
-        return (
-          <Pressable
-            key={o.id}
-            ref={(el) => { refs.current[o.id] = el }}
-            role="radio"
-            aria-checked={on}
-            tabIndex={on ? 0 : -1}
-            onClick={() => onChange(o.id)}
-            className={`h-9 px-3 rounded-md text-small-ui font-semibold transition-colors duration-quick
-              ${on ? 'bg-raised text-ink' : 'text-ink-muted hover:text-ink'}`}
-          >
-            {o.label}
-          </Pressable>
-        )
-      })}
-    </div>
-  )
-}
-
 /**
- * Cài đặt → Giao diện (mockup §5): theme as three cards that apply at once,
- * reduced motion, the account's language, and (where there is one) the
- * sidebar. Theme and motion live on this device under the signed-in person. Realtime colour is not a setting: it is information, so
- * there is nothing to turn off (DESIGN.md §7).
+ * Giao diện, ngôn ngữ on a wide screen (mockup settings-desktop.html §5): theme as three cards that apply at
+ * once, reduced motion, the account's language, and (where there is one) the sidebar. Theme and motion live on this
+ * device under the signed-in person. Realtime colour is not a setting: it is information, so there is nothing to
+ * turn off (DESIGN.md §7).
  */
-export function AppearanceTab() {
+export function AppearanceOptions() {
   const { prefs, update } = usePreferences()
   const language = useAccountLanguage()
   // The sidebar exists only where the bottom bar does not.
@@ -108,15 +73,15 @@ export function AppearanceTab() {
   const cards = useRef<Record<string, HTMLButtonElement | null>>({})
 
   const onThemeKeys = (e: KeyboardEvent<HTMLDivElement>) => {
-    const i = THEMES.findIndex((t) => t.id === prefs.theme)
+    const i = THEME_CHOICES.findIndex((t) => t.value === prefs.theme)
     let next = -1
-    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = (i + 1) % THEMES.length
-    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = (i - 1 + THEMES.length) % THEMES.length
-    const target = THEMES[next]
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = (i + 1) % THEME_CHOICES.length
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = (i - 1 + THEME_CHOICES.length) % THEME_CHOICES.length
+    const target = THEME_CHOICES[next]
     if (!target) return
     e.preventDefault()
-    update({ theme: target.id })
-    cards.current[target.id]?.focus()
+    update({ theme: target.value })
+    cards.current[target.value]?.focus()
   }
 
   return (
@@ -124,20 +89,20 @@ export function AppearanceTab() {
       <section aria-labelledby={themeId} className="grid gap-3">
         <h2 id={themeId} className="m-0 text-label text-ink-muted">Chủ đề</h2>
         <div role="radiogroup" aria-labelledby={themeId} onKeyDown={onThemeKeys} className="grid grid-cols-3 gap-3">
-          {THEMES.map((t) => {
-            const on = t.id === prefs.theme
+          {THEME_CHOICES.map((t) => {
+            const on = t.value === prefs.theme
             return (
               <Pressable
-                key={t.id}
-                ref={(el) => { cards.current[t.id] = el }}
+                key={t.value}
+                ref={(el) => { cards.current[t.value] = el }}
                 role="radio"
                 aria-checked={on}
                 tabIndex={on ? 0 : -1}
-                onClick={() => update({ theme: t.id })}
+                onClick={() => update({ theme: t.value })}
                 className={`grid gap-2 p-2 rounded-surface bg-raised transition-shadow duration-quick
                   ${on ? 'outline-2 outline-accent -outline-offset-2' : 'hover:bg-hover'}`}
               >
-                {t.id === 'system' ? <SystemThumbnail /> : <Thumbnail theme={t.id} />}
+                {t.value === 'system' ? <SystemThumbnail /> : <Thumbnail theme={t.value} />}
                 <span className={`text-sm text-center ${on ? 'font-semibold text-ink' : 'text-ink-muted'}`}>{t.label}</span>
               </Pressable>
             )
@@ -146,7 +111,7 @@ export function AppearanceTab() {
         <span className="text-xs text-ink-muted">Mặc định là Theo hệ thống. Lưu trên máy này và theo tài khoản.</span>
       </section>
 
-      <section className="grid gap-2.5">
+      <section className="grid gap-2.5 justify-items-start">
         <div className="grid">
           <span className="font-semibold text-ink">Giảm chuyển động</span>
           <span className="text-sm text-ink-muted">
@@ -156,12 +121,12 @@ export function AppearanceTab() {
         <Segmented
           label="Giảm chuyển động"
           value={prefs.motion}
-          options={MOTIONS}
-          onChange={(motion) => update({ motion })}
+          choices={MOTION_CHOICES}
+          onPick={(motion) => update({ motion })}
         />
       </section>
 
-      <section className="grid gap-2.5">
+      <section className="grid gap-2.5 justify-items-start">
         <div className="grid">
           <span className="font-semibold text-ink">Ngôn ngữ</span>
           <span className="text-sm text-ink-muted">Dùng chung mọi workspace và mọi thiết bị của bạn.</span>
@@ -169,8 +134,8 @@ export function AppearanceTab() {
         <Segmented
           label="Ngôn ngữ"
           value={language.value}
-          options={LANGUAGE_CHOICES.map((c) => ({ id: c.value, label: c.label }))}
-          onChange={(v) => { if (language.ready && v !== language.value) language.set(v) }}
+          choices={LANGUAGE_CHOICES}
+          onPick={(v) => { if (language.ready && v !== language.value) language.set(v) }}
         />
       </section>
       {!phoneLayout && <section className="flex items-center gap-4">

@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import type { ApprovalSettings as ApprovalOptions } from '../../../api/settings'
 import { useActiveWorkspace } from '../../../hooks/useActiveWorkspace'
-import { useBottomBarLayout } from '../../../hooks/usePhone'
 import { useServerSettings } from '../../../hooks/useServerSettings'
 import { APPROVAL_DEFAULTS } from '../../../lib/settings-defaults'
 import { ChoicePage, SettingsGroup, SettingsPage, SettingsRow, SettingsSwitch, choiceLabel, type Choice } from '../SettingsGroup'
+import { useSettingsWide } from '../settings-layout'
 import { useSettingsNav } from '../settings-nav'
+import { useWorkspaceLead } from './workspace-lead'
 
 export { APPROVAL_DEFAULTS }
 
@@ -18,14 +19,15 @@ const SORTS: Choice<NonNullable<ApprovalOptions['sort']>>[] = [
  * Cài đặt Phê duyệt (DESIGN.md §6, organization workspaces only, kept per organization): notifications by kind of
  * work and the order of Chờ tôi duyệt. A personal workspace has no Phê duyệt and no address for this page.
  *
- * The order applies below 1024px only (a wide screen keeps the server's order, oldest first), so a wide screen
- * does not offer it. "Tab mở đầu" is not offered: the stored choices (chờ duyệt, đã duyệt, đã từ chối) are not the
+ * The order applies below 1024px only (a wide screen keeps the server's order, oldest first), so the desktop shell
+ * (`useSettingsWide`) does not offer it. "Tab mở đầu" is not offered: the stored choices (chờ duyệt, đã duyệt, đã từ chối) are not the
  * screen's tabs, so it would change nothing.
  */
 export function ApprovalSettings() {
   const { back } = useSettingsNav()
   const { workspaceId } = useActiveWorkspace()
-  const compact = useBottomBarLayout()
+  const wide = useSettingsWide()
+  const lead = useWorkspaceLead()
   const { settings, save } = useServerSettings('approval', workspaceId, APPROVAL_DEFAULTS)
   const [page, setPage] = useState<'sort' | null>(null)
   const done = () => setPage(null)
@@ -33,7 +35,7 @@ export function ApprovalSettings() {
   if (page === 'sort') return <ChoicePage title="Sắp xếp" value={settings.sort} choices={SORTS} onPick={(sort) => void save({ sort })} onBack={done} />
 
   return (
-    <SettingsPage title="Cài đặt Phê duyệt" onBack={back}>
+    <SettingsPage title={wide ? 'Phê duyệt' : 'Cài đặt Phê duyệt'} lead={lead} onBack={back}>
       <SettingsGroup title="Thông báo">
         <SettingsSwitch
           label="Đề nghị chờ bạn duyệt"
@@ -47,7 +49,7 @@ export function ApprovalSettings() {
           onChange={(notify_result) => void save({ notify_result })}
         />
       </SettingsGroup>
-      {compact && (
+      {!wide && (
         <SettingsGroup title="Hiển thị">
           <SettingsRow
             label="Sắp xếp"

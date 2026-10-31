@@ -1,4 +1,5 @@
 import { cleanup, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   RouterProvider, createMemoryHistory, createRootRoute, createRoute, createRouter,
@@ -26,7 +27,10 @@ async function renderApproval(url = '/approval') {
   const route = createRoute({
     getParentRoute: () => root, path: '/approval', validateSearch: validateApprovalSearch, component: ApprovalScreen,
   })
-  const router = createRouter({ routeTree: root.addChildren([route]), history: createMemoryHistory({ initialEntries: [url] }) })
+  const settings = createRoute({ getParentRoute: () => root, path: '/settings/$section', component: () => null })
+  const router = createRouter({
+    routeTree: root.addChildren([route, settings]), history: createMemoryHistory({ initialEntries: [url] }),
+  })
   await router.load()
   renderWithClient(<RouterProvider router={router} />)
   return router
@@ -72,6 +76,27 @@ async function servedTitles(): Promise<string[]> {
   resetClient()
   return titles
 }
+
+describe('ApprovalScreen: the desktop gear to Cài đặt Phê duyệt', () => {
+  it('on a wide screen the header ends with the gear, which opens Cài đặt Phê duyệt in the same workspace', async () => {
+    const user = userEvent.setup()
+    viewport(false)
+    const router = await renderApproval(`/approval?ws=${WS_ID}&tab=history`)
+    const gear = await screen.findByRole('button', { name: 'Cài đặt Phê duyệt' })
+    expect(gear).toHaveAttribute('title', 'Cài đặt Phê duyệt')
+    await user.click(gear)
+    await waitFor(() => expect(router.state.location.pathname).toBe('/settings/approval'))
+    // Only the workspace follows; the tab stays behind.
+    expect(router.state.location.search).toEqual({ ws: WS_ID })
+  })
+
+  it('a phone has no gear: its ⋯ already leads there', async () => {
+    viewport(true)
+    await renderApproval()
+    await screen.findAllByRole('heading', { name: 'Phê duyệt', level: 1 })
+    expect(screen.queryByRole('button', { name: 'Cài đặt Phê duyệt' })).toBeNull()
+  })
+})
 
 describe('ApprovalScreen: Cài đặt Phê duyệt → Sắp xếp', () => {
   it('below 1024px Mới nhất trước puts the newest request first; Cũ nhất trước the oldest', async () => {

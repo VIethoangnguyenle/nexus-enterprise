@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import {
-  CircleAlert, ClipboardCheck, Database, Layers, Package, Shield, ShieldCheck, User, UserPlus, Users,
+  CircleAlert, ClipboardCheck, Database, Layers, Package, Plus, Shield, ShieldCheck, User, UserPlus, Users,
 } from 'lucide-react'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useDepartments, useInvitations, useMemberDirectory, useRoles } from '../../hooks/useAdmin'
@@ -18,29 +18,31 @@ import { workspaceDisplayName } from '../../lib/workspace'
 import { useAuthStore } from '../../stores/auth.store'
 import { Avatar, Button, spaceLetter } from '../primitives'
 import { InviteDialog } from '../admin/InviteDialog'
+import { ConfirmDialog } from '../composites/ConfirmDialog'
 import { useWorkspaceKindLine } from '../patterns/WorkspaceSwitcherSheet'
 import { EmptyState } from '../spaces/EmptyState'
 import { EditFieldScreen } from './EditFieldScreen'
 import { GROUP_CREATION_CHOICES, GroupCreationRow } from './GroupCreationRow'
 import { LeaveWorkspace } from './LeaveWorkspace'
+import { ReadOnlyField } from './ReadOnlyField'
+import { SettingsChoice } from './SettingsChoice'
 import { ChoicePage, SettingsGroup, SettingsPage, SettingsRow } from './SettingsGroup'
+import {
+  DESCRIPTION_MAX, NAME_MAX, WorkspaceDetailsForm, WorkspaceTypeCard, checkDescription, checkName, editableName,
+} from './WorkspaceInfo'
+import { useWorkspaceLead } from './modules/workspace-lead'
+import { useSettingsWide } from './settings-layout'
 import { useSettingsNav } from './settings-nav'
 
 const ICON = { size: 18, strokeWidth: 1.75 } as const
-const NAME_MAX = 100
 /** A whole number as Vietnamese writes it (1.250), never capped like a badge. */
 const count = (n: number) => (Number.isFinite(n) ? n : 0).toLocaleString('vi-VN')
-const DESCRIPTION_MAX = 500
+const SET_BY_ADMIN = 'Do quản trị viên đặt'
+const ADMINS_NOTE = 'Nhờ một quản trị viên khi bạn cần mời người, đổi vai trò hay phòng ban.'
+/** What locking group creation does: the words the phone's choice page shows under Chỉ quản trị viên. */
+const LOCK_HINT = GROUP_CREATION_CHOICES.find((c) => c.value === 'admins')?.hint
 
-const checkName = (value: string) => {
-  const v = value.trim()
-  if (!v) return 'Nhập tên cho workspace.'
-  if (Array.from(v).length > NAME_MAX) return `Tên dài tối đa ${NAME_MAX} ký tự.`
-  return undefined
-}
-const checkDescription = (value: string) =>
-  Array.from(value.trim()).length > DESCRIPTION_MAX ? `Mô tả dài tối đa ${DESCRIPTION_MAX} ký tự.` : undefined
-
+/** Phone only: the subpages a row opens. On a wide screen there is no way back from one, so all of it is inline. */
 type Page = 'name' | 'description' | 'groupCreation' | 'admins' | null
 
 /** Only the workspace follows to an admin screen. */
@@ -52,9 +54,14 @@ const keepWorkspace = (prev: { ws?: string }) => (prev.ws ? { ws: prev.ws } : {}
  * screen it opens). Organization administrator: Thông tin, Thành viên và tổ chức, Quy định, Phân hệ, Rời.
  * Organization member: Thông tin read only, Quản trị viên, the rule locked, Hồ sơ trong tổ chức, Rời. Personal: the
  * name and storage only. A workspace's kind is fixed at creation; nothing here changes it.
+ *
+ * Inside the desktop shell (§6 "Cài đặt trên máy tính", mockup settings-desktop.html screen 5) the same rows under
+ * the same rules, with nothing on a page of its own: Thông tin is a form (read only with the reason for a member),
+ * Ai được tạo nhóm a drop-down, Quản trị viên opens its list in place, then the Loại workspace card and Rời.
  */
 export function WorkspaceSettingsScreen() {
   const navigate = useNavigate()
+  const wide = useSettingsWide()
   const { back, open } = useSettingsNav()
   const { workspaceId: wsId, workspaceName } = useActiveWorkspace()
   const me = useAuthStore((s) => s.user)
@@ -62,8 +69,12 @@ export function WorkspaceSettingsScreen() {
   const details = useWorkspaceDetails(wsId)
   const profile = useMyProfile(wsId)
   const kindLine = useWorkspaceKindLine()
+  const lead = useWorkspaceLead()
   const [page, setPage] = useState<Page>(null)
   const [inviting, setInviting] = useState(false)
+  const [adminsOpen, setAdminsOpen] = useState(false)
+  const [confirmLock, setConfirmLock] = useState(false)
+  const adminsId = useId()
 
   const admin = !isPersonal && details.data?.can_manage === true
   const member = !isPersonal && details.data?.can_manage === false
@@ -79,7 +90,7 @@ export function WorkspaceSettingsScreen() {
   const setRule = useSetGroupCreation(wsId)
   const update = useUpdateWorkspaceDetails(wsId)
 
-  const name = details.data?.name || workspaceDisplayName(workspaceName)
+  const name = workspaceDisplayName(details.data?.name || workspaceName)
   const role = profile.data?.current_tenant?.role
   const tenant = profile.data?.current_tenant
   const person = profile.data?.user
@@ -88,7 +99,7 @@ export function WorkspaceSettingsScreen() {
 
   if (details.isError) {
     return (
-      <SettingsPage title="Cài đặt workspace" onBack={back}>
+      <SettingsPage title="Cài đặt workspace" lead={lead} onBack={back}>
         <EmptyState
           icon={<CircleAlert size={24} strokeWidth={1.75} />}
           text="Không tải được thông tin workspace. Kiểm tra kết nối rồi thử lại."
@@ -99,7 +110,7 @@ export function WorkspaceSettingsScreen() {
   }
   if (!details.data) {
     return (
-      <SettingsPage title="Cài đặt workspace" onBack={back}>
+      <SettingsPage title="Cài đặt workspace" lead={lead} onBack={back}>
         <div aria-busy="true" className="grid gap-3">
           <span className="skeleton h-24 rounded-xl" />
           <span className="skeleton h-28 rounded-xl" />
@@ -113,7 +124,7 @@ export function WorkspaceSettingsScreen() {
     return (
       <EditFieldScreen
         title="Tên workspace"
-        initial={details.data.name}
+        initial={editableName(details.data.name)}
         maxLength={NAME_MAX + 20}
         validate={checkName}
         hint="Mọi người trong workspace thấy tên này."
@@ -149,7 +160,7 @@ export function WorkspaceSettingsScreen() {
   if (page === 'admins') {
     return (
       <SettingsPage title="Quản trị viên" onBack={() => setPage(null)}>
-        <SettingsGroup note="Nhờ một quản trị viên khi bạn cần mời người, đổi vai trò hay phòng ban.">
+        <SettingsGroup note={ADMINS_NOTE}>
           {(details.data.owner_names ?? []).map((n) => (
             <SettingsRow key={n} icon={<Avatar name={n} size={24} />} label={n} />
           ))}
@@ -165,22 +176,24 @@ export function WorkspaceSettingsScreen() {
     : undefined
   const pending = invitations.data?.length ?? 0
   const owners = details.data.owner_names ?? []
+  const ownTile = isPersonal && !!me?.id
 
   return (
-    <SettingsPage title="Cài đặt workspace" onBack={back}>
-      <div className="flex items-center gap-3.5 p-3.5 rounded-xl bg-raised">
+    <SettingsPage title="Cài đặt workspace" lead={lead} onBack={back}>
+      <div className={`flex items-center ${wide ? 'gap-3.5 pt-1 pb-2' : 'gap-3.5 p-3.5 rounded-xl bg-raised'}`}>
         <span
           aria-hidden="true"
           // An organization is the accent; a workspace of one is the person's own hue.
-          style={isPersonal && me?.id ? personStyle(me.id) : undefined}
-          className={`grid place-items-center w-18 h-18 rounded-[1.25rem] font-display text-[1.75rem] font-bold shrink-0
-            ${isPersonal && me?.id ? 'bg-(--p) text-on-person' : 'bg-accent text-on-accent'}`}
+          style={ownTile && me ? personStyle(me.id) : undefined}
+          className={`grid place-items-center font-display font-bold shrink-0
+            ${wide ? 'w-14 h-14 rounded-2xl text-[1.5rem]' : 'w-18 h-18 rounded-[1.25rem] text-[1.75rem]'}
+            ${ownTile ? 'bg-(--p) text-on-person' : 'bg-accent text-on-accent'}`}
         >
           {spaceLetter(isPersonal ? person?.display_name || name : name)}
         </span>
         <div className="grid gap-1 min-w-0 flex-1 justify-items-start">
-          <b className="max-w-full text-[1.125rem] font-bold text-ink truncate">{name}</b>
-          <span className="max-w-full text-sm text-ink-muted truncate">{kindLine}</span>
+          <b className={`max-w-full text-[1.125rem] font-bold text-ink truncate ${wide ? 'font-display' : ''}`}>{name}</b>
+          <span className={`max-w-full text-ink-muted truncate ${wide ? 'text-[0.8125rem]' : 'text-sm'}`}>{kindLine}</span>
           {!isPersonal && role && (
             <span className={`inline-flex items-center h-7 px-2.5 rounded-full text-[0.8125rem] font-semibold
               ${admin ? 'bg-accent-wash text-accent' : 'bg-sunk text-ink'}`}>
@@ -191,8 +204,18 @@ export function WorkspaceSettingsScreen() {
       </div>
 
       <SettingsGroup title="Thông tin">
-        <SettingsRow label="Tên workspace" value={name} onPress={canEdit ? () => setPage('name') : undefined} />
-        {!isPersonal && (
+        {wide && (canEdit ? (
+          <div className="pt-2 pb-4">
+            <WorkspaceDetailsForm wsId={wsId} details={details.data} label="Thông tin" withDescription={!isPersonal} />
+          </div>
+        ) : (
+          <div className="grid gap-4 max-w-130 pt-2 pb-4">
+            <ReadOnlyField label="Tên workspace" value={name} reason={SET_BY_ADMIN} />
+            {!isPersonal && <ReadOnlyField label="Mô tả" value={details.data.description ?? ''} reason={SET_BY_ADMIN} />}
+          </div>
+        ))}
+        {!wide && <SettingsRow label="Tên workspace" value={name} onPress={canEdit ? () => setPage('name') : undefined} />}
+        {!wide && !isPersonal && (
           <SettingsRow
             label="Mô tả"
             value={details.data.description || (canEdit ? 'Chưa có' : undefined)}
@@ -207,8 +230,16 @@ export function WorkspaceSettingsScreen() {
                 {owners.slice(0, 3).map((n) => <Avatar key={n} name={n} size={24} />)}
               </span>
             }
-            onPress={() => setPage('admins')}
+            onPress={wide ? () => setAdminsOpen((o) => !o) : () => setPage('admins')}
+            expanded={wide ? adminsOpen : undefined}
+            controls={wide ? adminsId : undefined}
           />
+        )}
+        {wide && member && adminsOpen && (
+          <div id={adminsId} className="grid pl-4 pb-3">
+            {owners.map((n) => <SettingsRow key={n} icon={<Avatar name={n} size={24} />} label={n} />)}
+            <p className="m-0 pt-1 text-[0.8125rem] text-ink-muted">{ADMINS_NOTE}</p>
+          </div>
         )}
       </SettingsGroup>
 
@@ -224,7 +255,11 @@ export function WorkspaceSettingsScreen() {
             icon={<UserPlus {...ICON} />}
             label="Mời thành viên"
             hint={pending > 0 ? `${count(pending)} lời mời đang chờ` : undefined}
-            onPress={() => setInviting(true)}
+            // A wide screen invites from a button on the row (mockup settings-desktop.html screen 5).
+            trailing={wide
+              ? <Button type="button" variant="soft" size="sm" onClick={() => setInviting(true)}><Plus size={16} strokeWidth={1.75} aria-hidden="true" />Mời</Button>
+              : undefined}
+            onPress={wide ? undefined : () => setInviting(true)}
           />
           <SettingsRow
             icon={<Layers {...ICON} />}
@@ -249,11 +284,22 @@ export function WorkspaceSettingsScreen() {
 
       {!isPersonal && (
         <SettingsGroup title="Quy định">
-          <GroupCreationRow
-            icon={<ShieldCheck {...ICON} />}
-            rule={locks.data?.group_creation}
-            onPress={admin && locks.data ? () => setPage('groupCreation') : undefined}
-          />
+          {admin && locks.data ? (
+            <SettingsChoice
+              icon={wide ? undefined : <ShieldCheck {...ICON} />}
+              label="Ai được tạo nhóm"
+              hint={wide ? 'Khoá cho cả tổ chức: thành viên không đổi được.' : undefined}
+              value={locks.data.group_creation}
+              choices={GROUP_CREATION_CHOICES}
+              // Locking is org-wide and not fully undone by opening again: it is asked first. Opening is not.
+              onPick={(rule) => (rule === 'admins' ? setConfirmLock(true) : setRule.mutate(rule))}
+              onOpen={() => setPage('groupCreation')}
+              disabled={setRule.isPending}
+              menu
+            />
+          ) : (
+            <GroupCreationRow icon={wide ? undefined : <ShieldCheck {...ICON} />} rule={locks.data?.group_creation} />
+          )}
         </SettingsGroup>
       )}
 
@@ -289,11 +335,30 @@ export function WorkspaceSettingsScreen() {
               onPress={() => void navigate({ to: '/assets', search: (prev: { ws?: string }) => ({ ...keepWorkspace(prev), section: 'types' as const }) })}
             />
           )}
-          <SettingsRow icon={<Database {...ICON} />} label="Dung lượng Tài liệu" hint={storage} />
+          {/* On a wide screen the size sits on the right, as a row's value (mockup screen 5). */}
+          <SettingsRow icon={<Database {...ICON} />} label="Dung lượng Tài liệu" hint={wide ? undefined : storage} value={wide ? storage : undefined} />
         </SettingsGroup>
       )}
 
-      {!isPersonal && <LeaveWorkspace variant="row" />}
+      {wide && (
+        <SettingsGroup title="Loại workspace">
+          <WorkspaceTypeCard details={details.data} />
+        </SettingsGroup>
+      )}
+
+      {!isPersonal && <LeaveWorkspace variant={wide ? 'section' : 'row'} />}
+
+      {admin && (
+        <ConfirmDialog
+          open={confirmLock}
+          onClose={() => { if (!setRule.isPending) setConfirmLock(false) }}
+          onConfirm={() => setRule.mutate('admins', { onSettled: () => setConfirmLock(false) })}
+          title="Khoá quyền tạo nhóm?"
+          description={LOCK_HINT}
+          confirmLabel="Khoá"
+          loading={setRule.isPending}
+        />
+      )}
 
       {admin && (
         <InviteDialog

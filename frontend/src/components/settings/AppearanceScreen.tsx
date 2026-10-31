@@ -1,30 +1,34 @@
 import { useState } from 'react'
 import { Globe, Palette, Sparkles } from 'lucide-react'
-import type { AccountLanguage } from '../../api/auth'
 import { useAccountLanguage } from '../../hooks/useAccountLanguage'
 import { usePreferences } from '../../hooks/usePreferences'
-import type { ThemePref } from '../../lib/preferences'
-import { ChoicePage, SettingsGroup, SettingsPage, SettingsRow, SettingsSwitch, choiceLabel, type Choice } from './SettingsGroup'
+import { AppearanceOptions, LANGUAGE_CHOICES, THEME_CHOICES } from './AppearanceOptions'
+import { ChoicePage, SettingsGroup, SettingsPage, SettingsRow, SettingsSwitch, choiceLabel } from './SettingsGroup'
+import { ACCOUNT_LEAD } from './settings-model'
+import { useSettingsWide } from './settings-layout'
 import { useSettingsNav } from './settings-nav'
 
 const ICON = { size: 18, strokeWidth: 1.75 } as const
 
-export const THEME_CHOICES: Choice<ThemePref>[] = [
-  { value: 'system', label: 'Theo hệ thống' },
-  { value: 'light', label: 'Sáng' },
-  { value: 'dark', label: 'Tối' },
-]
-
-export const LANGUAGE_CHOICES: Choice<AccountLanguage>[] = [
-  { value: 'vi', label: 'Tiếng Việt' },
-  { value: 'en', label: 'English' },
-]
-
 /**
- * Tôi → Giao diện, ngôn ngữ: the theme and reduced motion live on this device (`usePreferences`), the language on
- * the account (auth). "Thu gọn sidebar" means nothing on a phone and is not here.
+ * Giao diện, ngôn ngữ: the theme and reduced motion live on this device (`usePreferences`), the language on the
+ * account (auth). On a phone (Tôi → Giao diện, ngôn ngữ) each is a row; "Thu gọn sidebar" means nothing there and is
+ * not shown. Inside the desktop shell the theme cards, the choices side by side and the sidebar switch.
  */
 export function AppearanceScreen() {
+  return useSettingsWide() ? <AppearanceWide /> : <AppearanceRows />
+}
+
+function AppearanceWide() {
+  const { back } = useSettingsNav()
+  return (
+    <SettingsPage title="Giao diện, ngôn ngữ" lead={ACCOUNT_LEAD} onBack={back}>
+      <AppearanceOptions />
+    </SettingsPage>
+  )
+}
+
+function AppearanceRows() {
   const { back } = useSettingsNav()
   const { prefs, update } = usePreferences()
   const language = useAccountLanguage()
