@@ -254,6 +254,25 @@ The invitee acts through `GET /api/invitations`, `POST /api/invitations/:id/acce
 - **WHEN** two owners each remove the other at the same moment
 - **THEN** exactly one removal happens and one owner remains
 
+### Requirement: Removing a member removes only a person
+The `:nodeId` of `DELETE /api/workspaces/:id/members/:nodeId`, and the target of the gRPC `RemoveMember`, SHALL be a person of the workspace: a user (`U`) node under its Members UA. Anything else (a role UA, a department UA, the directory restriction UA, the Members or Owners UA, a node of another workspace, an ID that names no node) SHALL be refused as not found (404; an empty ID is invalid input, 400) before any edge is read for removal or changed, whoever the caller is, owners included. The check runs under the owner lock, so the node proved a person is the node detached. The removal strips the target from every UA under the workspace's policy class; pointed at a UA it would detach a role from the directory restriction (lifting its prohibition, which otherwise takes `manage`) or a department from its parent, with nothing more than `invite`. Because only a member can be removed, the edges that make the person one (the Members UA and the UAs under it, Owners and TenantMember) are removed last, and only once every other edge is gone: a removal that fails part-way leaves the person a member, so the retry is accepted and finishes the job instead of leaving a role or department edge behind. The rule lives in the workspace service, not the PDP: the PDP answers what a subject may do, and is not asked here whether the target may be detached.
+
+#### Scenario: Invite-only member targets a restricted role
+- **WHEN** a caller holding `invite` removes, by its node ID, a role UA that sits under the workspace's directory restriction
+- **THEN** the answer is 404 and the role stays under the restriction, its members still unable to read the hidden contacts
+
+#### Scenario: Any attribute or foreign node as the target
+- **WHEN** an invite-only member or an owner removes a department UA, the Members or Owners UA, a node of another workspace, or an ID that names nothing
+- **THEN** the answer is 404 and every edge of that node stays
+
+#### Scenario: A person is still removed
+- **WHEN** the same callers remove a person of the workspace who holds no `manage`
+- **THEN** the person is detached from every UA of the workspace, and nothing else is
+
+#### Scenario: A removal that failed part-way is retried
+- **WHEN** removing a member fails on their department edge
+- **THEN** they are still under Members, and removing them again is accepted and removes every edge
+
 ### Requirement: Authorization reads come from the writer
 Every graph read that feeds an authorization or write decision in the workspace service (owner lists, ancestry and descendants for membership and scope, the associations and ancestry behind a delegation check) SHALL go to the policy writer, not to a read replica that may lag. Only `CheckAccess` uses the read service.
 

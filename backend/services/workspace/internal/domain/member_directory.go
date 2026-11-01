@@ -131,6 +131,21 @@ func (s *Service) requireMemberUser(ctx context.Context, ws *WorkspaceResult, no
 	return nil
 }
 
+// memberNode is the ID of a person of a workspace: a U node under its Members UA.
+// Only memberOf makes one, so a function taking it cannot be handed a role or
+// department UA, the Members or Owners UA, a node of another workspace, or an ID
+// that names nothing. The removal path takes it: detaching a UA instead of a
+// person would lift a directory prohibition or cut a department off its parent.
+type memberNode string
+
+// memberOf proves nodeID is a person of the workspace (see requireMemberUser).
+func (s *Service) memberOf(ctx context.Context, ws *WorkspaceResult, nodeID string) (memberNode, error) {
+	if err := s.requireMemberUser(ctx, ws, nodeID); err != nil {
+		return "", err
+	}
+	return memberNode(nodeID), nil
+}
+
 // ListMemberDirectory returns every person of the workspace as a row: name,
 // email, department, roles, standing. The caller must hold manage on the Mgmt
 // OA; the table carries email addresses and what each person may do.

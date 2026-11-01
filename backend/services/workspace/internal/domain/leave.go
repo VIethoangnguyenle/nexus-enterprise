@@ -39,7 +39,13 @@ func (s *Service) LeaveWorkspace(ctx context.Context, callerNodeID, wsID string)
 		if containsNode(owners, callerNodeID) && len(owners) <= 1 {
 			return fmt.Errorf("%w: the last owner cannot leave", ErrLastOwner)
 		}
-		return s.detachMember(ctx, ws, callerNodeID)
+		// authorizeMember already proved this; proving it again under the lock is
+		// what lets detachMember take only a person.
+		caller, err := s.memberOf(ctx, ws, callerNodeID)
+		if err != nil {
+			return err
+		}
+		return s.detachMember(ctx, ws, caller)
 	}
 	if err := s.store.WithOwnerLock(ctx, ws.ID, leave); err != nil {
 		return err

@@ -107,6 +107,71 @@ func TestRealPolicy_RemovingAManagerNeedsManage(t *testing.T) {
 	}
 }
 
+// parentsOf lists the IDs the node is directly assigned to.
+func (w *guardWorld) parentsOf(id string) []string {
+	w.t.Helper()
+	_, write := testutil.StartPolicy(w.t)
+	ps, err := write.GetParents(testutil.PolicyAdmin(context.Background()), &policypb.GetParentsRequest{NodeId: id})
+	require.NoError(w.t, err)
+	var out []string
+	for _, n := range ps.GetNodes() {
+		out = append(out, n.Id)
+	}
+	return out
+}
+
+// Removing a member removes a person, nothing else. A role restricted in the
+// directory, a sub-department, the Members and Owners UAs, a node of another
+// workspace and an ID that names nothing are refused, by an invite-only member and
+// by an owner alike, and every edge they had stays: detaching the role from the
+// restriction would lift its prohibition, detaching the department would cut it
+// off its parent. The paired allow: the same callers still remove a person.
+func TestRealPolicy_RemoveMemberRemovesOnlyPeople(t *testing.T) {
+	type target struct {
+		id      string
+		parents []string
+	}
+	w := newGuardWorld(t)
+	_, write := testutil.StartPolicy(t)
+	limited := testutil.NewNode(t, write, ngac.DirectoryLimitedUAName(ngac.WorkspaceID(w.g.WorkspaceID)), ngac.TypeUA, w.g.PC)
+	role := testutil.NewNode(t, write, ngac.RoleUAName(ngac.RoleID("rp-"+uuid.NewString())), ngac.TypeUA, w.g.PC, limited)
+	parentDept := testutil.NewNode(t, write, ngac.DeptUAName(ngac.DeptID("rp-"+uuid.NewString())), ngac.TypeUA, w.g.PC)
+	childDept := testutil.NewNode(t, write, ngac.DeptUAName(ngac.DeptID("rp-"+uuid.NewString())), ngac.TypeUA, parentDept)
+	w.person(w.g.Members, role, childDept)
+	other := testutil.SeedWorkspaceGraph(t, write)
+	ids := map[string]string{
+		"a role restricted in the directory": role,
+		"the directory restriction":          limited,
+		"a sub-department":                   childDept,
+		"a top department":                   parentDept,
+		"the Members UA":                     w.g.Members,
+		"the Owners UA":                      w.g.Owners,
+		"another workspace's Members UA":     other.Members,
+		"another workspace's person":         w.outsider.node,
+		"a node that does not exist":         uuid.NewString(),
+	}
+	out := map[string]target{}
+	for name, id := range ids {
+		out[name] = target{id: id, parents: w.parentsOf(id)}
+	}
+	require.Contains(t, out["a role restricted in the directory"].parents, limited, "the fixture is meaningful")
+	require.Contains(t, out["a sub-department"].parents, parentDept, "the fixture is meaningful")
+
+	for name, tg := range out {
+		for caller, p := range map[string]wsPerson{"invite-only": w.invite, "owner": w.owner} {
+			err := w.svc.RemoveMember(w.as(p), p.node, w.g.WorkspaceID, tg.id)
+			assert.ErrorIs(t, err, domain.ErrNotFound, caller+" removing "+name)
+			assert.ElementsMatch(t, tg.parents, w.parentsOf(tg.id), caller+" removing "+name+": every edge stays")
+		}
+	}
+
+	require.NoError(t, w.svc.RemoveMember(w.as(w.invite), w.invite.node, w.g.WorkspaceID, w.plain.node), "invite-only removes a person")
+	assert.False(t, w.isMember(w.plain))
+	co := w.person(w.g.Members)
+	require.NoError(t, w.svc.RemoveMember(w.as(w.owner), w.owner.node, w.g.WorkspaceID, co.node), "an owner removes a person")
+	assert.False(t, w.isMember(co))
+}
+
 // If the policy cannot answer whether the target holds manage, the removal is
 // refused; with it answering, the same removal goes through.
 func TestRealPolicy_RemovingAMemberIsRefusedWhenManageCannotBeChecked(t *testing.T) {

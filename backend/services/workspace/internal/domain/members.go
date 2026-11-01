@@ -71,7 +71,7 @@ func requireOwner(owners []*policypb.NGACNode, callerNodeID string) error {
 // manage is grantable per area, so an invite-only role could otherwise remove the
 // people above it. If the policy cannot say what the target holds, the removal is
 // refused.
-func (s *Service) requireManageToRemoveManager(ctx context.Context, callerNodeID string, ws *WorkspaceResult, targetNodeID string) error {
+func (s *Service) requireManageToRemoveManager(ctx context.Context, callerNodeID string, ws *WorkspaceResult, target memberNode) error {
 	// Every refusal here is fail-closed; one that comes from the policy service not
 	// answering is 503, not a denial, so the caller retries instead of giving up.
 	unavailable := func(what string, err error) error {
@@ -86,7 +86,7 @@ func (s *Service) requireManageToRemoveManager(ctx context.Context, callerNodeID
 	for _, id := range oas {
 		ids = append(ids, id)
 	}
-	held, err := policyclient.New(s.policyRead).BatchCheck(ctx, targetNodeID, ids, []string{ngac.OpManage})
+	held, err := policyclient.New(s.policyRead).BatchCheck(ctx, string(target), ids, []string{ngac.OpManage})
 	if err != nil {
 		return unavailable("batch check", err)
 	}
@@ -107,6 +107,11 @@ func (s *Service) requireManageToRemoveManager(ctx context.Context, callerNodeID
 // must hold invite on the workspace's Mgmt OA, and manage on it too when the
 // person holds manage on any area.
 //
+// The target must be a person of the workspace (a U node under its Members UA);
+// anything else, a role or department UA above all, is refused as not found before
+// any edge is touched. Without it, invite alone would detach a role from the
+// directory restriction or a department from its parent.
+//
 // Removing someone in the Owners UA takes being an Owner and holding manage, and
 // the last owner stays. That rule is checked and acted on under the workspace's
 // owner lock, so two removals at once cannot both pass it.
@@ -116,11 +121,16 @@ func (s *Service) RemoveMember(ctx context.Context, callerNodeID, wsID, targetNG
 		return err
 	}
 	remove := func(ctx context.Context) error {
+		// Under the lock, so the person proved here is the one detached.
+		target, err := s.memberOf(ctx, ws, targetNGACNodeID)
+		if err != nil {
+			return err
+		}
 		_, owners, err := s.ownersOf(ctx, ws)
 		if err != nil {
 			return err
 		}
-		if containsNode(owners, targetNGACNodeID) {
+		if containsNode(owners, string(target)) {
 			if err := requireOwner(owners, callerNodeID); err != nil {
 				return err
 			}
@@ -134,10 +144,10 @@ func (s *Service) RemoveMember(ctx context.Context, callerNodeID, wsID, targetNG
 			if len(owners) <= 1 {
 				return fmt.Errorf("%w: cannot remove last owner", ErrInvalidInput)
 			}
-		} else if err := s.requireManageToRemoveManager(ctx, callerNodeID, ws, targetNGACNodeID); err != nil {
+		} else if err := s.requireManageToRemoveManager(ctx, callerNodeID, ws, target); err != nil {
 			return err
 		}
-		return s.detachMember(ctx, ws, targetNGACNodeID)
+		return s.detachMember(ctx, ws, target)
 	}
 	if err := s.store.WithOwnerLock(ctx, ws.ID, remove); err != nil {
 		return err
@@ -192,28 +202,73 @@ func (s *Service) repairRemoval(ctx context.Context, wsID, nodeID string, delays
 		"workspace", wsID, "user_node_id", nodeID)
 }
 
-// detachMember removes a user from every UA under the workspace PC. It performs
-// no authorization; callers must have authorized already.
-func (s *Service) detachMember(ctx context.Context, ws *WorkspaceResult, targetNGACNodeID string) error {
+// detachMember removes a person from every UA under the workspace PC. It performs
+// no authorization; callers must have authorized already. It takes a memberNode,
+// so it can only ever be pointed at a person, never at a UA.
+func (s *Service) detachMember(ctx context.Context, ws *WorkspaceResult, target memberNode) error {
+	targetNGACNodeID := string(target)
 	desc, err := s.policyWrite.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: ws.PcNodeID})
 	if err != nil {
 		return fmt.Errorf("get descendants: %w", err)
 	}
-	// Every UA the user is detached from is one revocation. A failure here
-	// leaves the user assigned and therefore still authorized, so it has to
-	// surface rather than be dropped — reporting "removed" while the graph
-	// still grants access is the worst possible outcome.
-	var failed []string
+	membership, err := s.membershipUAs(ctx, ws)
+	if err != nil {
+		return err
+	}
+	// The UAs that make the person a member (Members and those under it: Owners,
+	// TenantMember) go last, and only once every other edge is gone. Removal only
+	// ever acts on a member, so a removal that fails half-way must leave the person
+	// one: the retry then finishes the job instead of being refused with a role or
+	// department edge (a view of a hidden directory) left behind.
+	var others, members []string
 	for _, n := range desc.Nodes {
 		if n.NodeType != ngac.TypeUA {
 			continue
 		}
+		if membership[n.Id] {
+			members = append(members, n.Id)
+		} else {
+			others = append(others, n.Id)
+		}
+	}
+	if err := s.detachFrom(ctx, targetNGACNodeID, others); err != nil {
+		return err
+	}
+	return s.detachFrom(ctx, targetNGACNodeID, members)
+}
+
+// membershipUAs is the Members UA of the workspace and every UA beneath it.
+func (s *Service) membershipUAs(ctx context.Context, ws *WorkspaceResult) (map[string]bool, error) {
+	membersID, err := policyclient.MembersUA(ctx, s.policyWrite, ngac.WorkspaceID(ws.ID))
+	if err != nil {
+		return nil, err
+	}
+	desc, err := s.policyWrite.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: membersID})
+	if err != nil {
+		return nil, fmt.Errorf("get descendants of members: %w", err)
+	}
+	out := map[string]bool{membersID: true}
+	for _, n := range desc.GetNodes() {
+		if n.GetNodeType() == ngac.TypeUA {
+			out[n.GetId()] = true
+		}
+	}
+	return out, nil
+}
+
+// detachFrom removes the person's assignment to each UA. Every UA is one
+// revocation: a failure leaves the person assigned and therefore still
+// authorized, so it surfaces rather than being dropped — reporting "removed"
+// while the graph still grants access is the worst possible outcome.
+func (s *Service) detachFrom(ctx context.Context, nodeID string, uaIDs []string) error {
+	var failed []string
+	for _, id := range uaIDs {
 		if _, err := s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
-			ChildId: targetNGACNodeID, ParentId: n.Id,
+			ChildId: nodeID, ParentId: id,
 		}); err != nil {
 			slog.Error("failed to detach user from UA during member removal",
-				"user_node_id", targetNGACNodeID, "ua_id", n.Id, "error", err)
-			failed = append(failed, n.Id)
+				"user_node_id", nodeID, "ua_id", id, "error", err)
+			failed = append(failed, id)
 		}
 	}
 	if len(failed) > 0 {

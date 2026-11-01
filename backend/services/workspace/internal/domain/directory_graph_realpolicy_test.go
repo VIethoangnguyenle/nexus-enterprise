@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -448,24 +449,33 @@ func TestRealPolicy_ChangingDepartmentSwapsThePeersEdge(t *testing.T) {
 
 // Someone removed from the workspace keeps no view: not the department edge (the
 // association on a hidden Dir is on the department UA), not the peers edge, not
-// Limited, not Members.
+// Limited, not Members. A removal that fails half-way leaves the person a member
+// (the membership edges go last), so the retry is accepted and finishes the job:
+// removal only ever acts on a member, and a stale department edge alone would be
+// enough to read the hidden Dir.
 func TestRealPolicy_ARemovedMemberKeepsNoEdgeThatGaveAView(t *testing.T) {
 	w := newDirWorld(t, domain.TypeOrganization)
 	h := w.dept("H", nil)
 	w.hide(h)
 	leaver := w.member(w.limited())
-	stray := w.newPerson() // never a member, but holds a stale department edge
+	interrupted := w.member()
 	w.place(leaver, h)
-	testutil.Assign(t, w.write, stray.node, h.NGACUaID)
+	w.place(interrupted, h)
 
 	assert.True(t, w.can(leaver, w.dir(h), ngac.OpRead), "before: H's own person reads the hidden Dir")
 	assert.True(t, w.can(leaver, w.peer(h), ngac.OpRead))
-	assert.True(t, w.can(stray, w.dir(h), ngac.OpRead), "a stale department edge alone is enough to read: the reason it must go")
 
 	require.NoError(t, w.svc.RemoveMember(w.as(w.owner), w.owner.node, w.ws.ID, leaver.node))
-	require.NoError(t, w.svc.RemoveMember(w.as(w.owner), w.owner.node, w.ws.ID, stray.node))
 
-	for name, p := range map[string]wsPerson{"leaver": leaver, "stray": stray} {
+	// The department edge cannot be removed the first time.
+	flaky := &failRemoveOnce{PolicyWriteServiceClient: w.write, parent: h.NGACUaID}
+	svc := domain.NewService(store.New(w.pool), store.New(w.pool), w.read, flaky, nil, nil)
+	require.Error(t, svc.RemoveMember(w.as(w.owner), w.owner.node, w.ws.ID, interrupted.node))
+	assert.True(t, w.under(interrupted.node, h.NGACUaID), "the department edge survived the failure")
+	assert.True(t, w.under(interrupted.node, w.ws.MembersUaID), "so the person is still a member")
+	require.NoError(t, svc.RemoveMember(w.as(w.owner), w.owner.node, w.ws.ID, interrupted.node), "and the retry is accepted")
+
+	for name, p := range map[string]wsPerson{"leaver": leaver, "interrupted": interrupted} {
 		assert.False(t, w.under(p.node, h.NGACUaID), name+": the department edge is removed")
 		assert.False(t, w.under(p.node, w.peers(h)), name+": the peers edge is removed")
 		assert.False(t, w.under(p.node, w.limited()), name+": the Limited edge is removed")
@@ -476,6 +486,21 @@ func TestRealPolicy_ARemovedMemberKeepsNoEdgeThatGaveAView(t *testing.T) {
 	}
 	member := w.member()
 	assert.True(t, w.can(member, w.owners(), ngac.OpRead), "an ordinary member still reads the owners")
+}
+
+// failRemoveOnce fails the first removal of an assignment to parent.
+type failRemoveOnce struct {
+	policypb.PolicyWriteServiceClient
+	parent string
+	failed bool
+}
+
+func (f *failRemoveOnce) RemoveAssignment(ctx context.Context, in *policypb.RemoveAssignmentRequest, opts ...grpc.CallOption) (*policypb.Empty, error) {
+	if in.GetParentId() == f.parent && !f.failed {
+		f.failed = true
+		return nil, status.Error(codes.Unavailable, "policy down")
+	}
+	return f.PolicyWriteServiceClient.RemoveAssignment(ctx, in, opts...)
 }
 
 // Tearing a workspace down removes its prohibition, which has no foreign key to
