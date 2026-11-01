@@ -49,6 +49,9 @@ type TenantMembership struct {
 	DepartmentName string
 	// TenantType is the workspace's type. Filled by GetTenantUser only.
 	TenantType string
+	// Title is the person's title in this workspace: the one set here, "" when
+	// cleared here, else the account default. Filled by GetTenantUser only.
+	Title string
 }
 
 // Tenant represents a workspace used as a tenant.
@@ -186,16 +189,19 @@ func (s *Store) ListTenantsByUser(ctx context.Context, userID string) ([]TenantM
 
 // GetTenantUser retrieves a specific tenant membership, with the name of the
 // department an administrator assigned (workspace-scoped; never the person's own
-// claim).
+// claim) and the person's title in this workspace.
 func (s *Store) GetTenantUser(ctx context.Context, tenantID, userID string) (*TenantMembership, error) {
 	var m TenantMembership
 	err := s.db.QueryRow(ctx,
-		`SELECT tu.tenant_id, w.name, tu.user_id, tu.role, tu.status, tu.open_id, COALESCE(tu.ngac_node_id,''), COALESCE(d.name,''), w.type
+		`SELECT tu.tenant_id, w.name, tu.user_id, tu.role, tu.status, tu.open_id, COALESCE(tu.ngac_node_id,''), COALESCE(d.name,''), w.type,
+		        `+workspaceTitle+`
 		 FROM tenant_users tu
 		 JOIN workspaces w ON w.id = tu.tenant_id
+		 JOIN users u ON u.id = tu.user_id
 		 LEFT JOIN departments d ON d.id = tu.department_id AND d.workspace_id = tu.tenant_id
 		 WHERE tu.tenant_id = $1 AND tu.user_id = $2`,
-		tenantID, userID).Scan(&m.TenantID, &m.TenantName, &m.UserID, &m.Role, &m.Status, &m.OpenID, &m.NGACNodeID, &m.DepartmentName, &m.TenantType)
+		tenantID, userID).Scan(&m.TenantID, &m.TenantName, &m.UserID, &m.Role, &m.Status, &m.OpenID, &m.NGACNodeID, &m.DepartmentName, &m.TenantType,
+		&m.Title)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}

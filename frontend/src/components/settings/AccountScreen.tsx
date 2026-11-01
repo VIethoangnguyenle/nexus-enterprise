@@ -31,7 +31,7 @@ const FIELDS: Record<Field, { title: string; api: 'display_name' | 'title' | 'lo
 function useProfilePage() {
   const { workspaceId } = useActiveWorkspace()
   const q = useMyProfile(workspaceId)
-  const save = useUpdateProfile()
+  const save = useUpdateProfile(workspaceId)
   const [editing, setEditing] = useState<Field | null>(null)
   const person = q.data?.user
   const values: ProfileForm = { displayName: person?.display_name ?? '', title: person?.title ?? '', location: person?.location ?? '' }

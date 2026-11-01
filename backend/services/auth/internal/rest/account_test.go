@@ -46,6 +46,7 @@ type acctStore struct {
 	// names the administrator-assigned department by "user|workspace".
 	status      map[string]string
 	department  map[string]string
+	titles      map[string]string // "user|workspace" -> the title set in that workspace
 	contacts    []store.User
 	contactsTot int
 	contactsNxt *store.ContactCursor
@@ -59,7 +60,7 @@ func newAcctStore() *acctStore {
 	return &acctStore{
 		users: map[string]*store.User{}, changes: map[string]store.ProfileChanges{},
 		members: map[string][]store.WorkspaceSummary{}, byEmail: map[string]string{}, verified: map[string]bool{},
-		status: map[string]string{}, department: map[string]string{},
+		status: map[string]string{}, department: map[string]string{}, titles: map[string]string{},
 	}
 }
 
@@ -99,6 +100,22 @@ func (s *acctStore) UpdateProfile(_ context.Context, id string, ch store.Profile
 	if s.users[id] == nil {
 		return store.ErrNoSuchUser
 	}
+	// As the store: a workspace named must be one the person is an active member
+	// of, and then the title is that workspace's.
+	if ch.WorkspaceID != "" {
+		member := false
+		for _, w := range s.members[id] {
+			if w.ID == ch.WorkspaceID && s.statusOf(id) == "active" {
+				member = true
+			}
+		}
+		if !member {
+			return store.ErrNotMember
+		}
+		if ch.Title != nil {
+			s.titles[id+"|"+ch.WorkspaceID] = *ch.Title
+		}
+	}
 	s.changes[id] = ch
 	s.users[id].ProfileCompleted = true
 	if ch.DisplayName != nil {
@@ -122,15 +139,24 @@ func (s *acctStore) GetTenantUser(_ context.Context, tenantID, userID string) (*
 	defer s.mu.Unlock()
 	for _, w := range s.members[userID] {
 		if w.ID == tenantID {
-			st := "active"
-			if v, ok := s.status[userID]; ok {
-				st = v
+			title, set := s.titles[userID+"|"+tenantID]
+			if !set {
+				title = s.users[userID].Title
 			}
-			return &store.TenantMembership{TenantID: tenantID, TenantName: w.Name, UserID: userID, Role: w.Role, Status: st,
-				DepartmentName: s.department[userID+"|"+tenantID]}, nil
+			return &store.TenantMembership{TenantID: tenantID, TenantName: w.Name, UserID: userID, Role: w.Role, Status: s.statusOf(userID),
+				DepartmentName: s.department[userID+"|"+tenantID], Title: title}, nil
 		}
 	}
 	return nil, nil
+}
+
+// statusOf is the person's membership status: "active" unless overridden. The
+// caller holds s.mu.
+func (s *acctStore) statusOf(userID string) string {
+	if v, ok := s.status[userID]; ok {
+		return v
+	}
+	return "active"
 }
 
 func (s *acctStore) InsertTenantUser(_ context.Context, tenantID, userID, role, _, _ string) error {

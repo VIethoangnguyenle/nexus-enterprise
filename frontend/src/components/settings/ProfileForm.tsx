@@ -30,7 +30,7 @@ export const accountFields = (isPersonal: boolean): readonly (keyof ProfileForm)
 export function useProfileForm(fields: readonly (keyof ProfileForm)[] = ['displayName', 'title', 'location']) {
   const { workspaceId } = useActiveWorkspace()
   const q = useMyProfile(workspaceId)
-  const save = useUpdateProfile()
+  const save = useUpdateProfile(workspaceId)
 
   // The person's own record (GET /api/me), not a search of the directory.
   const person = q.data?.user

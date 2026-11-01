@@ -170,6 +170,9 @@ describe('Lịch on a wide screen', () => {
     const week = within(cal).getByRole('radiogroup', { name: 'Tuần bắt đầu vào' })
     expect(within(week).getByRole('radio', { name: 'Thứ Hai' })).toHaveAttribute('aria-checked', 'true')
     await waitFor(() => expect(within(cal).getByRole('combobox', { name: 'Múi giờ' })).toHaveValue('Asia/Ho_Chi_Minh'))
+    // The zone reads as an offset and a place, never as its IANA id.
+    expect(within(cal).getByRole('option', { name: '(GMT+7) Hà Nội' })).toHaveProperty('selected', true)
+    expect(within(cal).queryByRole('option', { name: /Asia\/|Ho Chi Minh/ })).toBeNull()
     expect(within(cal).getByRole('combobox', { name: 'Bắt đầu làm việc' })).toHaveValue('08:00')
     expect(within(cal).getByRole('combobox', { name: 'Kết thúc làm việc' })).toHaveValue('17:30')
     expect(await within(cal).findByRole('checkbox', { name: 'Lê Thị Hoa' })).toBeChecked()

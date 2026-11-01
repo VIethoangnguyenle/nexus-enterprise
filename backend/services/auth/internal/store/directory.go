@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -15,19 +16,52 @@ type ProfileChanges struct {
 	Title       *string
 	Location    *string
 	Language    *string
+	// WorkspaceID scopes the title: when set, Title is this workspace's
+	// (tenant_users.title) and the account default (users.title) is left alone.
+	// Empty writes the account default. The other fields are always the account's.
+	WorkspaceID string
 }
+
+// ErrNotMember is returned when a write names a workspace the person is not an
+// active member of (or one that does not exist).
+var ErrNotMember = errors.New("not an active member of the workspace")
 
 // UpdateProfile writes only the fields in ch and marks the profile as
 // completed the first time a profile field (name, title, location) is saved.
 // The language alone is a preference, not a profile: saving only it completes
-// nothing. It returns ErrNoSuchUser when the account does not exist.
+// nothing. It returns ErrNoSuchUser when the account does not exist, and
+// ErrNotMember, having written nothing, when ch names a workspace the person is
+// not an active member of.
 func (s *Store) UpdateProfile(ctx context.Context, userID string, ch ProfileChanges) error {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("update profile: begin: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // a no-op once committed
+
+	accountTitle := ch.Title
+	if ch.WorkspaceID != "" {
+		// The membership row is locked by the update, so a removal racing this
+		// write either lands before (refused) or after (the title goes with the row).
+		tag, err := tx.Exec(ctx,
+			`UPDATE tenant_users SET title = COALESCE($3, title)
+			  WHERE tenant_id = $1 AND user_id = $2 AND status = 'active'`,
+			ch.WorkspaceID, userID, ch.Title)
+		if err != nil {
+			return fmt.Errorf("update workspace title: %w", err)
+		}
+		if tag.RowsAffected() == 0 {
+			return ErrNotMember
+		}
+		accountTitle = nil
+	}
+
 	// The personal workspaces this person owns that still carry their previous
 	// name follow the new one, in the same statement: the one made at sign-up
 	// is named after them (first after the handle sign-up gave them). One they
 	// renamed, or an organization, keeps its name.
 	var updated bool
-	err := s.db.QueryRow(ctx,
+	err = tx.QueryRow(ctx,
 		`WITH old AS (
 		     -- The statement's snapshot: the name before this update. (No FOR UPDATE:
 		     -- it would skip the row the UPDATE below changes in the same statement.)
@@ -39,7 +73,7 @@ func (s *Store) UpdateProfile(ctx context.Context, userID string, ch ProfileChan
 		         location     = COALESCE($4, location),
 		         language     = COALESCE($5, language),
 		         profile_completed_at = CASE
-		             WHEN $2::text IS NULL AND $3::text IS NULL AND $4::text IS NULL THEN profile_completed_at
+		             WHEN $2::text IS NULL AND NOT $6::boolean AND $4::text IS NULL THEN profile_completed_at
 		             ELSE COALESCE(profile_completed_at, NOW())
 		         END
 		     WHERE id = $1
@@ -51,12 +85,16 @@ func (s *Store) UpdateProfile(ctx context.Context, userID string, ch ProfileChan
 		        AND w.name = old.display_name AND old.display_name IS DISTINCT FROM $2
 		 )
 		 SELECT EXISTS (SELECT 1 FROM upd)`,
-		userID, ch.DisplayName, ch.Title, ch.Location, ch.Language).Scan(&updated)
+		// A title saved in a workspace completes the profile like one saved on the account.
+		userID, ch.DisplayName, accountTitle, ch.Location, ch.Language, ch.Title != nil).Scan(&updated)
 	if err != nil {
 		return fmt.Errorf("update profile: %w", err)
 	}
 	if !updated {
 		return ErrNoSuchUser
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("update profile: commit: %w", err)
 	}
 	return nil
 }
@@ -137,6 +175,11 @@ type ContactFilter struct {
 	After        *ContactCursor // nil for the first page
 }
 
+// workspaceTitle is a person's title in the workspace of the membership row tu:
+// the one set there, "" when it was cleared there, and the account's default
+// (users.title) when nothing was set there.
+const workspaceTitle = `COALESCE(tu.title, u.title, '')`
+
 // likeEscaper makes a person's text literal inside ILIKE.
 var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 
@@ -201,7 +244,7 @@ func (s *Store) ListContactsByWorkspace(ctx context.Context, workspaceID string,
 	}
 	if f.Search != "" {
 		like := "%" + likeEscaper.Replace(f.Search) + "%"
-		add(`(`+name+` ILIKE ? ESCAPE '\' OR COALESCE(u.title,'') ILIKE ? ESCAPE '\'
+		add(`(`+name+` ILIKE ? ESCAPE '\' OR `+workspaceTitle+` ILIKE ? ESCAPE '\'
 			OR COALESCE(d.name,'') ILIKE ? ESCAPE '\' OR COALESCE(u.email,'') ILIKE ? ESCAPE '\')`, like, like, like, like)
 	}
 
@@ -221,7 +264,7 @@ func (s *Store) ListContactsByWorkspace(ctx context.Context, workspaceID string,
 	args = append(args, limit+1)
 	query := `SELECT u.id, u.username, COALESCE(u.ngac_node,''), COALESCE(u.email,''),
 			COALESCE(u.union_id,''), ` + name + `, COALESCE(u.phone,''),
-			COALESCE(u.title,''), COALESCE(d.name,''), COALESCE(d.id,''), COALESCE(u.location,''), COALESCE(u.avatar_url,''),
+			` + workspaceTitle + `, COALESCE(d.name,''), COALESCE(d.id,''), COALESCE(u.location,''), COALESCE(u.avatar_url,''),
 			lower(` + name + `)` +
 		from + " WHERE true" + where +
 		fmt.Sprintf(" ORDER BY lower(%s), u.id LIMIT $%d", name, len(args))

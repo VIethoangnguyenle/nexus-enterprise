@@ -250,6 +250,8 @@ func (s *Service) GetMe(ctx context.Context, userID, tenantID string) (*UserInfo
 
 	var tInfo *TenantInfo
 	if membership != nil && membership.Status == "active" {
+		// The title is the one this workspace shows, not the account default.
+		uInfo.Title = membership.Title
 		tInfo = &TenantInfo{
 			ID: membership.TenantID, Name: membership.TenantName,
 			Role: membership.Role, OpenID: membership.OpenID, Department: membership.DepartmentName,

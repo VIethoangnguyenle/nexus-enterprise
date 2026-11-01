@@ -146,6 +146,30 @@ func TestDirectoryStore(t *testing.T) {
 			assert.Equal(t, "admin", role, "and leaves the role of a person who did not leave")
 		}
 	})
+
+	t.Run("the title shown is the workspace's, else the account default", func(t *testing.T) {
+		wsC, _ := testutil.CreateWorkspace(t, pool, ownerID)
+		titleIn := func(ws string) string {
+			t.Helper()
+			got, err := st.ProfilesByNodeIDs(ctx, ws, []string{nodeID})
+			require.NoError(t, err)
+			require.Contains(t, got, nodeID)
+			return got[nodeID].Title
+		}
+		_, err := pool.Exec(ctx, `UPDATE tenant_users SET title = 'Kế toán trưởng' WHERE tenant_id = $1 AND user_id = $2`, wsA, userID)
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, `UPDATE tenant_users SET title = NULL WHERE tenant_id = $1 AND user_id = $2`, wsB, userID)
+		require.NoError(t, err)
+
+		assert.Equal(t, "Kế toán trưởng", titleIn(wsA), "set in this workspace")
+		assert.Equal(t, "Chuyên viên", titleIn(wsB), "nothing set here: the account default")
+		assert.Equal(t, "Chuyên viên", titleIn(wsC), "no membership row: the account default")
+
+		_, err = pool.Exec(ctx, `UPDATE tenant_users SET title = '' WHERE tenant_id = $1 AND user_id = $2`, wsB, userID)
+		require.NoError(t, err)
+		assert.Equal(t, "", titleIn(wsB), "cleared in this workspace: empty, not the default")
+		assert.Equal(t, "Kế toán trưởng", titleIn(wsA), "another workspace keeps its own")
+	})
 }
 
 // People who are no longer in the workspace are not members for the two counts
