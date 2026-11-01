@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/http"
 	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"golang.org/x/time/rate"
 
-	"ngac-platform/ngac"
 	"ngac-platform/pkg/grpcauth"
 )
 
@@ -17,10 +18,14 @@ import (
 type Hub struct {
 	mu       sync.RWMutex
 	channels map[string]map[*Client]bool
-	users    map[string]map[*Client]bool // userID → connected clients
-	rdb      *redis.Client
-	ctx      context.Context
-	cancel   context.CancelFunc
+	// channelWorkspace is the workspace each subscribed channel belongs to, as
+	// the authorizer reported it, so a removal from a workspace finds the
+	// channels of that workspace whatever tenant the socket signed in to.
+	channelWorkspace map[string]string
+	users            map[string]map[*Client]bool // userID → connected clients
+	rdb              *redis.Client
+	ctx              context.Context
+	cancel           context.CancelFunc
 
 	// access authorizes joining a channel's live stream. A nil checker denies
 	// every subscription.
@@ -34,15 +39,24 @@ type Hub struct {
 	// dom holds workspace subscriptions, sequence numbers and the presence
 	// grace timers (hub_domain.go). Its maps are guarded by mu.
 	dom domainState
+
+	// Connection guards (hub_guard.go). limits, clientIP, origins and
+	// frameLimiters are guarded by mu; slots has its own lock.
+	limits        ConnLimits
+	clientIP      func(*http.Request) string
+	origins       OriginPolicy
+	slots         *ipSlots
+	frameLimiters map[string]*rate.Limiter // userID → frame budget of their sessions
 }
 
 // subscribeCheckTimeout bounds the policy round-trip a Subscribe waits on.
 const subscribeCheckTimeout = 5 * time.Second
 
-// ChannelAccessChecker answers whether a user may perform an operation on a
-// channel. domain.Service satisfies it.
+// ChannelAccessChecker answers whether a user may follow a channel's live
+// stream (read on it) and, when they may, which workspace the channel belongs
+// to. domain.Service satisfies it.
 type ChannelAccessChecker interface {
-	AuthorizeChannelAccess(ctx context.Context, channelID, userNodeID, operation string) error
+	AuthorizeChannelSubscribe(ctx context.Context, channelID, userNodeID string) (workspaceID string, err error)
 }
 
 // NewHub creates a Hub with optional Redis pub/sub for horizontal scaling.
@@ -52,13 +66,19 @@ type ChannelAccessChecker interface {
 func NewHub(rdb *redis.Client, access ChannelAccessChecker) *Hub {
 	ctx, cancel := context.WithCancel(context.Background())
 	h := &Hub{
-		channels: make(map[string]map[*Client]bool),
-		users:    make(map[string]map[*Client]bool),
-		rdb:      rdb,
-		ctx:      ctx,
-		cancel:   cancel,
-		access:   access,
-		dom:      newDomainState(),
+		channels:         make(map[string]map[*Client]bool),
+		channelWorkspace: make(map[string]string),
+		users:            make(map[string]map[*Client]bool),
+		rdb:              rdb,
+		ctx:              ctx,
+		cancel:           cancel,
+		access:           access,
+		dom:              newDomainState(),
+		limits:           DefaultConnLimits(),
+		clientIP:         directIP,
+		origins:          OriginPolicy{allowed: map[string]bool{}},
+		slots:            newIPSlots(),
+		frameLimiters:    make(map[string]*rate.Limiter),
 	}
 	if rdb != nil {
 		go h.subscribeRedis()
@@ -94,28 +114,32 @@ func (h *Hub) Close() {
 // no checker, no identity, a policy error — is a refusal.
 //
 // who is the session's verified identity (from the JWT it authenticated with);
-// it rides the context so the policy check runs as that user.
-func (h *Hub) authorizeSubscribe(channelID string, who grpcauth.Caller) error {
+// it rides the context so the policy check runs as that user. On success it
+// returns the workspace the channel belongs to.
+func (h *Hub) authorizeSubscribe(channelID string, who grpcauth.Caller) (string, error) {
 	if h.access == nil {
-		return errors.New("no channel access checker configured")
+		return "", errors.New("no channel access checker configured")
 	}
 	if channelID == "" || who.NGACNodeID == "" {
-		return errors.New("channel and user identity required")
+		return "", errors.New("channel and user identity required")
 	}
 	ctx, cancel := context.WithTimeout(grpcauth.WithCaller(h.ctx, who), subscribeCheckTimeout)
 	defer cancel()
-	return h.access.AuthorizeChannelAccess(ctx, channelID, who.NGACNodeID, ngac.OpRead)
+	return h.access.AuthorizeChannelSubscribe(ctx, channelID, who.NGACNodeID)
 }
 
-// subscribe adds a client to a local channel group. Callers must have passed
-// authorizeSubscribe first.
-func (h *Hub) subscribe(channelID string, client *Client) {
+// subscribe adds a client to a local channel group and records the workspace
+// the channel belongs to. Callers must have passed authorizeSubscribe first.
+func (h *Hub) subscribe(channelID, workspaceID string, client *Client) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.channels[channelID] == nil {
 		h.channels[channelID] = make(map[*Client]bool)
 	}
 	h.channels[channelID][client] = true
+	if workspaceID != "" {
+		h.channelWorkspace[channelID] = workspaceID
+	}
 }
 
 // RevokeChannelSubscriptions drops every live subscription the user (by NGAC
@@ -203,6 +227,7 @@ func (h *Hub) UnsubscribeAll(client *Client) {
 		delete(userClients, client)
 		if len(userClients) == 0 {
 			delete(h.users, client.userID)
+			delete(h.frameLimiters, client.userID)
 		}
 	}
 }

@@ -32,6 +32,17 @@ func (s *Service) AuthorizeChannelAccess(ctx context.Context, channelID, userNod
 	return err
 }
 
+// AuthorizeChannelSubscribe authorizes following a channel's live stream, which
+// is a read of the channel, and returns the workspace the channel belongs to so
+// the subscription can be ended when the user leaves that workspace.
+func (s *Service) AuthorizeChannelSubscribe(ctx context.Context, channelID, userNodeID string) (string, error) {
+	ch, err := s.authorizeChannel(ctx, channelID, userNodeID, ngac.OpRead)
+	if err != nil {
+		return "", err
+	}
+	return ch.WorkspaceID, nil
+}
+
 // loadChannel returns the channel, ErrNotFound when there is none, and a plain
 // wrapped error when the lookup itself failed.
 func (s *Service) loadChannel(ctx context.Context, channelID string) (*store.Channel, error) {

@@ -34,26 +34,35 @@ const quiet = 300 * time.Millisecond
 
 // fakeAccess stands in for the domain's channel authorizer. It grants exactly
 // the (channel, user node, operation) triples it is told to and records every
-// question it is asked.
+// question it is asked. workspace names the workspace a channel belongs to
+// (none when absent).
 type fakeAccess struct {
-	mu     sync.Mutex
-	allow  map[[3]string]bool
-	err    error
-	called [][3]string
+	mu        sync.Mutex
+	allow     map[[3]string]bool
+	workspace map[string]string
+	err       error
+	called    [][3]string
 }
 
-func (f *fakeAccess) AuthorizeChannelAccess(_ context.Context, channelID, userNodeID, operation string) error {
+func (f *fakeAccess) AuthorizeChannelSubscribe(_ context.Context, channelID, userNodeID string) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	key := [3]string{channelID, userNodeID, operation}
+	key := [3]string{channelID, userNodeID, ngac.OpRead}
 	f.called = append(f.called, key)
 	if f.err != nil {
-		return f.err
+		return "", f.err
 	}
 	if f.allow[key] {
-		return nil
+		return f.workspace[channelID], nil
 	}
-	return domain.ErrAccessDenied
+	return "", domain.ErrAccessDenied
+}
+
+// revoke takes read on the channel away from the user.
+func (f *fakeAccess) revoke(channelID, userNodeID string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.allow, [3]string{channelID, userNodeID, ngac.OpRead})
 }
 
 func (f *fakeAccess) calls() [][3]string {

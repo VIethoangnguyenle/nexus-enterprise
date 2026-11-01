@@ -61,8 +61,8 @@ A refused subscription is answered with an acknowledgement marked `denied`, in a
 ### Requirement: A subscription ends when its justification does
 A subscription was authorized when it opened and SHALL NOT outlive what justified it:
 
-- When a member is removed or leaves, the hub SHALL drop, on every instance, that user's workspace subscription and every channel subscription held in the workspace's tenant, before anyone is told they left (the workspace `member_removed` event drives it).
-- When a permission event names a user, the hub SHALL ask the policy service again about each workspace that user's sessions follow and drop the ones that no longer pass.
+- When a member is removed or leaves, the hub SHALL drop, on every instance, that user's workspace subscription and every subscription to a channel of that workspace, before anyone is told they left (the workspace `member_removed` event drives it). A channel is matched by the workspace it belongs to (recorded when the subscription was authorized), not by the tenant of the socket that holds it, so a socket signed in to another tenant loses it too; a channel whose workspace is unknown is matched by the socket's tenant.
+- When a permission event names a user, the hub SHALL ask the policy service again about each workspace and each channel that user's sessions follow in that tenant and drop the ones that no longer pass.
 - A session SHALL be closed at the expiry of the token it authenticated with; the client reconnects with its refreshed token, and a client that cannot has lost its right to listen.
 
 #### Scenario: Removed while connected
@@ -76,6 +76,38 @@ A subscription was authorized when it opened and SHALL NOT outlive what justifie
 #### Scenario: Token expiry
 - **WHEN** a session's token expires
 - **THEN** the server closes the connection
+
+#### Scenario: Removed from a workspace whose channel is followed from another tenant
+- **WHEN** a person signed in to tenant B follows a channel of workspace A and is removed from A
+- **THEN** frames of that channel stop reaching the B socket, the B socket stays open, and B's channels keep arriving
+
+#### Scenario: Read on a channel taken away
+- **WHEN** a permission event names a user whose read on a followed channel is gone
+- **THEN** that channel's frames stop reaching their sessions, and channels they may still read keep arriving
+
+### Requirement: A socket has one identity and bounded cost
+A WebSocket connection SHALL authenticate exactly once. A second `auth` frame on an authenticated socket SHALL be answered with an error and the connection closed with 1008 (policy violation); a client that needs another identity opens another socket. Re-authenticating in place would carry one identity's subscriptions over to another, out of reach of the sweeps above.
+
+The hub SHALL bound what a connection may cost the process it shares with messaging's REST and gRPC servers:
+
+- a client frame over 64 KiB closes the connection with 1009 (the largest legitimate frame is the auth frame, a JWT of about a kilobyte);
+- a connection that sends nothing, not even a pong to the hub's pings (every 54 s), for 60 s is closed;
+- one client address may hold at most 256 open connections and at most 32 not yet authenticated (room for an office behind one NAT address); over either cap the upgrade is answered 429. Behind nginx the address is read from `X-Forwarded-For` only when the peer is listed in `MESSAGING_TRUSTED_PROXIES`;
+- a user's frames, across their sessions on one instance, are throttled to 50 per second with a burst of 500 (per connection before authentication). Frames over the budget wait; they are not dropped, so the subscribes a reconnect replays are slowed, never lost.
+
+The upgrade SHALL be refused with 403 when the request's `Origin` is neither absent (not a browser), nor the host the socket is served on (nginx and the Vite dev proxy keep the `Host` header), nor the origin of `APP_BASE_URL`, nor — only when `APP_ENV` is a development environment — a page on `localhost`, `127.0.0.1` or `[::1]` at any port (a dev server whose proxy rewrites `Host`).
+
+#### Scenario: A second auth frame
+- **WHEN** an authenticated socket sends another `auth` frame, for any tenant
+- **THEN** the connection is closed with 1008, and a removal from the first tenant leaves nothing of it delivered
+
+#### Scenario: An oversized frame
+- **WHEN** a client, authenticated or not, sends a frame over 64 KiB
+- **THEN** the connection is closed with 1009; a frame under the limit is read as usual
+
+#### Scenario: A page of another site
+- **WHEN** a page whose origin is not the app's opens `/api/ws`
+- **THEN** the upgrade is answered 403 and no socket opens
 
 ### Requirement: Workspace events are numbered
 The hub SHALL stamp each workspace-level event with the workspace's next sequence number, monotonic per workspace (taken in Redis together with the log append when present, an in-process counter otherwise). Events addressed to a channel or to users carry sequence 0 in the workspace stream: not every subscriber receives them, so their numbers could not be checked for holes. User-addressed events have their own per-user numbers (see "Missed events are replayed from a log"); channel-addressed events have none.

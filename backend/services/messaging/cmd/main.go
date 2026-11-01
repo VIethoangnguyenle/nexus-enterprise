@@ -159,6 +159,24 @@ func main() {
 		slog.Info("LIVEKIT_* not set, calls disabled")
 	}
 
+	// Who is asking, for the per-address limits of the WebSocket hub and the
+	// REST server. Nothing is trusted unless the proxy networks are listed:
+	// X-Forwarded-For is a header any client writes.
+	extractIP, err := httputil.NewIPExtractor(strings.Split(os.Getenv("MESSAGING_TRUSTED_PROXIES"), ","))
+	if err != nil {
+		slog.Error("refusing to start", "error", err)
+		os.Exit(1)
+	}
+	hub.SetClientIP(extractIP)
+	// A page of another site must not open a socket: the hub admits its own
+	// host, the app's public origin and, in development, loopback dev servers.
+	origins, err := mgrpc.NewOriginPolicy(os.Getenv("APP_BASE_URL"), bootstrap.IsDevEnvironment())
+	if err != nil {
+		slog.Warn("APP_BASE_URL unusable as a WebSocket origin; only same-host pages may connect", "error", err)
+		origins, _ = mgrpc.NewOriginPolicy("", bootstrap.IsDevEnvironment())
+	}
+	hub.SetOriginPolicy(origins)
+
 	// Start WebSocket server with graceful shutdown support
 	wsMux := http.NewServeMux()
 	wsMux.HandleFunc("/api/ws", hub.HandleWebSocket(jwtSecret))
@@ -233,13 +251,6 @@ func main() {
 
 	// REST server (client-facing)
 	e := httputil.NewEcho("messaging", echomw.Logger())
-	// Who is asking, for the per-address limits. Nothing is trusted unless the
-	// proxy networks are listed: X-Forwarded-For is a header any client writes.
-	extractIP, err := httputil.NewIPExtractor(strings.Split(os.Getenv("MESSAGING_TRUSTED_PROXIES"), ","))
-	if err != nil {
-		slog.Error("refusing to start", "error", err)
-		os.Exit(1)
-	}
 	e.IPExtractor = extractIP
 	restHandler := rest.NewHandler(domainSvc, notifications, hub)
 	restHandler.RegisterRoutes(e, jwtSecret)

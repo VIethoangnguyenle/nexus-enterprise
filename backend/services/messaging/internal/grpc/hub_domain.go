@@ -234,6 +234,9 @@ func (h *Hub) RevokeWorkspaceSubscriptions(workspaceID, userNodeID string) {
 
 // revokeWorkspaceLocal drops this instance's subscriptions of the user to the
 // workspace and to the channels of its tenant (a workspace is its own tenant).
+// A channel is matched by the workspace it belongs to, so a channel of this
+// workspace followed from a socket signed in to another tenant goes too; a
+// channel whose workspace is not known is matched by the socket's tenant.
 //
 // It also closes the user's connections for that tenant with CloseNotMember: the
 // socket was admitted on a membership that no longer holds, and a client that
@@ -246,9 +249,10 @@ func (h *Hub) revokeWorkspaceLocal(workspaceID, userNodeID string) {
 			delete(h.dom.workspaces[workspaceID], c)
 		}
 	}
-	for _, subscribers := range h.channels {
+	for channelID, subscribers := range h.channels {
+		ofWorkspace := h.channelWorkspace[channelID] == workspaceID
 		for c := range subscribers {
-			if c.ngacNodeID == userNodeID && c.tenantID == workspaceID {
+			if c.ngacNodeID == userNodeID && (ofWorkspace || c.tenantID == workspaceID) {
 				delete(subscribers, c)
 			}
 		}
@@ -269,30 +273,45 @@ func (h *Hub) revokeWorkspaceLocal(workspaceID, userNodeID string) {
 }
 
 // recheckWorkspaceAccess asks the policy service again about each workspace the
-// user's sessions follow in the tenant, and drops the ones that no longer pass.
-// It runs when a permission event names the user: the grant that justified the
-// subscription may be the very thing that changed.
+// user's sessions follow in the tenant, and about each channel of the tenant
+// they follow, and drops the ones that no longer pass. It runs when a permission
+// event names the user: the grant that justified the subscription may be the
+// very thing that changed.
 func (h *Hub) recheckWorkspaceAccess(tenantID, userNodeID string) {
 	type follow struct {
 		c  *Client
-		ws string
+		id string
 	}
-	var follows []follow
+	var workspaces, channels []follow
 	h.mu.RLock()
 	for ws, subscribers := range h.dom.workspaces {
 		for c := range subscribers {
 			if c.ngacNodeID == userNodeID && c.tenantID == tenantID {
-				follows = append(follows, follow{c, ws})
+				workspaces = append(workspaces, follow{c, ws})
+			}
+		}
+	}
+	for channelID, subscribers := range h.channels {
+		ofTenant := h.channelWorkspace[channelID] == tenantID
+		for c := range subscribers {
+			if c.ngacNodeID == userNodeID && (ofTenant || c.tenantID == tenantID) {
+				channels = append(channels, follow{c, channelID})
 			}
 		}
 	}
 	h.mu.RUnlock()
-	for _, f := range follows {
-		who := grpcauth.Caller{UserID: f.c.userID, NGACNodeID: f.c.ngacNodeID, TenantID: f.c.tenantID}
-		if err := h.authorizeWorkspaceSubscribe(f.ws, who); err != nil {
+	for _, f := range workspaces {
+		if err := h.authorizeWorkspaceSubscribe(f.id, f.c.caller()); err != nil {
 			slog.Info("workspace subscription dropped after a permission change",
-				"user_id", f.c.userID, "workspace_id", f.ws, "error", err)
-			h.unsubscribeWorkspace(f.ws, f.c)
+				"user_id", f.c.userID, "workspace_id", f.id, "error", err)
+			h.unsubscribeWorkspace(f.id, f.c)
+		}
+	}
+	for _, f := range channels {
+		if _, err := h.authorizeSubscribe(f.id, f.c.caller()); err != nil {
+			slog.Info("channel subscription dropped after a permission change",
+				"user_id", f.c.userID, "channel_id", f.id, "error", err)
+			h.Unsubscribe(f.id, f.c)
 		}
 	}
 }

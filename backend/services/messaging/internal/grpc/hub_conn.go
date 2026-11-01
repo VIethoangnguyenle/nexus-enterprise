@@ -9,16 +9,13 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
+	"golang.org/x/time/rate"
 	"google.golang.org/protobuf/proto"
 
 	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/policyclient"
 	pb "ngac-platform/proto/messaging"
 )
-
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
-}
 
 const authTimeout = 5 * time.Second
 
@@ -44,6 +41,16 @@ type Client struct {
 	send          chan []byte
 	authenticated bool
 	jwtSecret     string
+
+	// ip is the client address the connection holds a slot for; preAuth says
+	// it still holds the unauthenticated one too. Touched by readPump only.
+	ip      string
+	preAuth bool
+	// limits are the hub's limits when the connection opened. limiter is the
+	// frame budget: the connection's own until it authenticates, then the one
+	// its user's sessions share. Touched by readPump only.
+	limits  ConnLimits
+	limiter *rate.Limiter
 	// viewing is the conversation this session has on screen, "" for none.
 	// Guarded by hub.mu.
 	viewing string
@@ -70,19 +77,45 @@ type WSClaims struct {
 
 // HandleWebSocket returns an HTTP handler that upgrades to WebSocket.
 // Auth is done via first message (ClientEnvelope{auth}) instead of URL query param.
+//
+// Before the upgrade the request's Origin is checked (OriginPolicy) and the
+// client address must have a free slot (ConnLimits); a refusal is answered 403
+// or 429 and no socket is opened.
 func (h *Hub) HandleWebSocket(jwtSecret string) http.HandlerFunc {
+	upgrader := websocket.Upgrader{CheckOrigin: h.checkOrigin}
 	return func(w http.ResponseWriter, r *http.Request) {
+		h.mu.RLock()
+		limits, clientIP := h.limits, h.clientIP
+		h.mu.RUnlock()
+
+		if !h.checkOrigin(r) {
+			slog.Warn("websocket refused: origin not allowed", "origin", r.Header.Get("Origin"), "host", r.Host)
+			http.Error(w, "origin not allowed", http.StatusForbidden)
+			return
+		}
+		ip := clientIP(r)
+		if !h.slots.take(ip, limits) {
+			slog.Warn("websocket refused: too many connections from one address", "ip", ip)
+			http.Error(w, "too many connections", http.StatusTooManyRequests)
+			return
+		}
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
+			h.slots.closed(ip, true)
 			slog.Warn("websocket upgrade failed", "error", err)
 			return
 		}
+		conn.SetReadLimit(limits.MaxFrameBytes)
 
 		client := &Client{
 			conn:      conn,
 			hub:       h,
 			send:      make(chan []byte, 256),
 			jwtSecret: jwtSecret,
+			ip:        ip,
+			preAuth:   true,
+			limits:    limits,
+			limiter:   rate.NewLimiter(rate.Limit(limits.FramesPerSecond), limits.FrameBurst),
 		}
 
 		go client.writePump()
@@ -137,6 +170,8 @@ func (c *Client) handleAuth(req *pb.AuthRequest) bool {
 	c.ngacNodeID = claims.NGACNodeID
 	c.tenantID = claims.TenantID
 	c.authenticated = true
+	c.preAuth = false
+	c.hub.slots.authenticated(c.ip)
 	// A session is good for as long as the token it proved itself with; the
 	// client reconnects with its refreshed one.
 	if claims.ExpiresAt != nil {
@@ -146,12 +181,14 @@ func (c *Client) handleAuth(req *pb.AuthRequest) bool {
 		})
 	}
 
-	// Track client by userID
+	// Track client by userID; from now on its frames draw on the budget its
+	// user's sessions share.
 	c.hub.mu.Lock()
 	if c.hub.users[claims.UserID] == nil {
 		c.hub.users[claims.UserID] = make(map[*Client]bool)
 	}
 	c.hub.users[claims.UserID][c] = true
+	c.limiter = c.hub.userLimiterLocked(claims.UserID)
 	c.hub.mu.Unlock()
 
 	c.sendAuthResponse(true, claims.UserID, "")
@@ -221,6 +258,7 @@ func (c *Client) readPump() {
 		if c.expiry != nil {
 			c.expiry.Stop()
 		}
+		c.hub.slots.closed(c.ip, c.preAuth)
 		c.hub.UnsubscribeAll(c)
 		// Presence is per tenant, so a session still open in another tenant
 		// does not keep the user "online" here. The absence is announced after
@@ -243,11 +281,26 @@ func (c *Client) readPump() {
 		}
 	}()
 
+	// A peer that sends nothing, not even a pong to the pings writePump sends,
+	// for PongWait is gone; its socket is not kept open on its behalf.
+	_ = c.conn.SetReadDeadline(time.Now().Add(c.limits.PongWait))
+	c.conn.SetPongHandler(func(string) error {
+		return c.conn.SetReadDeadline(time.Now().Add(c.limits.PongWait))
+	})
+
 	for {
 		msgType, message, err := c.conn.ReadMessage()
 		if err != nil {
+			// Over the read limit gorilla has already sent 1009; any other error
+			// is the peer gone or the deadline passed.
 			break
 		}
+		// Frames over the budget wait their turn; while they wait nothing more
+		// is read, so a flood backs up into the sender's own TCP window.
+		if err := c.limiter.Wait(c.hub.ctx); err != nil {
+			break
+		}
+		_ = c.conn.SetReadDeadline(time.Now().Add(c.limits.PongWait))
 
 		// Binary frame = protobuf
 		if msgType == websocket.BinaryMessage {
@@ -273,6 +326,17 @@ func (c *Client) handleBinaryMessage(data []byte, authTimer *time.Timer) {
 
 	switch payload := env.Payload.(type) {
 	case *pb.ClientEnvelope_Auth:
+		// A socket has one identity for its whole life. Taking a second one
+		// would carry the first identity's subscriptions over to it, out of
+		// reach of the sweeps that end them; a client that needs another
+		// identity opens another socket.
+		if c.authenticated {
+			slog.Warn("websocket closed: second auth frame on an authenticated socket",
+				"user_id", c.userID, "tenant_id", c.tenantID)
+			c.sendError(400, "already authenticated")
+			c.closeWith(websocket.ClosePolicyViolation, "already authenticated")
+			return
+		}
 		if c.handleAuth(payload.Auth) {
 			authTimer.Stop()
 		}
@@ -287,13 +351,14 @@ func (c *Client) handleBinaryMessage(data []byte, authTimer *time.Timer) {
 			return
 		}
 		channelID := payload.Subscribe.ChannelId
-		if err := c.hub.authorizeSubscribe(channelID, grpcauth.Caller{UserID: c.userID, NGACNodeID: c.ngacNodeID, TenantID: c.tenantID}); err != nil {
+		workspaceID, err := c.hub.authorizeSubscribe(channelID, c.caller())
+		if err != nil {
 			slog.Warn("websocket subscribe denied",
 				"user_id", c.userID, "channel_id", channelID, "error", err)
 			c.sendError(403, "not allowed to subscribe to this channel")
 			return
 		}
-		c.hub.subscribe(channelID, c)
+		c.hub.subscribe(channelID, workspaceID, c)
 
 	case *pb.ClientEnvelope_Unsubscribe:
 		if !c.authenticated {
@@ -334,15 +399,37 @@ func (c *Client) handleBinaryMessage(data []byte, authTimer *time.Timer) {
 	}
 }
 
+// caller is the session's verified identity, for checks made on its behalf.
+func (c *Client) caller() grpcauth.Caller {
+	return grpcauth.Caller{UserID: c.userID, NGACNodeID: c.ngacNodeID, TenantID: c.tenantID}
+}
+
+// writePump is the connection's only data writer. Between frames it pings the
+// peer, whose pong keeps readPump's deadline moving.
 func (c *Client) writePump() {
-	defer c.conn.Close()
-	for msg := range c.send {
-		kind := websocket.BinaryMessage
-		if isControl(msg) {
-			kind = websocket.TextMessage
-		}
-		if err := c.conn.WriteMessage(kind, msg); err != nil {
-			return
+	ping := time.NewTicker(c.limits.PongWait * 9 / 10)
+	defer func() {
+		ping.Stop()
+		c.conn.Close()
+	}()
+	for {
+		select {
+		case msg, ok := <-c.send:
+			if !ok {
+				return
+			}
+			kind := websocket.BinaryMessage
+			if isControl(msg) {
+				kind = websocket.TextMessage
+			}
+			_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := c.conn.WriteMessage(kind, msg); err != nil {
+				return
+			}
+		case <-ping.C:
+			if err := c.conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(writeWait)); err != nil {
+				return
+			}
 		}
 	}
 }
