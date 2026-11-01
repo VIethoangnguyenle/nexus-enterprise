@@ -26,6 +26,21 @@ func (g *Graph) CheckAccess(userNodeID, objectNodeID, operation string) *AccessD
 		}
 	}
 
+	// The subject is a person. A UA (a role, a department), an OA or a PC named
+	// as the subject would otherwise be answered from its own grants, so a check
+	// such as "does this target hold manage" could be passed by a role.
+	if userNode.NodeType != NodeTypeUser {
+		return &AccessDecision{
+			Decision:  DecisionDeny,
+			User:      userNodeID,
+			Object:    objectNodeID,
+			Operation: operation,
+			Explanation: AccessExplanation{
+				Reason: DenyReasonSubjectNotUser,
+			},
+		}
+	}
+
 	// Single-pass BFS: collect UAs + PCs in one traversal (replaces 2 separate DFS calls)
 	userUAs, userPCs := g.bfsCollectAttributesAndPCs(userNodeID, NodeTypeUserAttribute)
 

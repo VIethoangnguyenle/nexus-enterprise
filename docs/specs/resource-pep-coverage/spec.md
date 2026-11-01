@@ -225,10 +225,45 @@ wins. A request that carries no user reaches only the methods below.
 | auth | `IsTokenRevoked` | a token naming the service `messaging` | token validity is checked from a bare jti |
 | policy | `PolicyWrite/CreateNode`, `PolicyWrite/CreateAssignment`, `PolicyRead/FindNodeByName` | a token naming the service `auth` | auth provisions user and tenant nodes during signup and sign-in, before any user is authenticated |
 | policy | `PolicyWrite/DeleteNode` | a token naming the service `auth` | auth removes the node it just created when signup fails part-way, so no orphan stays in the graph |
+| policy | `PolicyWrite/FindNodeByName`, `CreateNode`, `CreateAssignment`, `CreateAssociation` | a token naming the service `backfill-managers` | the operator command gives groups made before group roles existed their Managers UA, with no user present |
+| policy | `PolicyWrite/InvalidateCache` | a token naming the service `policy-ctl` | the operator tool drops cached decisions after a migration rewrote the graph tables |
 
 A service token is accepted only on a method listed above and only from a service on that method's
 allowlist (`grpcauth.ServiceOnly`); a valid token for any other service, or on any other method, is
 `Unauthenticated`.
+
+A call a client makes for a user SHALL also carry, in the metadata key `x-nexus-service`, a second
+token of the same form naming the dialling service (the name given to `grpcauth.Dial`) and bound to
+the same method. Any server that receives one SHALL verify it like the identity token and refuse the
+request with `Unauthenticated` if it fails, or if it names a user. A server that does not restrict a
+method ignores whose service it is; old servers ignore the key altogether.
+
+The policy writer (`PolicyWriteService`) SHALL admit a user's request only when the
+`x-nexus-service` token names a service listed for that method below, and SHALL answer
+`PermissionDenied` otherwise, including when the token is absent. Every writer RPC has a row
+(`grpc.WriteCallers` in the policy service); an RPC without one admits no user from any service. The
+lists are the services that make each call today: `asset`, `auth`, `calendar`, `drive`, `messaging`
+and `workspace` provision graph nodes through `pkg/provision`, whose rollback deletes what it created;
+`approval` only asks the writer membership questions; `document`, and any other name, holds no writer.
+
+| Writer RPC | A user's request may come through |
+|---|---|
+| `CreateNode`, `DeleteNode`, `CreateAssignment`, `CreateAssociation` | asset, auth, calendar, drive, messaging, workspace |
+| `RemoveAssignment` | auth, calendar, drive, messaging, workspace |
+| `RemoveAssociation` | calendar, workspace |
+| `CreateProhibition`, `RemoveProhibition` | workspace |
+| `RegisterOperations`, `InvalidateCache`, `InitSchema`, `LoadGraph` | none |
+| `GetAssociations`, `GetNode`, `FindNodeByName`, `IsAssigned`, `GetChildren`, `GetParents`, `GetAncestors`, `GetDescendants` | approval, asset, auth, calendar, drive, messaging, workspace |
+
+The policy read service is not narrowed: a user's request is admitted from any service.
+
+#### Scenario: A service that never makes the call asks the writer to delete an OA
+- **WHEN** a request carrying a valid user identity reaches `PolicyWrite/DeleteNode` through `document` or `approval`
+- **THEN** it is refused with `PermissionDenied`, the OA stays, and every decision on it is unchanged
+
+#### Scenario: The service that makes the call changes a grant
+- **WHEN** a user's `PolicyWrite/CreateAssociation` comes through `workspace`
+- **THEN** it is admitted, and decisions follow the new grant
 
 The secret is `INTERNAL_IDENTITY_SECRET`, read through `bootstrap.ConfigureInternalIdentity` at the
 start of every service's `main`. Outside a development `APP_ENV` (`dev`, `development`, `local`,
@@ -251,7 +286,10 @@ claim any user or service, cannot alter a captured token (it is signed), and can
 another method or after it expires. Not protected, and accepted: (1) every service holds the same
 symmetric secret, so the per-method service allowlists limit mistakes but do not authenticate one
 service to another: compromising any one service, or stealing the secret, lets the holder mint any
-user or service identity, and rotation is the remedy; (2) a captured token can be replayed on the
+user or service identity, and rotation is the remedy; for the same reason the writer's per-service
+user lists stop a service from being misused as a confused deputy, not a service that holds the
+secret, and the writer does not yet check that the nodes a user's write targets lie under that user's
+workspace policy class; (2) a captured token can be replayed on the
 *same* method until it expires, because there is no replay cache (the nonce is for logging); (3) the
 transport is plaintext, so the gRPC ports must stay unreachable from outside the platform. That
 isolation comes from the Docker network layout, not from the nginx edge: the Go services sit only on

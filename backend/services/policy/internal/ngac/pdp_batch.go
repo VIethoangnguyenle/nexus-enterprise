@@ -31,7 +31,9 @@ func (g *Graph) CheckAccessBatch(userNodeID string, objectNodeIDs []string, oper
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
-	if g.Nodes[userNodeID] == nil {
+	// A missing subject, or one that is not a user (see CheckAccess), is denied
+	// everything.
+	if u := g.Nodes[userNodeID]; u == nil || u.NodeType != NodeTypeUser {
 		for _, objID := range objectNodeIDs {
 			results[objID] = deny()
 		}

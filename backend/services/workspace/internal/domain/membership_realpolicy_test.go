@@ -18,7 +18,11 @@ import (
 	"ngac-platform/testutil"
 )
 
-func TestMain(m *testing.M) { os.Exit(testutil.RunMain(m)) }
+// The policy clients sign as workspace: the code under test is the workspace service.
+func TestMain(m *testing.M) {
+	testutil.PolicyService = "workspace"
+	os.Exit(testutil.RunMain(m))
+}
 
 // These tests run the workspace service against the real policy service. A person
 // is a member of a workspace when they sit under its Members UA. A channel's UA

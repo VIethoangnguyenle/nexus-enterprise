@@ -44,3 +44,19 @@ fail on. A result derived from any evaluation error SHALL be `false` and SHALL N
 #### Scenario: Prohibition matches one object in a batch
 - **WHEN** a batch includes an object under an OA a prohibition targets for the requested operation
 - **THEN** that object's result is `false` even when an association allows it, and the other objects are unaffected
+
+### Requirement: The subject of a decision is a user
+`CheckAccess` and `BatchCheckAccess` SHALL deny every operation when the subject (`user_node_id`)
+is a node of the graph whose type is not `U`: a UA (a role, a department, a Members UA), an OA or a
+PC is never evaluated from its own grants, and the SQL fallback is not consulted for it. The single
+check's explanation reason is `subject_not_user`. A subject that is in no in-memory graph is left to
+the SQL fallback as before. `ResolveAccessibleScopes` is not covered by this rule: it still accepts
+a UA as its subject (it then includes that UA's own grants), though no service calls it that way.
+
+#### Scenario: A role is asked about as the subject
+- **WHEN** a check names a role UA holding `manage` on an OA as the subject of `manage` on that OA
+- **THEN** the answer is DENY, while a user assigned to that role is allowed
+
+#### Scenario: A non-user subject on an object outside the graph
+- **WHEN** a check names a UA as the subject of an object that is not in memory and that the SQL fallback would allow
+- **THEN** the answer is DENY and the SQL fallback is not asked

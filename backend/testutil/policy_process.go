@@ -55,6 +55,16 @@ var (
 	policyProc *policyProcess
 )
 
+// PolicyService is the service a user's call through the clients StartPolicy
+// returns comes through. The real policy admits a user's write only through
+// the services that make that call (see AuthPolicy in services/policy), so a
+// test binary whose code under test or fixtures make another service's writes
+// sets this in TestMain, before anything starts the policy; "workspace" may
+// make every user write the writer offers. A call with no user always signs as
+// "auth", the service the policy admits for the signup provisioning calls
+// (CreateNode, CreateAssignment, DeleteNode, FindNodeByName) fixtures make bare.
+var PolicyService = "auth"
+
 type policyProcess struct {
 	cmd   *osexec.Cmd
 	conn  *grpc.ClientConn
@@ -234,7 +244,8 @@ func startPolicyProcess() (*policyProcess, error) {
 	}
 
 	addr := "127.0.0.1:" + grpcPort
-	conn, err := grpcauth.Dial(addr, "auth", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(harnessIdentity(PolicyService)))
 	if err != nil {
 		return fail("dial %s: %v", addr, err)
 	}
@@ -276,4 +287,16 @@ func PolicyCaller(ctx context.Context, userNodeID string) context.Context {
 // service does not check the caller against the graph, so it needs no node.
 func PolicyAdmin(ctx context.Context) context.Context {
 	return PolicyCaller(ctx, "harness-admin")
+}
+
+// harnessIdentity signs a call that carries a user as coming through service,
+// and one without as the bare "auth" service.
+func harnessIdentity(service string) grpc.UnaryClientInterceptor {
+	asUser, bare := grpcauth.ClientInterceptor(service), grpcauth.ClientInterceptor("auth")
+	return func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+		if grpcauth.CallerFrom(ctx).Authenticated() {
+			return asUser(ctx, method, req, reply, cc, invoker, opts...)
+		}
+		return bare(ctx, method, req, reply, cc, invoker, opts...)
+	}
 }

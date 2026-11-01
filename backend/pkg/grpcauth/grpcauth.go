@@ -11,6 +11,10 @@
 // on the handler's context, so a handler asks CallerFrom(ctx) instead of
 // trusting a user id in the request body. Raw x-caller-* metadata is ignored.
 //
+// A call made on behalf of a user also carries a second token, under
+// KeyService, naming the dialling service. A server can then restrict a method
+// to users whose request came through particular services (ServerPolicy.UserVia).
+//
 // What this stops: anything that can reach a gRPC port but does not hold the
 // secret can no longer claim an identity, and a token captured off the wire
 // cannot be replayed on another method or after about a minute. What it does
@@ -22,6 +26,7 @@ package grpcauth
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"strings"
 
@@ -77,11 +82,19 @@ func identityContext(ctx context.Context, service, method string) (context.Conte
 	md, _ := metadata.FromOutgoingContext(ctx)
 	md = md.Copy()
 	md.Delete(KeyIdentity)
+	md.Delete(KeyService)
 
 	var c claims
 	switch caller := CallerFrom(ctx); {
 	case caller.Authenticated():
 		c = claims{UID: caller.UserID, NID: caller.NGACNodeID, TID: caller.TenantID}
+		if service != "" {
+			via, err := mint(active.Load(), claims{SVC: service}, method)
+			if err != nil {
+				return nil, status.Error(codes.Unauthenticated, "cannot sign calling service: "+err.Error())
+			}
+			md.Set(KeyService, via)
+		}
 	case caller != (Caller{}):
 		// A half-built caller is a bug upstream. Sending it as the service
 		// identity instead would quietly swap a user's rights for the
@@ -125,9 +138,11 @@ func StreamClientInterceptor(service string) grpc.StreamClientInterceptor {
 	}
 }
 
-// ServiceRule admits one method to named services that carry no user.
+// ServiceRule names the services allowed on one method: in ServiceOK, the
+// services that may call it with no user; in UserVia, the services a user's
+// request must come through.
 type ServiceRule struct {
-	// Reason says why the method may run without a user.
+	// Reason says why these services, and only these, may make the call.
 	Reason string
 	// Services are the only service names that may call it.
 	Services []string
@@ -157,6 +172,12 @@ type ServerPolicy struct {
 	// user: startup steps, registration flows, and event consumers that have no
 	// end user to forward. The service name comes from a verified token.
 	ServiceOK map[string]ServiceRule
+	// UserVia methods admit a user caller only when the request came through
+	// one of the named services, proven by the KeyService token the dialling
+	// client signs beside the user's. A request with no such token, or from
+	// another service, is PermissionDenied. Methods not listed admit a user
+	// from any service. A bare service identity is governed by ServiceOK alone.
+	UserVia map[string]ServiceRule
 }
 
 // ServerInterceptor admits a request when it carries a valid identity token
@@ -200,8 +221,9 @@ func ServerOptions(p ServerPolicy, extra ...grpc.UnaryServerInterceptor) []grpc.
 	chain = append(chain, ServerInterceptor(p))
 	return []grpc.ServerOption{
 		// The only caller-supplied metadata a request needs is the identity
-		// token (about 400 bytes). Refuse oversized headers before they are
-		// parsed and verified.
+		// token and, for a user's call, the calling-service token (about 400
+		// bytes each). Refuse oversized headers before they are parsed and
+		// verified.
 		grpc.MaxHeaderListSize(maxHeaderListSize),
 		grpc.ChainUnaryInterceptor(chain...),
 		grpc.ChainStreamInterceptor(StreamServerInterceptor(p)),
@@ -232,7 +254,36 @@ func admit(ctx context.Context, p ServerPolicy, method string) (context.Context,
 		slog.Warn("service identity not allowed on method", "method", method, "service", c.SVC)
 		return nil, status.Error(codes.Unauthenticated, "caller identity required")
 	}
+	via, err := callingService(md, method)
+	if err != nil {
+		slog.Warn("calling-service token refused", "method", method, "reason", err.Error())
+		return nil, status.Error(codes.Unauthenticated, "invalid caller identity")
+	}
+	if rule, ok := p.UserVia[method]; ok && (via == "" || !rule.allows(via)) {
+		slog.Warn("user request refused: calling service not allowed on method",
+			"method", method, "service", via, "user_node", c.NID)
+		return nil, status.Error(codes.PermissionDenied, "calling service not allowed on this method")
+	}
 	return WithCaller(ctx, Caller{UserID: c.UID, NGACNodeID: c.NID, TenantID: c.TID}), nil
+}
+
+// callingService returns the service named by the KeyService token in md, or
+// "" when there is none. A token that is present must verify for method and
+// name a service and nothing else: a bad proof of origin is a forged request,
+// whichever method it arrives on.
+func callingService(md metadata.MD, method string) (string, error) {
+	token := first(md, KeyService)
+	if token == "" {
+		return "", nil
+	}
+	c, err := verify(active.Load(), token, method)
+	if err != nil {
+		return "", err
+	}
+	if c.SVC == "" {
+		return "", errors.New("calling-service token names a user")
+	}
+	return c.SVC, nil
 }
 
 // callerStream overrides the stream's context with the admitted one.

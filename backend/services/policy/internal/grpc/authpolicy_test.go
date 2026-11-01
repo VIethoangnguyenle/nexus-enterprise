@@ -21,8 +21,8 @@ func servePolicy(t *testing.T) (pb.PolicyWriteServiceClient, pb.PolicyReadServic
 	return servePolicyAs(t, "auth")
 }
 
-// servePolicyAs dials as service. "auth" is the only service the policy
-// accepts without a user.
+// servePolicyAs dials as service, with or without a user on the context (see
+// AuthPolicy for which services each RPC accepts).
 func servePolicyAs(t *testing.T, service string) (pb.PolicyWriteServiceClient, pb.PolicyReadServiceClient) {
 	t.Helper()
 	conn := testutil.ServeGRPCAs(t, service, pgrpc.AuthPolicy(), func(s *grpc.Server) {
@@ -70,7 +70,9 @@ func TestPolicyAdmitsSignupProvisioningFromAService(t *testing.T) {
 	wantCode(t, "DeleteNode", err, codes.Unimplemented)
 }
 
-func TestPolicyAdmitsAUserCallerOnAnyRPC(t *testing.T) {
+// A user's request through a service that makes the call is admitted (the full
+// per-service matrix is in authpolicy_callers_test.go).
+func TestPolicyAdmitsAUserCallerThroughAProvisioningService(t *testing.T) {
 	w, r := servePolicy(t)
 	ctx := grpcauth.WithCaller(context.Background(), grpcauth.Caller{UserID: "u", NGACNodeID: "n"})
 

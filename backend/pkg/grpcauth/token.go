@@ -18,6 +18,11 @@ import (
 // gRPC lower-cases keys on the wire.
 const KeyIdentity = "x-nexus-identity"
 
+// KeyService carries a second token on a call made for a user: the same
+// signature, method and expiry rules, naming the dialling service. A server
+// that does not ask for it ignores it, so adding it to a call breaks no peer.
+const KeyService = "x-nexus-service"
+
 const (
 	// tokenTTL is how long a minted token is valid. A call is made the moment
 	// its token is minted, so this only has to cover clock drift and queueing.

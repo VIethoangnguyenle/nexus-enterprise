@@ -430,7 +430,7 @@ A user attribute SHALL have at most one association with a given object attribut
 ### Requirement: Associations of a user attribute can be read
 The policy read service SHALL list the associations of a UA (`GetAssociations`), and the policy writer SHALL answer the same from its own, authoritative graph for callers that decide a write from what is there now: each OA and the operations held. It SHALL answer InvalidArgument for an empty ID or a node that is not a UA, and NotFound for an unknown node, and SHALL return copies, so a caller cannot change the graph through the answer. Like every read RPC other than the signup lookups, it requires a verified end user.
 
-The policy writer SHALL likewise answer `GetNode`, `GetChildren`, `GetParents`, `GetAncestors` and `GetDescendants` from its own graph, under the same caller rule (Unauthenticated with no caller, a user caller required), so callers that decide a write or an authorization from the graph are not exposed to a lagging replica.
+The policy writer SHALL likewise answer `GetNode`, `GetChildren`, `GetParents`, `GetAncestors` and `GetDescendants` from its own graph, under the same caller rule (Unauthenticated with no caller, a user caller required, and on the writer that user's request must come through a service that holds a writer; see "Caller identity on gRPC is a signed token" in `resource-pep-coverage`), so callers that decide a write or an authorization from the graph are not exposed to a lagging replica.
 
 #### Scenario: A user node
 - **WHEN** the associations of a user (U) node are requested

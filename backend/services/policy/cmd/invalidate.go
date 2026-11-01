@@ -15,11 +15,12 @@ import (
 	"ngac-platform/pkg/bootstrap"
 	"ngac-platform/pkg/grpcauth"
 	pb "ngac-platform/proto/policy"
+	pgrpc "ngac-platform/services/policy/internal/grpc"
 )
 
 // invalidateService is the identity the operator tool presents. The policy
 // service admits it on InvalidateCache and nothing else (see grpc.AuthPolicy).
-const invalidateService = "policy-ctl"
+const invalidateService = pgrpc.PolicyCtlService
 
 // invalidateCallTimeout bounds one InvalidateCache call.
 const invalidateCallTimeout = 30 * time.Second

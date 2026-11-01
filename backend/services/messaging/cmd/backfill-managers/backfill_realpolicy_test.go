@@ -20,7 +20,11 @@ import (
 	"ngac-platform/testutil"
 )
 
-func TestMain(m *testing.M) { os.Exit(testutil.RunMain(m)) }
+// The policy clients sign as workspace: the fixture undoes a grant (RemoveAssociation), a write messaging never makes; the backfill itself dials as backfill-managers.
+func TestMain(m *testing.M) {
+	testutil.PolicyService = "workspace"
+	os.Exit(testutil.RunMain(m))
+}
 
 // The backfill against the real policy service, signed as the command signs
 // (service identity backfill-managers, no user). Another service identity is

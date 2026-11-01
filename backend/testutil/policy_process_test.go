@@ -13,7 +13,11 @@ import (
 	"ngac-platform/testutil"
 )
 
-func TestMain(m *testing.M) { os.Exit(testutil.RunMain(m)) }
+// The policy clients sign as workspace: the fixtures here create and remove prohibitions, which only workspace makes.
+func TestMain(m *testing.M) {
+	testutil.PolicyService = "workspace"
+	os.Exit(testutil.RunMain(m))
+}
 
 // A member holds what Members is associated with; a stranger holds nothing. Both
 // halves run on the same fixture so an unknown node cannot fake the deny.

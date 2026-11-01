@@ -37,6 +37,9 @@ func (e *decisionEngine) DecideBatch(ctx context.Context, req BatchAccessRequest
 	})
 
 	results := graph.CheckAccessBatch(req.UserNodeID, req.ObjectNodeIDs, req.Operations)
+	if e.subjectNotUser(graph, req.UserNodeID) {
+		return results // all DENY: the graph refuses a non-user subject too
+	}
 
 	e.applyCTEFallbackBatch(ctx, graph, req, results)
 	e.applyProhibitionsBatch(graph, req, results)

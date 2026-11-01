@@ -70,6 +70,18 @@ func (e *decisionEngine) Decide(ctx context.Context, req AccessRequest) *AccessD
 	// Step 1: Resolve the graph to evaluate against
 	graph := e.resolveGraph(ctx, req)
 
+	// A subject known not to be a user is denied before any step, the SQL
+	// fallback included: that query does not look at the subject's type.
+	if e.subjectNotUser(graph, req.UserNodeID) {
+		return &AccessDecision{
+			Decision:    DecisionDeny,
+			User:        req.UserNodeID,
+			Object:      req.ObjectNodeID,
+			Operation:   req.Operation,
+			Explanation: AccessExplanation{Reason: DenyReasonSubjectNotUser},
+		}
+	}
+
 	// Step 2: BFS access check on resolved graph
 	decision := graph.CheckAccess(req.UserNodeID, req.ObjectNodeID, req.Operation)
 
@@ -133,6 +145,17 @@ func (e *decisionEngine) tryCTEFallback(ctx context.Context, graph GraphReader, 
 	decision.Decision = DecisionAllow
 	decision.Explanation.Reason = "Resolved via CTE fallback (O node not in graph)"
 	e.triggerAsyncShardPromotion(req)
+}
+
+// subjectNotUser reports whether id is a node of the resolved or the global
+// graph whose type is not U. A subject in neither is left to the SQL fallback,
+// as before (a user created moments ago on another replica).
+func (e *decisionEngine) subjectNotUser(graph GraphReader, id string) bool {
+	n := graph.GetNode(id)
+	if n == nil && graph != e.graph {
+		n = e.graph.GetNode(id)
+	}
+	return n != nil && n.NodeType != NodeTypeUser
 }
 
 // triggerAsyncShardPromotion loads the workspace shard in background after CTE fallback,

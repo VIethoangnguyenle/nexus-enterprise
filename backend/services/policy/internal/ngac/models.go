@@ -16,6 +16,9 @@ const (
 const (
 	DenyReasonNodeNotFound  = "node_not_found"
 	DenyReasonNoAssociation = "no_association_path"
+	// DenyReasonSubjectNotUser: the subject of a decision is always a user (U)
+	// node. A UA, OA or PC named as the subject is denied, never evaluated.
+	DenyReasonSubjectNotUser = "subject_not_user"
 
 	// Fail-closed reasons: evaluation could not complete, so the request is
 	// denied. Decisions carrying these are error-derived and never cached.
