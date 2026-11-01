@@ -53,7 +53,7 @@ func openRequests(t *testing.T, n int) (context.Context, *domain.Service, func(s
 	var reqs []*domain.Request
 	for i := 0; i < n; i++ {
 		r, err := svc.CreateApprovalRequest(ctx, domain.CreateRequestInput{
-			EntityType: "expense", ScopeOAID: "oa", DepartmentID: "dept", CreatedBy: "creator",
+			EntityType: "expense", CreatedBy: "creator",
 		})
 		if err != nil {
 			t.Fatalf("create: %v", err)

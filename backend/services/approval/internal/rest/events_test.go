@@ -42,6 +42,19 @@ func (m *memStore) WorkspaceType(context.Context, string) (string, error) {
 	return "organization", nil
 }
 
+// CreatorDepartments: the requester "n-req" sits in department "d-req".
+func (m *memStore) CreatorDepartments(_ context.Context, _, user string) ([]string, error) {
+	if user == "n-req" {
+		return []string{"d-req"}, nil
+	}
+	return nil, nil
+}
+
+// ScopeInTenant: "oa-own" is the only attribute of the tenant.
+func (m *memStore) ScopeInTenant(_ context.Context, _, scope string) (bool, error) {
+	return scope == "oa-own", nil
+}
+
 // InTx runs fn; this fake has no rollback to demonstrate.
 func (m *memStore) InTx(ctx context.Context, fn func(ctx context.Context) error) error {
 	return fn(ctx)
@@ -468,7 +481,7 @@ func TestEveryPublishedEventCarriesTenantAndWorkspace(t *testing.T) {
 // rolled-back commit does: nothing is stored.
 type failingInsertStore struct{ *memStore }
 
-func (failingInsertStore) InsertRequestWithAssignments(context.Context, *domain.Request, []*domain.AssignmentRecord) error {
+func (failingInsertStore) InsertRequest(context.Context, *domain.Request) error {
 	return errors.New("commit failed")
 }
 

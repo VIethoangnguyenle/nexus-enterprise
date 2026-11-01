@@ -151,3 +151,52 @@ func (s *Store) CanonicalApprover(ctx context.Context, tenantID, approverType, v
 	}
 	return "", invalid
 }
+
+// CreatorDepartments returns the ids of this tenant's departments whose UA the
+// person is assigned to directly. The graph edge is the membership; the
+// tenant_users.department_id listing is only a copy of it.
+func (s *Store) CreatorDepartments(ctx context.Context, tenantID, userNodeID string) ([]string, error) {
+	if tenantID == "" || userNodeID == "" {
+		return nil, nil
+	}
+	rows, err := s.db.Query(ctx, `
+		SELECT DISTINCT d.id FROM departments d
+		  JOIN ngac_assignments a ON a.parent_id = d.ngac_ua_id
+		 WHERE d.workspace_id = $1 AND a.child_id = $2
+		 ORDER BY d.id`, tenantID, userNodeID)
+	if err != nil {
+		return nil, fmt.Errorf("creator departments: %w", err)
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan creator department: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// ScopeInTenant reports whether scopeOAID is an object attribute that reaches
+// the tenant's policy class, so a request cannot be filed under another
+// tenant's attribute, or under a node that is not an attribute at all.
+func (s *Store) ScopeInTenant(ctx context.Context, tenantID, scopeOAID string) (bool, error) {
+	if tenantID == "" || scopeOAID == "" {
+		return false, nil
+	}
+	var ok bool
+	err := s.db.QueryRow(ctx, `
+		WITH RECURSIVE up(id) AS (
+			SELECT id FROM ngac_nodes WHERE id = $1 AND node_type = 'OA'
+			UNION
+			SELECT a.parent_id FROM ngac_assignments a JOIN up ON a.child_id = up.id
+		)
+		SELECT EXISTS (SELECT 1 FROM up JOIN ngac_nodes p ON p.id = up.id WHERE p.node_type = 'PC' AND p.name = $2)`,
+		scopeOAID, ngac.PCName(ngac.WorkspaceID(tenantID))).Scan(&ok)
+	if err != nil {
+		return false, fmt.Errorf("scope in tenant: %w", err)
+	}
+	return ok, nil
+}

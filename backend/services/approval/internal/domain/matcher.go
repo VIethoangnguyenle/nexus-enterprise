@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
-	"strings"
 )
 
 // EntityFields represents the entity data used for template matching.
@@ -134,12 +133,6 @@ func evalBetween(condValue, fieldValue string) bool {
 		return false
 	}
 	return actual >= bounds[0] && actual <= bounds[1]
-}
-
-// ResolvePlaceholder replaces template placeholders with actual values.
-// Supported: {creator_dept} → resolved from creator's department UA.
-func ResolvePlaceholder(value string, creatorDeptID string) string {
-	return strings.ReplaceAll(value, "{creator_dept}", creatorDeptID)
 }
 
 // parseForm reads the submitted form (label → value). Anything unreadable is

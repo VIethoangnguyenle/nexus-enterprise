@@ -58,7 +58,7 @@ func TestApprove_ARemovedNamedApproverCannotDecide(t *testing.T) {
 	svc, ms, mp := setupServiceWithTemplate()
 	req, err := svc.CreateApprovalRequest(context.Background(), CreateRequestInput{
 		EntityType: "transfer", EntityID: "txn-gate", EntityFields: EntityFields{},
-		ScopeOAID: "oa_dept1", DepartmentID: "dept1", CreatedBy: "user1",
+		CreatedBy: "user1",
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -75,7 +75,7 @@ func TestApprove_ARemovedNamedApproverCannotDecide(t *testing.T) {
 	// Deny: the second request, same fixture, once approver1 is no longer in the workspace.
 	req2, err := svc.CreateApprovalRequest(context.Background(), CreateRequestInput{
 		EntityType: "transfer", EntityID: "txn-gate-2", EntityFields: EntityFields{},
-		ScopeOAID: "oa_dept1", DepartmentID: "dept1", CreatedBy: "user1",
+		CreatedBy: "user1",
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)

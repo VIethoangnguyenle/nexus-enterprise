@@ -38,7 +38,8 @@ func decodeCursor(cursor string) (time.Time, string, error) {
 // ListPending returns the user's pending assignments on their requests' current
 // steps: rows of their own, and the group rows of the roles and departments in
 // groupNodeIDs. A step the user has already acted on drops out even though its
-// group row stays pending for the other members.
+// group row stays pending for the other members, and a request the user made
+// never waits on them: its creator may not decide it.
 func (s *Store) ListPending(ctx context.Context, userNodeID string, groupNodeIDs []string) ([]*domain.RequestWithAssignment, error) {
 	c, err := s.conn(ctx)
 	if err != nil {
@@ -55,6 +56,7 @@ func (s *Store) ListPending(ctx context.Context, userNodeID string, groupNodeIDs
 		WHERE aa.status = 'pending'
 		  AND ar.status = 'pending'
 		  AND ar.current_step = aa.step_order
+		  AND ar.created_by <> $1
 		  AND (aa.user_node_id = $1
 		       OR (aa.user_node_id = ANY($2)
 		           AND aa.grant_source IN ('role:' || aa.user_node_id, 'department:' || aa.user_node_id)))

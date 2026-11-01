@@ -216,7 +216,9 @@ func TestEntryPointTableCoversEveryExportedMethod(t *testing.T) {
 	// Guard and event helpers that are not entry points: RequireOrganization and
 	// RequireMember are the guards; EventAudience and NotifyOptOuts run only
 	// after a decision that was guarded, to address its event.
-	notEntryPoints := map[string]bool{"RequireOrganization": true, "RequireMember": true, "EventAudience": true, "NotifyOptOuts": true}
+	// ReconcileSoleApproverSteps is the start-up sweep: no caller reaches it,
+	// and it visits only organizations' schemas (ListOrganizationSchemas).
+	notEntryPoints := map[string]bool{"RequireOrganization": true, "RequireMember": true, "EventAudience": true, "NotifyOptOuts": true, "ReconcileSoleApproverSteps": true}
 	var want, got []string
 	typ := reflect.TypeOf(&Service{})
 	for i := 0; i < typ.NumMethod(); i++ {

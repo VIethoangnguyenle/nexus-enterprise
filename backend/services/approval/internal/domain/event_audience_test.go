@@ -14,7 +14,7 @@ func TestEventAudience_NamesRequesterAndCurrentApprovers(t *testing.T) {
 	ctx := context.Background()
 	req, err := svc.CreateApprovalRequest(ctx, CreateRequestInput{
 		EntityType: "transfer", EntityID: "txn-aud-1", EntityFields: EntityFields{},
-		ScopeOAID: "oa_dept1", DepartmentID: "dept1", CreatedBy: "requester",
+		CreatedBy: "requester",
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -55,7 +55,7 @@ func TestEventAudience_TerminalRequestNamesNoApprovers(t *testing.T) {
 	ctx := context.Background()
 	req, err := svc.CreateApprovalRequest(ctx, CreateRequestInput{
 		EntityType: "transfer", EntityID: "txn-aud-2", EntityFields: EntityFields{},
-		ScopeOAID: "oa_dept1", DepartmentID: "dept1", CreatedBy: "requester",
+		CreatedBy: "requester",
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)

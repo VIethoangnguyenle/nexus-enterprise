@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"ngac-platform/ngac"
 	"ngac-platform/pkg/grpcauth"
 )
 
@@ -22,10 +23,22 @@ type CreateRequestInput struct {
 	EntityID     string
 	EntityFields EntityFields // for template matching
 	FormDataJSON string       // JSON-encoded submitted form values
-	ScopeOAID    string       // department-level OA for visibility
-	DepartmentID string       // department ID for auditing
-	CreatedBy    string       // user_node_id of the creator
+	// ScopeOAID is the attribute the request is filed under, which decides who
+	// sees it in their department list. Empty means the default scope; anything
+	// else must be an attribute of the caller's tenant the creator may write.
+	ScopeOAID string
+	CreatedBy string // user_node_id of the creator
+	// There is deliberately no department field: the request's department is
+	// the creator's, read from the graph (see creatorDepartment), never one a
+	// client names, because a department step may be routed to it.
 }
+
+// defaultScope and noDepartment are what a request carries when it is filed
+// under no particular scope, or made by someone in no single department.
+const (
+	defaultScope = "default"
+	noDepartment = "default"
+)
 
 // ApproveInput contains fields for a single approval action.
 type ApproveInput struct {
@@ -71,13 +84,15 @@ func (s *Service) CreateApprovalRequest(ctx context.Context, in CreateRequestInp
 	if in.EntityID == "" {
 		in.EntityID = uuid.New().String()
 	}
-	// Default scope/department if not provided — workspace-level context
-	// will supply these once OA/department features are implemented.
-	if in.ScopeOAID == "" {
-		in.ScopeOAID = "default"
+	tenantID := grpcauth.CallerFrom(ctx).TenantID
+	if in.ScopeOAID == "" || in.ScopeOAID == defaultScope {
+		in.ScopeOAID = defaultScope
+	} else if err := s.authorizeScope(ctx, tenantID, in.CreatedBy, in.ScopeOAID); err != nil {
+		return nil, err
 	}
-	if in.DepartmentID == "" {
-		in.DepartmentID = "default"
+	deptID, err := s.creatorDepartment(ctx, tenantID, in.CreatedBy)
+	if err != nil {
+		return nil, err
 	}
 	form := parseForm(in.FormDataJSON)
 
@@ -119,24 +134,20 @@ func (s *Service) CreateApprovalRequest(ctx context.Context, in CreateRequestInp
 		CurrentStep:      1,
 		Status:           "pending",
 		ScopeOAID:        in.ScopeOAID,
-		DepartmentID:     in.DepartmentID,
+		DepartmentID:     deptID,
 		CreatedBy:        in.CreatedBy,
 		CreatedAt:        now,
 	}
 
-	// 3-4. Someone must be able to decide the request before it exists: a
-	// request whose first step resolves to nobody is refused, not left pending.
-	var first []*AssignmentRecord
-	if len(tmpl.Steps) > 0 {
-		if first, err = buildAssignments(req.ID, tmpl.Steps[0], in.DepartmentID); err != nil {
-			return nil, fmt.Errorf("assign step 1: %w", err)
-		}
-	}
-	// 5. The request, its first assignments and its audit trail are one change:
-	// a request nobody can account for, or a trail for a request that was not
-	// stored, would both be wrong for ever.
+	// 3-5. The request, its first step's assignments and its audit trail are
+	// one change: a request nobody can account for, or a trail for a request
+	// that was not stored, would both be wrong for ever. Someone must be able
+	// to decide the request before it exists: a step that resolves to nobody
+	// refuses it. A step only the requester could decide is skipped (see
+	// startStep), which may carry the request on to a later step or complete it.
+	var stored *Request
 	err = s.store.InTx(ctx, func(ctx context.Context) error {
-		if err := s.store.InsertRequestWithAssignments(ctx, req, first); err != nil {
+		if err := s.store.InsertRequest(ctx, req); err != nil {
 			return fmt.Errorf("insert request: %w", err)
 		}
 		if err := s.logAudit(ctx, req.ID, "created", in.CreatedBy, 0, map[string]string{
@@ -146,18 +157,29 @@ func (s *Service) CreateApprovalRequest(ctx context.Context, in CreateRequestInp
 		}); err != nil {
 			return err
 		}
-		return s.auditAssigned(ctx, req.ID, 1, first)
+		if err := s.startStep(ctx, req, tmpl.Steps, 1, tenantID); err != nil {
+			return err
+		}
+		// Skipping may have moved or completed it.
+		var err error
+		stored, err = s.store.GetRequest(ctx, req.ID)
+		if err != nil {
+			return fmt.Errorf("re-read request: %w", err)
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-
-	return req, nil
+	return stored, nil
 }
 
 // actingRow finds the assignment the caller acts through on the request's
 // current step, and says whether it is a group's row.
 //
+//   - The request's creator never acts on it, by approving or by rejecting,
+//     whatever row or role or department would otherwise let them: nobody
+//     decides their own request. Templates have no setting that allows it.
 //   - The caller's own pending row (a named approver, or one added by
 //     reconciliation): if it came from a role or department, the caller must
 //     still belong to it; a named approver must still belong to the workspace.
@@ -168,6 +190,9 @@ func (s *Service) CreateApprovalRequest(ctx context.Context, in CreateRequestInp
 //
 // Anything else is ErrAccessDenied.
 func (s *Service) actingRow(ctx context.Context, req *Request, userNodeID string) (*AssignmentRecord, bool, error) {
+	if req.CreatedBy == userNodeID {
+		return nil, false, fmt.Errorf("%w: the requester may not decide their own request", ErrAccessDenied)
+	}
 	own, err := s.store.GetAssignment(ctx, req.ID, userNodeID)
 	switch {
 	case err == nil:
@@ -374,4 +399,45 @@ func (s *Service) BatchApprove(ctx context.Context, in BatchApproveInput) ([]str
 	}
 
 	return approved, nil
+}
+
+// authorizeScope accepts a scope a request is filed under only if it is an
+// object attribute of the caller's tenant and the creator holds write on it:
+// filing a request under an attribute puts it in front of everyone who reads
+// that attribute, which is a write to it. Anything else is ErrAccessDenied, so
+// the answer does not say whether the attribute exists elsewhere.
+func (s *Service) authorizeScope(ctx context.Context, tenantID, userNodeID, scopeOAID string) error {
+	if tenantID == "" {
+		return fmt.Errorf("%w: no workspace to file the request in", ErrAccessDenied)
+	}
+	inTenant, err := s.store.ScopeInTenant(ctx, tenantID, scopeOAID)
+	if err != nil {
+		return fmt.Errorf("check scope: %w", err)
+	}
+	if !inTenant {
+		return fmt.Errorf("%w: the scope is not an attribute of this workspace", ErrAccessDenied)
+	}
+	allowed, err := s.policy.CheckAccess(ctx, userNodeID, scopeOAID, ngac.OpWrite)
+	if err != nil {
+		return fmt.Errorf("ngac check access: %w", err)
+	}
+	if !allowed {
+		return fmt.Errorf("%w: filing a request under this scope needs %s on it", ErrAccessDenied, ngac.OpWrite)
+	}
+	return nil
+}
+
+// creatorDepartment is the department a request is made in: the one the
+// creator is assigned to in the graph, or noDepartment when there is no single
+// one (none, or more than one). A department step naming the placeholder then
+// cannot be routed, and the request is refused.
+func (s *Service) creatorDepartment(ctx context.Context, tenantID, userNodeID string) (string, error) {
+	ids, err := s.store.CreatorDepartments(ctx, tenantID, userNodeID)
+	if err != nil {
+		return "", fmt.Errorf("creator department: %w", err)
+	}
+	if len(ids) != 1 {
+		return noDepartment, nil
+	}
+	return ids[0], nil
 }

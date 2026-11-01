@@ -200,8 +200,8 @@ func (s *Service) GetRequestDetail(ctx context.Context, userNodeID, requestID st
 // and on its current step the caller holds a pending row of their own, or
 // belongs to a role or department that does and has not yet acted themselves.
 func (s *Service) canAct(ctx context.Context, req *Request, rows []*AssignmentRecord, userNodeID string) (bool, error) {
-	if req.Status != "pending" {
-		return false, nil
+	if req.Status != "pending" || req.CreatedBy == userNodeID {
+		return false, nil // the requester never decides their own request
 	}
 	acted := false
 	var groups []*AssignmentRecord

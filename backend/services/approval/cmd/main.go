@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"time"
 
 	echomw "github.com/labstack/echo/v4/middleware"
 	"google.golang.org/grpc"
@@ -76,6 +77,7 @@ func main() {
 	}
 	svc := domain.NewService(st, policyClient)
 	srv := approvalGRPC.NewServer(svc)
+	go reconcileSoleApproverSteps(ctx, svc)
 
 	gs := grpc.NewServer(grpcauth.ServerOptions(grpcauth.ServerPolicy{Exempt: grpcauth.HealthExempt()})...)
 	pb.RegisterApprovalServiceServer(gs, srv)
@@ -211,4 +213,27 @@ func (a *policyGRPCAdapter) GetMembers(ctx context.Context, uaNodeID string) ([]
 // include a removal made a moment ago.
 func (a *policyGRPCAdapter) IsWorkspaceMember(ctx context.Context, userNodeID, workspaceID string) (bool, error) {
 	return policyclient.IsWorkspaceMember(ctx, a.graph, userNodeID, ngac.WorkspaceID(workspaceID))
+}
+
+// reconcileSoleApproverSteps unsticks, once per start, requests already waiting
+// on a step only their requester could decide (see
+// domain.ReconcileSoleApproverSteps). It runs in the background so the service
+// serves at once, and retries a few times when a tenant or request could not be
+// handled; the sweep is idempotent, so a retry redoes nothing already done.
+func reconcileSoleApproverSteps(ctx context.Context, svc *domain.Service) {
+	const attempts = 5
+	for i := 1; i <= attempts; i++ {
+		skipped, err := svc.ReconcileSoleApproverSteps(ctx)
+		if err == nil {
+			slog.Info("approval reconcile: sole-approver steps skipped", "requests", skipped)
+			return
+		}
+		slog.Warn("approval reconcile incomplete", "attempt", i, "requests_skipped", skipped, "error", err)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(time.Duration(i) * 30 * time.Second):
+		}
+	}
+	slog.Error("approval reconcile gave up; it runs again on the next start", "attempts", attempts)
 }

@@ -161,6 +161,41 @@ The pending list, the right to read a request (detail, trail) and the event audi
 - **WHEN** the caller's memberships cannot be read
 - **THEN** acting and reading the trail fail; the pending list falls back to the caller's own rows (shorter, never wider)
 
+### Requirement: Nobody decides their own request
+The requester (`created_by`) SHALL NOT approve or reject their own request, through any row: one naming them, or a role or department they belong to. Approve, reject and batch approve refuse with 403 (batch approve skips the request) and record nothing; the request stays pending for the other approvers. The pending list never contains a request the caller made, and `can_act` is false for its requester. Templates have no setting that allows self-approval; there is no withdraw action either, so a requester who no longer wants a request leaves it to the approvers.
+
+A step whose only possible approver is the requester SHALL be skipped by the system rather than left waiting for ever: a person step naming the requester, or a role or department step whose only member (directly or below, read from the graph tables `ngac_assignments`/`ngac_nodes`) is the requester. Eligibility is decided when the step starts (on creation for step 1, when the previous step completes for the others). A step with any other member is not skipped, even if the requester is also a member; an empty group the requester is not in is not skipped either (it waits, as before). Skipping records no decision (nobody's approval counts for it), writes a `step_skipped` audit entry with no actor (the system), the step's `step_order` and `detail_json` `{"reason":"người tạo là người duyệt duy nhất"}`, logs it, and moves the request on: to the next step, which is started by the same rule, or, after the last step, to `approved` with the usual `completed` entry. A request may therefore be approved the moment it is made. Membership that cannot be read fails the operation (503) and never skips.
+
+Requests already waiting on such a step when this rule arrived are unstuck by a sweep the service runs in the background at every start: for every organization's pending request, under its row lock, if nobody has acted on its current step and the same rule says the requester is its only approver, the step's pending rows are marked skipped and the request moves on exactly as above. The sweep is idempotent and retries a few times when a tenant or request fails; it publishes no event.
+
+The `{creator_dept}` placeholder SHALL be accepted only as the approver of a `department` step, and only as the exact value (a template save with it on any other kind is 400). It stands for the requester's department as the graph holds it: the tenant's department whose UA the requester is assigned to directly. The request stores that department's id as `department_id`; a `department_id` in the create body is ignored. A requester in no department, or in more than one, cannot make a request whose chain uses the placeholder (400). A later step that uses it resolves the stored department to its UA within the caller's tenant when the step starts.
+
+`scope_oa_id` in the create body is optional; empty or `default` files the request under the default scope. Any other value SHALL be an object attribute that sits under the caller's tenant PC and on which the requester holds `write`; otherwise the answer is 403 and nothing is stored.
+
+#### Scenario: Requester in the approving role
+- **WHEN** the requester belongs to the role a step is assigned to and approves or rejects
+- **THEN** the answer is 403, nothing is recorded, and another member of the role can still approve
+
+#### Scenario: The requester is the only approver of a step
+- **WHEN** a step names the requester in person, or goes to a role or department whose only member is the requester
+- **THEN** the step is skipped with a `step_skipped` entry by the system and the reason, the next step starts, and after the last step the request is approved; the requester has no approval row
+
+#### Scenario: Another member can decide
+- **WHEN** the role or department of a step has any member besides the requester
+- **THEN** the step is not skipped, the requester still gets 403, and the other member's approval moves the request on
+
+#### Scenario: Forged department
+- **WHEN** a request is made with a `department_id` naming the requester's own node, or another department
+- **THEN** it is ignored: the department step goes to the requester's own department, where the requester still cannot act
+
+#### Scenario: Placeholder on a person step
+- **WHEN** a template saves `{creator_dept}` as a person or role approver, or an older template with that is used for a request
+- **THEN** the answer is 400
+
+#### Scenario: Forged scope
+- **WHEN** a request names a `scope_oa_id` of another tenant, a node that is not an object attribute, or one the requester cannot write
+- **THEN** the answer is 403 and no request is stored
+
 ### Requirement: Names stay inside the tenant
 Display names SHALL be looked up within the caller's tenant only: people through the tenant's members (by `tenant_users.ngac_node_id` or `users.ngac_node`), departments of the tenant's workspace, and roles or departments' UAs only if they sit under the tenant's PC. A role is named by its `display_name` property, falling back to its node name. A key from another tenant is omitted, never named.
 
@@ -173,6 +208,8 @@ Below 768 px the detail panel SHALL be a modal layer rendered above the phone ta
 ## Status
 Known gaps, recorded rather than resolved:
 - A rejected request is final: there is no undo and no resubmit, so "Trả lại" has no "Hoàn tác" and the dialog says the sender can send a new request.
+- A step's eligibility is decided when it starts. If every other member leaves the role or department afterwards, the step waits for someone to join; it is not skipped then.
+- A step whose quorum is larger than the number of members other than the requester cannot be completed; it is not skipped either, since others can still decide it.
 - Requests created through the UI carry the default scope, so they appear to the requester, the assigned approvers (directly or through their role or department) and whoever reads the default scope.
 - The sidebar count of waiting requests (mockup §3) is not shown; the tab carries it.
 - The reconciliation consumer no longer copies a pending step to a newly added member (the group row covers them); it still revokes a person's own pending rows when they leave a UA.

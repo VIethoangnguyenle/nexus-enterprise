@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sort"
 	"testing"
 	"time"
 
@@ -23,6 +24,17 @@ type mockStore struct {
 	// set of approver keys that exist in the tenant.
 	departments map[string]string
 	approvers   map[string]bool
+	// creatorDepts is the departments each person sits in, by department id;
+	// scopesInTenant, when non-nil, is the set of attributes of the tenant
+	// (nil: every attribute is).
+	creatorDepts   map[string][]string
+	scopesInTenant map[string]bool
+	// groupMembers is who sits under each role or department UA in the graph
+	// tables; membersErr makes reading it fail. tenants is what the reconcile
+	// sweep visits.
+	groupMembers map[string][]string
+	membersErr   error
+	tenants      []TenantSchema
 	// workspaceType is what WorkspaceType answers ("" means organization);
 	// workspaceErr, when set, is what it fails with.
 	workspaceType string
@@ -130,6 +142,33 @@ func (m *mockStore) CanonicalApprover(_ context.Context, _, _, value string) (st
 		return value, nil
 	}
 	return "", ErrInvalidInput
+}
+
+func (m *mockStore) CreatorDepartments(_ context.Context, _, userNodeID string) ([]string, error) {
+	return m.creatorDepts[userNodeID], nil
+}
+
+func (m *mockStore) ScopeInTenant(_ context.Context, _, scopeOAID string) (bool, error) {
+	return m.scopesInTenant == nil || m.scopesInTenant[scopeOAID], nil
+}
+
+func (m *mockStore) GroupMembers(_ context.Context, ua string) ([]string, error) {
+	return m.groupMembers[ua], m.membersErr
+}
+
+func (m *mockStore) ListOrganizationSchemas(context.Context) ([]TenantSchema, error) {
+	return m.tenants, nil
+}
+
+func (m *mockStore) ListPendingRequestIDs(context.Context) ([]string, error) {
+	var ids []string
+	for id, r := range m.requests {
+		if r.Status == "pending" {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	return ids, nil
 }
 
 func (m *mockStore) InsertRequestWithAssignments(ctx context.Context, r *Request, as []*AssignmentRecord) error {
@@ -284,6 +323,9 @@ func (m *mockStore) ListPending(_ context.Context, user string, groups []string)
 		if r == nil || r.Status != "pending" || a.Status != "pending" || a.StepOrder != r.CurrentStep {
 			continue
 		}
+		if r.CreatedBy == user {
+			continue // a request never waits on the person who made it
+		}
 		mine := a.UserNodeID == user
 		for _, g := range groups {
 			if a.UserNodeID == g && isGroupRow(a) {
@@ -401,8 +443,6 @@ func TestCreateApprovalRequest_MatchesTemplate(t *testing.T) {
 		EntityType:   "transfer",
 		EntityID:     "txn-001",
 		EntityFields: EntityFields{},
-		ScopeOAID:    "oa_dept1",
-		DepartmentID: "dept1",
 		CreatedBy:    "user1",
 	})
 	if err != nil {
@@ -450,8 +490,6 @@ func TestCreateApprovalRequest_NoTemplate(t *testing.T) {
 		EntityType:   "unknown_type",
 		EntityID:     "txn-001",
 		EntityFields: EntityFields{},
-		ScopeOAID:    "oa_dept1",
-		DepartmentID: "dept1",
 		CreatedBy:    "user1",
 	})
 	if !errors.Is(err, ErrNoMatchingTemplate) {
@@ -467,8 +505,6 @@ func TestApprove_StepAdvancement(t *testing.T) {
 		EntityType:   "transfer",
 		EntityID:     "txn-002",
 		EntityFields: EntityFields{},
-		ScopeOAID:    "oa_dept1",
-		DepartmentID: "dept1",
 		CreatedBy:    "user1",
 	})
 	if err != nil {
@@ -515,8 +551,6 @@ func TestApprove_FinalStep_Completes(t *testing.T) {
 		EntityType:   "transfer",
 		EntityID:     "txn-003",
 		EntityFields: EntityFields{},
-		ScopeOAID:    "oa_dept1",
-		DepartmentID: "dept1",
 		CreatedBy:    "user1",
 	})
 	if err != nil {
@@ -560,8 +594,6 @@ func TestReject_Terminal(t *testing.T) {
 		EntityType:   "transfer",
 		EntityID:     "txn-004",
 		EntityFields: EntityFields{},
-		ScopeOAID:    "oa_dept1",
-		DepartmentID: "dept1",
 		CreatedBy:    "user1",
 	})
 	if err != nil {
@@ -599,8 +631,6 @@ func TestReject_AlreadyCompleted(t *testing.T) {
 		EntityType:   "transfer",
 		EntityID:     "txn-005",
 		EntityFields: EntityFields{},
-		ScopeOAID:    "oa_dept1",
-		DepartmentID: "dept1",
 		CreatedBy:    "user1",
 	})
 	if err != nil {
@@ -627,8 +657,6 @@ func TestApprove_WrongStep(t *testing.T) {
 		EntityType:   "transfer",
 		EntityID:     "txn-006",
 		EntityFields: EntityFields{},
-		ScopeOAID:    "oa_dept1",
-		DepartmentID: "dept1",
 		CreatedBy:    "user1",
 	})
 	if err != nil {
@@ -660,8 +688,6 @@ func TestApprove_NGACDenied(t *testing.T) {
 		EntityType:   "transfer",
 		EntityID:     "txn-007",
 		EntityFields: EntityFields{},
-		ScopeOAID:    "oa_dept1",
-		DepartmentID: "dept1",
 		CreatedBy:    "user1",
 	})
 	if err != nil {
@@ -694,8 +720,6 @@ func TestBatchApprove(t *testing.T) {
 			EntityType:   "transfer",
 			EntityID:     entity,
 			EntityFields: EntityFields{},
-			ScopeOAID:    "oa_dept1",
-			DepartmentID: "dept1",
 			CreatedBy:    "user1",
 		})
 		if err != nil {
@@ -748,8 +772,6 @@ func TestBatchApprove_EnforcesNGACLikeSingleApprove(t *testing.T) {
 		EntityType:   "transfer",
 		EntityID:     "txn-008",
 		EntityFields: EntityFields{},
-		ScopeOAID:    "oa_dept1",
-		DepartmentID: "dept1",
 		CreatedBy:    "user1",
 	})
 	if err != nil {
@@ -785,8 +807,6 @@ func TestBatchApprove_RejectsCompletedRequest(t *testing.T) {
 		EntityType:   "transfer",
 		EntityID:     "txn-009",
 		EntityFields: EntityFields{},
-		ScopeOAID:    "oa_dept1",
-		DepartmentID: "dept1",
 		CreatedBy:    "user1",
 	})
 	if err != nil {
@@ -822,8 +842,6 @@ func TestTemplateSnapshot_Preserved(t *testing.T) {
 		EntityType:   "transfer",
 		EntityID:     "txn-snap",
 		EntityFields: EntityFields{},
-		ScopeOAID:    "oa_dept1",
-		DepartmentID: "dept1",
 		CreatedBy:    "user1",
 	})
 	if err != nil {

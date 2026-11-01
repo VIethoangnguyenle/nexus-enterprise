@@ -239,8 +239,6 @@ func TestApprove_RequiredCountGreaterThanOne(t *testing.T) {
 		EntityType:   "transfer",
 		EntityID:     "txn-multi",
 		EntityFields: EntityFields{},
-		ScopeOAID:    "oa1",
-		DepartmentID: "dept1",
 		CreatedBy:    "user1",
 	})
 	if err != nil {
@@ -273,8 +271,6 @@ func TestApprove_OnCompletedRequest(t *testing.T) {
 		EntityType:   "transfer",
 		EntityID:     "txn-completed",
 		EntityFields: EntityFields{},
-		ScopeOAID:    "oa1",
-		DepartmentID: "dept1",
 		CreatedBy:    "user1",
 	})
 	if err != nil {

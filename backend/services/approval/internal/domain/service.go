@@ -34,6 +34,7 @@ type Store interface {
 	AuditStore
 	DirectoryStore
 	WorkspaceStore
+	ReconcileStore
 	Transactor
 }
 
@@ -55,6 +56,15 @@ type DirectoryStore interface {
 	// node, a role's UA, or a department's UA (a department id is turned into
 	// its UA). Anything else is ErrInvalidInput.
 	CanonicalApprover(ctx context.Context, tenantID, approverType, value string) (string, error)
+	// CreatorDepartments returns the ids of the tenant's departments whose UA
+	// the person is assigned to directly in the graph (normally one, or none).
+	CreatorDepartments(ctx context.Context, tenantID, userNodeID string) ([]string, error)
+	// ScopeInTenant reports whether the node is an object attribute that sits
+	// under the tenant's policy class.
+	ScopeInTenant(ctx context.Context, tenantID, scopeOAID string) (bool, error)
+	// GroupMembers returns the people (user nodes) at or below a role's or
+	// department's UA in the graph tables.
+	GroupMembers(ctx context.Context, uaNodeID string) ([]string, error)
 }
 
 // TemplateStore defines template CRUD operations.
@@ -106,7 +116,7 @@ type RequestStore interface {
 	// Query tabs
 	// ListPending returns what waits on the user: their own rows and the group
 	// rows of the roles and departments in groupNodeIDs, minus steps they have
-	// already acted on.
+	// already acted on and requests they made themselves.
 	ListPending(ctx context.Context, userNodeID string, groupNodeIDs []string) ([]*RequestWithAssignment, error)
 	ListHistory(ctx context.Context, userNodeID, cursor string, limit int) ([]*RequestWithAssignment, string, error)
 	ListMyRequests(ctx context.Context, userNodeID, cursor string, limit int) ([]*Request, string, error)

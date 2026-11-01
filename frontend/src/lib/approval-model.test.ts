@@ -165,6 +165,9 @@ describe('labels', () => {
     expect(auditLine({ action: 'approved', detail_json: '{"comment":"OK"}' })).toEqual({ text: 'đã duyệt', system: false, comment: 'OK' })
     expect(auditLine({ action: 'rejected', detail_json: '{"comment":"Thiếu hoá đơn"}' }).comment).toBe('Thiếu hoá đơn')
     expect(auditLine({ action: 'step_advanced', detail_json: '{"from_step":"1"}' })).toEqual({ text: 'Chuyển sang bước tiếp theo', system: true })
+    // A step whose only approver is the requester is skipped by the system, never decided by them.
+    expect(auditLine({ action: 'step_skipped', detail_json: '{"reason":"người tạo là người duyệt duy nhất"}' }))
+      .toEqual({ text: 'Bỏ qua bước này: người tạo là người duyệt duy nhất', system: true })
     expect(auditLine({ action: 'completed', detail_json: '{"final_status":"approved"}' })).toEqual({ text: 'Đề nghị đã được duyệt', system: true })
     expect(auditLine({ action: 'completed', detail_json: '{"final_status":"rejected"}' }).text).toBe('Đề nghị đã bị trả lại')
     expect(auditLine({ action: 'assigned', detail_json: '{"grant_source":"direct"}' }).text).toBe('được giao duyệt')

@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"errors"
 	"testing"
 )
 
@@ -191,21 +192,23 @@ func TestEvaluateCondition_UnknownOperator(t *testing.T) {
 	}
 }
 
-func TestResolvePlaceholder(t *testing.T) {
-	tests := []struct {
-		input  string
-		deptID string
-		want   string
-	}{
-		{"{creator_dept}", "dept_123", "dept_123"},
-		{"managers_of_{creator_dept}", "dept_456", "managers_of_dept_456"},
-		{"no_placeholder", "dept_789", "no_placeholder"},
-		{"{creator_dept}_{creator_dept}", "d1", "d1_d1"},
+// The placeholder is resolved by exact match only (placeholderUA): a value that
+// merely contains it is never rewritten into something else.
+func TestBuildAssignments_PlaceholderIsExactAndDepartmentOnly(t *testing.T) {
+	dept := &Step{StepOrder: 1, ApproverType: ApproverDepartment, ApproverValue: "{creator_dept}"}
+	rows, err := buildAssignments("r", dept, "ua-d")
+	if err != nil || rows[0].UserNodeID != "ua-d" || rows[0].GrantSource != "department:ua-d" {
+		t.Fatalf("department placeholder: rows=%+v err=%v", rows, err)
 	}
-	for _, tt := range tests {
-		got := ResolvePlaceholder(tt.input, tt.deptID)
-		if got != tt.want {
-			t.Errorf("ResolvePlaceholder(%q, %q) = %q, want %q", tt.input, tt.deptID, got, tt.want)
-		}
+	embedded := &Step{StepOrder: 1, ApproverType: ApproverRole, ApproverValue: "managers_of_{creator_dept}"}
+	if rows, err := buildAssignments("r", embedded, "ua-d"); err != nil || rows[0].UserNodeID != "managers_of_{creator_dept}" {
+		t.Errorf("embedded placeholder rewritten: rows=%+v err=%v", rows, err)
+	}
+	person := &Step{StepOrder: 1, ApproverType: ApproverSpecificUser, ApproverValue: "{creator_dept}"}
+	if _, err := buildAssignments("r", person, "ua-d"); !errors.Is(err, ErrInvalidInput) {
+		t.Errorf("person placeholder: err=%v, want ErrInvalidInput", err)
+	}
+	if _, err := buildAssignments("r", dept, ""); !errors.Is(err, ErrInvalidInput) {
+		t.Errorf("unresolved placeholder: err=%v, want ErrInvalidInput", err)
 	}
 }

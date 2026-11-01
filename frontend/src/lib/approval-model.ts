@@ -323,6 +323,9 @@ export function auditLine(entry: Pick<AuditEntry, 'action' | 'detail_json'>): Au
       return { text: 'được giao duyệt', system: false }
     case 'step_advanced':
       return { text: 'Chuyển sang bước tiếp theo', system: true }
+    case 'step_skipped':
+      // The server skips a step whose only possible approver is the requester (nobody decides their own request).
+      return { text: 'Bỏ qua bước này: người tạo là người duyệt duy nhất', system: true }
     case 'completed':
       return {
         text: detail.final_status === 'rejected' ? 'Đề nghị đã bị trả lại' : 'Đề nghị đã được duyệt',

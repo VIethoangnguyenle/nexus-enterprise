@@ -125,7 +125,13 @@ func (s *Service) buildSteps(ctx context.Context, tenantID string, in []StepInpu
 		if value == "" {
 			return nil, fmt.Errorf("step %d has no approver: %w", st.StepOrder, ErrInvalidInput)
 		}
-		if !isPlaceholder(value) {
+		if isPlaceholder(value) {
+			// The requester's department is the only thing the placeholder can
+			// stand for, so only a department step may use it.
+			if st.ApproverType != ApproverDepartment {
+				return nil, fmt.Errorf("step %d: %s may only name a department step: %w", st.StepOrder, creatorDeptPlaceholder, ErrInvalidInput)
+			}
+		} else {
 			v, err := s.store.CanonicalApprover(ctx, tenantID, st.ApproverType, value)
 			if err != nil {
 				return nil, fmt.Errorf("step %d approver: %w", st.StepOrder, err)
@@ -145,9 +151,14 @@ func (s *Service) buildSteps(ctx context.Context, tenantID string, in []StepInpu
 	return steps, nil
 }
 
-// isPlaceholder reports whether an approver value is the "{creator_dept}"
-// placeholder, which is filled in per request and so has nothing to look up yet.
-func isPlaceholder(v string) bool { return v == "{creator_dept}" }
+// creatorDeptPlaceholder is the approver value of a department step whose
+// department is the requester's own, filled in per request from the graph.
+const creatorDeptPlaceholder = "{creator_dept}"
+
+// isPlaceholder reports whether an approver value is exactly the placeholder,
+// which is filled in per request and so has nothing to look up yet. A value that
+// merely contains it is an ordinary value.
+func isPlaceholder(v string) bool { return v == creatorDeptPlaceholder }
 
 func buildConditions(in []ConditionInput) ([]*Condition, error) {
 	out := make([]*Condition, 0, len(in))

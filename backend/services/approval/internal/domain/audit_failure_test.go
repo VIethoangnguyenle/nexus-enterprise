@@ -35,7 +35,7 @@ func newRequest(t *testing.T, failAudit string, failAssignments bool) (*Service,
 	t.Helper()
 	svc, ms, _ := setupServiceWithTemplate()
 	req, err := svc.CreateApprovalRequest(context.Background(), CreateRequestInput{
-		EntityType: "transfer", EntityID: "txn-x", ScopeOAID: "oa_dept1", DepartmentID: "dept1", CreatedBy: "user1",
+		EntityType: "transfer", EntityID: "txn-x", CreatedBy: "user1",
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -119,7 +119,7 @@ func TestCreateApprovalRequest_AFailedAuditStoresNothing(t *testing.T) {
 	svc.store = flakyStore{mockStore: ms, failAudit: "assigned"}
 
 	_, err := svc.CreateApprovalRequest(context.Background(), CreateRequestInput{
-		EntityType: "transfer", EntityID: "txn-y", ScopeOAID: "oa_dept1", DepartmentID: "dept1", CreatedBy: "user1",
+		EntityType: "transfer", EntityID: "txn-y", CreatedBy: "user1",
 	})
 
 	if err == nil {

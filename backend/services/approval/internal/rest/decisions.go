@@ -27,7 +27,8 @@ func (h *Handler) CreateRequest(c echo.Context) error {
 		EntityID     string `json:"entity_id"`
 		FormDataJSON string `json:"form_data_json"`
 		ScopeOAID    string `json:"scope_oa_id"`
-		DepartmentID string `json:"department_id"`
+		// A department_id in the body is not read: the request's department
+		// is the requester's own, taken from the graph by the domain.
 	}
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
@@ -39,7 +40,6 @@ func (h *Handler) CreateRequest(c echo.Context) error {
 		EntityID:     body.EntityID,
 		FormDataJSON: body.FormDataJSON,
 		ScopeOAID:    body.ScopeOAID,
-		DepartmentID: body.DepartmentID,
 		CreatedBy:    claims.NGACNodeID,
 	})
 	if err != nil {
