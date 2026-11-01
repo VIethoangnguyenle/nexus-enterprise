@@ -22,7 +22,7 @@ describe('uploads to storage are write-once', () => {
     vi.stubGlobal('fetch', fetchMock)
     try {
       await driveApi.uploadToStorage('https://storage.test/u', new File(['abc'], 'a.txt', { type: 'text/plain' }))
-      const init = fetchMock.mock.calls[0][1] as RequestInit
+      const init = fetchMock.mock.calls[0]?.[1] as RequestInit
       expect(init.method).toBe('PUT')
       expect(init.headers).toMatchObject({ 'Content-Type': 'text/plain', 'If-None-Match': '*' })
     } finally {
