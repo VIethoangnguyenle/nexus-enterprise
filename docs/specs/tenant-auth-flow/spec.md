@@ -276,6 +276,23 @@ The system SHALL include `tenant_id` and `session_id` in all JWTs. All downstrea
 
 Two fields are refused by name, 400, writing nothing: `department` (`department_not_editable`: a department is assigned by a workspace administrator, per workspace, and a person who could write their own could present themselves under any department in the directory) and `avatar_url` (`avatar_not_supported`: a URL a person typed would be loaded by every colleague's browser; a picture is uploaded to `PUT /api/me/avatar`, which makes the address itself).
 
+### Requirement: A person's title belongs to each workspace
+Chức danh SHALL be per workspace: `tenant_users.title` (migration 071) is the person's title in that workspace, NULL meaning "not set here" and `''` a title cleared here. `users.title` stays as the account's default. Every read for a workspace (`GET /api/me?workspace=` or the token's workspace, the contacts list and its `search`, the workspace administrators' member list) SHALL show `COALESCE(tenant_users.title, users.title, '')`: the title set there, empty when cleared there, else the default. A read with no workspace (`GET /api/me` for a token with none) shows the default. Migration 071 copied each account's non-empty title into every membership that had none, so existing workspaces kept what they showed.
+
+`PATCH /api/me/profile?workspace=<id>` SHALL write `title` to that workspace only, and only for a caller who is an ACTIVE member there; for any other workspace (another person's, a `disabled`, `invited` or `removed` membership, one that does not exist) it is 403 `access_denied` and nothing of the request is written. Without `?workspace=` the title written is the account default, whatever workspace the token is for: the sign-up profile step sends none. `display_name`, `location` and `language` are always the account's. A title saved in a workspace ends the profile step like one saved on the account.
+
+#### Scenario: A title changed in one workspace stays there
+- **WHEN** a person who belongs to workspaces A and B saves the title "Kế toán trưởng" with `?workspace=A`
+- **THEN** A shows "Kế toán trưởng" (`/api/me?workspace=A`, the contacts list of A, A's member list) and B still shows what it showed before
+
+#### Scenario: A new membership shows the account default until set
+- **WHEN** a person joins a workspace where no title was set for them
+- **THEN** it shows their account default, and follows that default until a title is saved in that workspace; a title cleared there shows empty, not the default
+
+#### Scenario: A workspace the caller is not in
+- **WHEN** `PATCH /api/me/profile?workspace=<id>` names a workspace where the caller is not an active member
+- **THEN** the answer is 403 and neither the title nor any other field of the request is written
+
 #### Scenario: Refused input writes nothing
 - **WHEN** a request carries a valid display name and a department
 - **THEN** the answer is 400 `department_not_editable`, the display name is unchanged and `needs_profile` is unchanged
@@ -332,7 +349,7 @@ After a display name, title, location or picture change commits (`PATCH /api/me/
 - **THEN** it is ignored: only the caller's profile changes
 
 ### Requirement: GET /me is the person's own record
-`GET /api/me` SHALL return the signed-in user (`id`, `username`, `ngac_node_id`, `email`, `display_name`, `title`, `location`, `avatar_url`, `email_verified`, `needs_profile`) and `current_tenant` (`id`, `name`, `role`, `open_id`, `department`) for the token's workspace, or for `?workspace=<id>` when given. `current_tenant` is present only for a workspace the caller is an ACTIVE member of, and `department` is the one an administrator assigned there (empty when none), never the person's own claim. Settings reads the person from here instead of searching the directory.
+`GET /api/me` SHALL return the signed-in user (`id`, `username`, `ngac_node_id`, `email`, `display_name`, `title` (the person's title in the workspace asked about when they are an active member there, see "A person's title belongs to each workspace"), `location`, `avatar_url`, `email_verified`, `needs_profile`) and `current_tenant` (`id`, `name`, `role`, `open_id`, `department`) for the token's workspace, or for `?workspace=<id>` when given. `current_tenant` is present only for a workspace the caller is an ACTIVE member of, and `department` is the one an administrator assigned there (empty when none), never the person's own claim. Settings reads the person from here instead of searching the directory.
 
 #### Scenario: Someone else's workspace
 - **WHEN** a caller asks `?workspace=` for a workspace they do not belong to, or where their membership is suspended

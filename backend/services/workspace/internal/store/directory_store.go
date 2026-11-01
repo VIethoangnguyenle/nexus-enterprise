@@ -24,8 +24,11 @@ type Profile struct {
 	Status string
 }
 
+// profileColumns reads users u joined to the person's membership row tu of the
+// workspace. The title is that workspace's: the one set there, "" when cleared
+// there, else (NULL, or no row) the account default.
 const profileColumns = `u.id, COALESCE(u.ngac_node,''), u.username, COALESCE(u.display_name,''),
-	COALESCE(u.email,''), COALESCE(u.avatar_url,''), COALESCE(u.title,'')`
+	COALESCE(u.email,''), COALESCE(u.avatar_url,''), COALESCE(tu.title, u.title, '')`
 
 func scanProfile(row pgx.Row, withStatus bool) (*Profile, error) {
 	var p Profile

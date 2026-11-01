@@ -17,6 +17,9 @@ type ProfileUpdateInput struct {
 	Title       *string
 	Location    *string
 	Language    *string
+	// WorkspaceID, when set, makes Title that workspace's title rather than the
+	// account default. It must be a workspace the person is an active member of.
+	WorkspaceID string
 }
 
 // validLanguages are the accepted values for the language field.
@@ -30,7 +33,7 @@ func (s *Service) UpdateProfile(ctx context.Context, userID string, in ProfileUp
 	if userID == "" {
 		return ErrInvalidInput
 	}
-	var ch store.ProfileChanges
+	ch := store.ProfileChanges{WorkspaceID: in.WorkspaceID}
 	sent := false
 
 	text := func(dst **string, src *string, max int, required bool) error {
@@ -67,6 +70,9 @@ func (s *Service) UpdateProfile(ctx context.Context, userID string, in ProfileUp
 	if err := s.store.UpdateProfile(ctx, userID, ch); err != nil {
 		if errors.Is(err, store.ErrNoSuchUser) {
 			return ErrNotFound
+		}
+		if errors.Is(err, store.ErrNotMember) {
+			return ErrAccessDenied
 		}
 		return fmt.Errorf("update profile: %w", err)
 	}

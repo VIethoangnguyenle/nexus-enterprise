@@ -66,6 +66,9 @@ type fakeWorld struct {
 	// edges is every assignment written through the policy writer, "child|parent"; the
 	// graph above is what membership reads see, edges is what IsAssigned answers.
 	edges map[string]bool
+	// titles is the title set per membership, "tenant|user"; absent means the
+	// account default.
+	titles map[string]string
 	// assignLog is every CreateAssignment / RemoveAssignment, in order ("+child>parent",
 	// "-child>parent"), so a test can see what a join created and what it undid.
 	assignLog []string
@@ -256,9 +259,24 @@ func (w *fakeWorld) GetTenantUser(_ context.Context, tenantID, userID string) (*
 	if m := w.membership(tenantID, userID); m != nil {
 		cp := *m
 		cp.TenantType = w.workspaceType(tenantID)
+		cp.Title = w.titleIn(tenantID, userID)
 		return &cp, nil
 	}
 	return nil, nil
+}
+
+// titleIn is the person's title in a workspace: the one set there, else the
+// account default.
+func (w *fakeWorld) titleIn(tenantID, userID string) string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if t, ok := w.titles[tenantID+"|"+userID]; ok {
+		return t
+	}
+	if u := w.users[userID]; u != nil {
+		return u.Title
+	}
+	return ""
 }
 
 // workspaceType is the type the workspace was created with.
@@ -300,11 +318,24 @@ func (w *fakeWorld) UpdateProfile(_ context.Context, userID string, ch store.Pro
 	if u == nil {
 		return store.ErrNoSuchUser
 	}
+	// As the store: a workspace named must hold an active membership, else
+	// nothing is written; the title is then that workspace's.
+	if ch.WorkspaceID != "" {
+		key := ch.WorkspaceID + "|" + userID
+		if m := w.members[key]; m == nil || m.Status != "active" {
+			return store.ErrNotMember
+		}
+		if ch.Title != nil {
+			if w.titles == nil {
+				w.titles = map[string]string{}
+			}
+			w.titles[key] = *ch.Title
+		}
+	} else if ch.Title != nil {
+		u.Title = *ch.Title
+	}
 	if ch.DisplayName != nil {
 		u.DisplayName = *ch.DisplayName
-	}
-	if ch.Title != nil {
-		u.Title = *ch.Title
 	}
 	if ch.Location != nil {
 		u.Location = *ch.Location

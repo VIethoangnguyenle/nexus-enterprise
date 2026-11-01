@@ -17,6 +17,12 @@ import (
 // UpdateProfile handles PATCH /api/me/profile. It is a partial update: a field
 // that is absent (or null) is left as it is, and "" clears it. The person
 // edited is always the token's; nothing in the body can name another.
+//
+// The title belongs to a workspace: ?workspace=<id> makes it that workspace's,
+// and is refused (403) unless the caller is an active member there. Without
+// it the title written is the account's default, which every workspace where
+// none was set shows. The token's workspace is deliberately not used: the
+// profile step of sign-up writes the default with whatever token it holds.
 func (h *Handler) UpdateProfile(c echo.Context) error {
 	claims, err := httputil.RequireClaims(c)
 	if err != nil {
@@ -54,6 +60,7 @@ func (h *Handler) UpdateProfile(c echo.Context) error {
 		Title:       body.Title,
 		Location:    body.Location,
 		Language:    body.Language,
+		WorkspaceID: c.QueryParam("workspace"),
 	}); err != nil {
 		return fail(c, err)
 	}
