@@ -8,8 +8,16 @@ export interface ProfileChanges {
 }
 
 export const profileApi = {
-  update: (changes: ProfileChanges) =>
-    apiFetch<{ status: string }>('/me/profile', { method: 'PATCH', body: JSON.stringify(changes) }),
+  /**
+   * The title belongs to a workspace: with `workspaceId` it is that workspace's
+   * and the others keep theirs. Without one it is the account's default, shown
+   * wherever no title was set. The other fields are the account's either way.
+   */
+  update: (changes: ProfileChanges, workspaceId?: string) =>
+    apiFetch<{ status: string }>(
+      workspaceId ? `/me/profile?workspace=${encodeURIComponent(workspaceId)}` : '/me/profile',
+      { method: 'PATCH', body: JSON.stringify(changes) },
+    ),
 
   /**
    * Makes `file` the person's picture. The server re-encodes it into three

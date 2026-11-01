@@ -99,6 +99,10 @@ On a desktop (1024 px and wider) Cài đặt SHALL be a section list beside the 
 - **WHEN** a person in an organization opens Hồ sơ trong tổ chức on a desktop or a phone
 - **THEN** Chức danh is editable there and saving sends only the title; Phòng ban and Vai trò are read only with the reason that an administrator sets them, and a department nobody assigned reads "Chưa có"
 
+#### Scenario: Chức danh is this organization's
+- **WHEN** a person who belongs to two organizations changes Chức danh on Hồ sơ trong tổ chức of one (or in Tài khoản và hồ sơ of a personal workspace)
+- **THEN** the save names the workspace open (`PATCH /api/me/profile?workspace=<id>`), the title changes in that workspace only and the other organization keeps its own; an organization where none was set shows the account's default (the title given at sign-up) until one is saved there
+
 #### Scenario: Changing the picture
 - **WHEN** a person touches their picture in Tài khoản và hồ sơ (one button around it, no Đổi ảnh button beside it), picks Đổi ảnh or Tải ảnh lên from the menu (Chụp ảnh or Chọn ảnh in the sheet below 768 px) and chooses a JPG or PNG of at most 5 MB
 - **THEN** it is uploaded at once (not with Lưu thay đổi), "Đã đổi ảnh" is said, and the new picture shows in Tài khoản và hồ sơ, the sidebar and the account sheet without a reload; elsewhere it shows from the next directory read

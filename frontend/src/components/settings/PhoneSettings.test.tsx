@@ -86,7 +86,8 @@ describe('Tôi', () => {
 })
 
 describe('Tài khoản và hồ sơ and Hồ sơ trong tổ chức', () => {
-  const profilePatches = () => server.writes.filter((w) => w.method === 'PATCH' && w.path === '/me/profile').map((w) => w.body)
+  // Each names the workspace open: the title is that workspace's.
+  const profilePatches = () => server.writes.filter((w) => w.method === 'PATCH' && w.path === `/me/profile?workspace=${WS}`).map((w) => w.body)
 
   it('in an organization the account page keeps the name, place and email; title, department and role are not on it', async () => {
     await renderSettings(`/settings/account?ws=${WS}`)

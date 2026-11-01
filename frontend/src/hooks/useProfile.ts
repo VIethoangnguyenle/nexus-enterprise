@@ -16,11 +16,11 @@ const refreshMyProfile = () =>
     queryClient.invalidateQueries({ queryKey: keys.auth.me() }),
   ])
 
-/** Saves one's own profile. */
-export function useUpdateProfile() {
+/** Saves one's own profile; the title as the one of `workspaceId`, the workspace open. */
+export function useUpdateProfile(workspaceId: string) {
   return useMutation({
     meta: { action: 'lưu hồ sơ' },
-    mutationFn: (changes: ProfileChanges) => profileApi.update(changes),
+    mutationFn: (changes: ProfileChanges) => profileApi.update(changes, workspaceId || undefined),
     onSuccess: refreshMyProfile,
   })
 }

@@ -41,8 +41,8 @@ afterEach(() => {
 
 const page = (name: string) => screen.findByRole('region', { name })
 const pushPuts = () => server.writes.filter((w) => w.method === 'PUT' && w.path === '/me/push-preferences')
-/** Every PATCH of the person's own profile, as sent. */
-const profilePatches = () => server.writes.filter((w) => w.method === 'PATCH' && w.path === '/me/profile').map((w) => w.body)
+/** Every PATCH of the person's own profile, as sent. Each names the workspace open, whose title it is. */
+const profilePatches = () => server.writes.filter((w) => w.method === 'PATCH' && w.path === `/me/profile?workspace=${WS}`).map((w) => w.body)
 const toasts = () => useToastStore.getState().toasts.map((t) => t.message)
 /** The form of Tài khoản và hồ sơ, once the stored profile is in it. */
 async function accountForm() {
