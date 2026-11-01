@@ -196,7 +196,8 @@ export const driveApi = {
     const res = await fetch(uploadUrl, {
       method: 'PUT',
       body: file,
-      headers: { 'Content-Type': file.type || 'application/octet-stream' },
+      // Write-once: storage refuses the PUT when an object already sits at the key.
+      headers: { 'Content-Type': file.type || 'application/octet-stream', 'If-None-Match': '*' },
     })
     if (!res.ok) throw new Error(`Storage upload failed: ${res.status}`)
   },
@@ -274,6 +275,8 @@ export const driveApi = {
       const xhr = new XMLHttpRequest()
       xhr.open('PUT', uploadUrl)
       xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
+      // Write-once, as in uploadToStorage.
+      xhr.setRequestHeader('If-None-Match', '*')
       xhr.upload.onprogress = (e) => onProgress(e.loaded, e.lengthComputable ? e.total : file.size)
       xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Storage upload failed: ${xhr.status}`)))
       xhr.onerror = () => reject(new Error('Storage upload failed: network'))
