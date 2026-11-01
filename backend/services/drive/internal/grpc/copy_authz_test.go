@@ -90,7 +90,7 @@ func TestCopyItem_IntoAnotherWorkspaceIsRefused(t *testing.T) {
 		f.pool.Exec(context.Background(), `DELETE FROM drive_quotas WHERE workspace_id = $1`, foreign)
 		f.pool.Exec(context.Background(), `DELETE FROM workspaces WHERE id = $1`, foreign)
 	})
-	theirs, err := f.srv.CreateFolder(asCaller("", actor), &pb.CreateFolderRequest{WorkspaceId: foreign, Name: "Theirs"})
+	theirs, err := f.srv.CreateFolder(asMemberOf(t, f.pool, foreign), &pb.CreateFolderRequest{WorkspaceId: foreign, Name: "Theirs"})
 	require.NoError(t, err)
 
 	// Even with every right granted, a file never crosses into another workspace.

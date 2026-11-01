@@ -32,6 +32,7 @@ func TestNameHelpersSurviveShortInput(t *testing.T) {
 		"DriveRootName":      func(s string) string { return ngac.DriveRootName(ngac.WorkspaceID(s)) },
 		"FolderNodeName":     func(s string) string { return ngac.FolderNodeName(ngac.FolderID(s)) },
 		"ShareOAName":        func(s string) string { return ngac.ShareOAName(ngac.ShareID(s)) },
+		"FileOAName":         func(s string) string { return ngac.FileOAName(ngac.FileID(s)) },
 		"RoleUAName":         func(s string) string { return ngac.RoleUAName(ngac.RoleID(s)) },
 		"UserNodeName":       func(s string) string { return ngac.UserNodeName(ngac.UserID(s)) },
 		"PersonalUAName":     func(s string) string { return ngac.PersonalUAName(ngac.UserNodeID(s)) },
@@ -66,6 +67,8 @@ func TestIDKeyedNamesAreDistinct(t *testing.T) {
 		"folder b": ngac.FolderNodeName("b"),
 		"share a":  ngac.ShareOAName("a"),
 		"share b":  ngac.ShareOAName("b"),
+		"file a":   ngac.FileOAName("a"),
+		"file b":   ngac.FileOAName("b"),
 		"role a":   ngac.RoleUAName("a"),
 		"role b":   ngac.RoleUAName("b"),
 		"user a":   ngac.UserNodeName("a"),
@@ -166,7 +169,7 @@ func TestValidateRoleName(t *testing.T) {
 		"", "   ", "User_abc", "user_abc", "PC_Global", "PC_ws1", "TenantMember_t", "TenantOwner_t",
 		"Dept_Sales", "Ch_x_Members", "ws1_Owners", "ws1_members", "ws1_Mgmt", "ws1_Documents",
 		"ws1_Channels", "ws1_Assets", "PublicUsers", "publicusers", "DriveRoot_ws", "Folder_x",
-		"Share_x_1", " User_abc", "Role_abc", "role_abc", "U_abc",
+		"Share_x_1", "File_x", " User_abc", "Role_abc", "role_abc", "U_abc",
 	} {
 		if err := ngac.ValidateRoleName(bad); err == nil {
 			t.Errorf("ValidateRoleName(%q) accepted, want rejected", bad)

@@ -108,6 +108,7 @@ func TestThumbnail_UnknownFolderAndPending(t *testing.T) {
 	_, err := f.svc.GetThumbnail(reader(), uuid.New().String(), 320, "")
 	assert.ErrorIs(t, err, domain.ErrNotFound)
 
+	f.policy.grant("reader", anyObject, ngac.OpWrite) // to make the folder
 	folder, err := f.svc.CreateFolder(reader(), &pb.CreateFolderRequest{WorkspaceId: f.ws, Name: "Hồ sơ"})
 	require.NoError(t, err)
 	_, err = f.svc.GetThumbnail(reader(), folder.Id, 320, "")

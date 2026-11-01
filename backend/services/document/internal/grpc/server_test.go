@@ -3,6 +3,7 @@ package grpc_test
 import (
 	"context"
 	"errors"
+	"net/http"
 	"net/url"
 	"strings"
 	"testing"
@@ -40,6 +41,21 @@ func (f failingSigner) PresignedPutObject(context.Context, string, string, time.
 }
 func (f failingSigner) PresignedGetObject(context.Context, string, string, time.Duration, url.Values) (*url.URL, error) {
 	return nil, f.err
+}
+func (f failingSigner) PresignHeader(context.Context, string, string, string, time.Duration, url.Values, http.Header) (*url.URL, error) {
+	return nil, f.err
+}
+
+// Deny: an upload slot for a negative size is refused as the caller's mistake,
+// before anything is signed.
+func TestGetUploadURL_ANegativeSizeIsInvalid(t *testing.T) {
+	for _, n := range []int64{-1, -5} {
+		_, err := server(errors.New("must not be reached")).GetUploadURL(context.Background(),
+			&pb.GetUploadURLRequest{WorkspaceId: "w", DocId: "d", Filename: "f", SizeBytes: &n})
+		if status.Code(err) != codes.InvalidArgument {
+			t.Fatalf("size %d: got %v, want InvalidArgument", n, err)
+		}
+	}
 }
 
 func server(err error) *dgrpc.DocumentStorageServer {

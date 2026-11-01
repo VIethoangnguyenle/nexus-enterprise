@@ -101,6 +101,19 @@ func (m *mockPolicyWrite) DeleteNode(_ context.Context, _ *policypb.DeleteNodeRe
 	return &policypb.Empty{}, nil
 }
 
+// GetNode knows no node: no file has an OA of its own here.
+func (m *mockPolicyWrite) GetNode(_ context.Context, _ *policypb.GetNodeRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+	return nil, status.Errorf(codes.NotFound, "node not found")
+}
+
+// GetChildren and GetParents answer as a graph with no edges.
+func (m *mockPolicyWrite) GetChildren(_ context.Context, _ *policypb.GetChildrenRequest, _ ...grpc.CallOption) (*policypb.NodeList, error) {
+	return &policypb.NodeList{}, nil
+}
+func (m *mockPolicyWrite) GetParents(_ context.Context, _ *policypb.GetParentsRequest, _ ...grpc.CallOption) (*policypb.NodeList, error) {
+	return &policypb.NodeList{}, nil
+}
+
 type mockDocStorage struct {
 	docpb.DocumentStorageServiceClient
 }
@@ -170,7 +183,11 @@ func setupServerDeny(t *testing.T) (*grpcserver.DriveServer, *pgxpool.Pool) {
 // land in someone else's workspace. Each test gets its own uniquely named user
 // and workspace, created on first use and removed — with everything this
 // package hangs off them — when the test ends.
-type testTenant struct{ wsID, userID string }
+//
+// The workspace records a Documents OA of its own, as every workspace the
+// workspace service provisions does: its drive roots there, and creating the
+// root is authorized on it.
+type testTenant struct{ wsID, userID, docsOA string }
 
 var tenants sync.Map // *testing.T -> *testTenant
 
@@ -189,10 +206,14 @@ func tenantFor(t *testing.T) *testTenant {
 		t.Skipf("test DB not available: %v", err)
 	}
 	sfx := uuid.New().String()
-	tt := &testTenant{wsID: "drive-test-ws-" + sfx, userID: "drive-test-user-" + sfx}
+	tt := &testTenant{wsID: "drive-test-ws-" + sfx, userID: "drive-test-user-" + sfx, docsOA: "drive-test-docs-" + sfx}
 	_, err = pool.Exec(ctx, `INSERT INTO users (id, username, password) VALUES ($1, $1, '')`, tt.userID)
 	require.NoError(t, err)
-	_, err = pool.Exec(ctx, `INSERT INTO workspaces (id, name, owner_id, type) VALUES ($1, $1, $2, 'organization')`, tt.wsID, tt.userID)
+	_, err = pool.Exec(ctx, `INSERT INTO ngac_nodes (id, name, node_type) VALUES ($1, $2, 'OA')`,
+		tt.docsOA, ngac.DocumentsOAName(ngac.WorkspaceID(tt.wsID)))
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO workspaces (id, name, owner_id, type, documents_oa_id) VALUES ($1, $1, $2, 'organization', $3)`,
+		tt.wsID, tt.userID, tt.docsOA)
 	require.NoError(t, err)
 	tenants.Store(t, tt)
 
@@ -205,6 +226,7 @@ func tenantFor(t *testing.T) *testTenant {
 			{`DELETE FROM drive_quotas WHERE workspace_id = $1`, tt.wsID},
 			{`DELETE FROM channels WHERE workspace_id = $1`, tt.wsID},
 			{`DELETE FROM workspaces WHERE id = $1`, tt.wsID},
+			{`DELETE FROM ngac_nodes WHERE id = $1`, tt.docsOA},
 			{`DELETE FROM users WHERE id = $1`, tt.userID},
 		} {
 			if _, err := pool.Exec(c, st.q, st.arg); err != nil {
@@ -220,6 +242,12 @@ func tenantFor(t *testing.T) *testTenant {
 func getTestWorkspaceID(t *testing.T, _ *pgxpool.Pool) string {
 	t.Helper()
 	return tenantFor(t).wsID
+}
+
+// getTestDocumentsOA returns the Documents OA recorded on this test's workspace.
+func getTestDocumentsOA(t *testing.T) string {
+	t.Helper()
+	return tenantFor(t).docsOA
 }
 
 // getTestUserID returns a user created for, and owned by, this test.

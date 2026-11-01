@@ -25,7 +25,19 @@ func (s *Store) FindRootByContext(ctx context.Context, workspaceID, driveContext
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
+	item.IsRoot = err == nil
 	return item, err
+}
+
+// ChannelCreator returns the user who created a channel, or "" when the
+// channel does not exist or records no creator.
+func (s *Store) ChannelCreator(ctx context.Context, channelID string) (string, error) {
+	var by *string
+	err := s.db.QueryRow(ctx, `SELECT created_by FROM channels WHERE id = $1`, channelID).Scan(&by)
+	if err == pgx.ErrNoRows || by == nil {
+		return "", nil
+	}
+	return *by, err
 }
 
 // RootWorkspaceByNode returns the workspace whose drive root hangs on the given

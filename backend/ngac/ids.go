@@ -22,6 +22,8 @@ type (
 	// FolderID is the identifier of a folder: drive_items.id for a drive
 	// folder, or a freshly generated ID for a workspace-level folder.
 	FolderID string
+	// FileID is drive_items.id of a drive file.
+	FileID string
 	// ShareID is drive_shares.id.
 	ShareID string
 	// RoleID is a generated identifier for a role; the role's node ID is not

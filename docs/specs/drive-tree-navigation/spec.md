@@ -117,6 +117,18 @@ The folder tree SHALL NOT display folders the user cannot read. For workspace me
 ### Requirement: A workspace's drive root is its recorded Documents OA
 The drive root of a workspace SHALL hang on the Documents OA recorded on the workspace (`workspaces.documents_oa_id`, set when the workspace is provisioned). The drive SHALL NOT work the root out from node names — not by looking for "Documents" or "Docs" among the policy class's children, and not by taking the first OA found. A workspace with no Documents OA recorded SHALL get a root OA of its own, `ngac.DriveRootName(workspace id)`, which is found again on later calls instead of created twice. A drive root is marked (`drive_items.is_root`), because top-level user folders are parent-less too; at most one active root exists per workspace, drive context and context id (unique index), and a request that loses the race to create it SHALL read the winner's root again and use it. A channel's drive SHALL be built only for a channel of the requesting workspace (or for the workspace's own id, its root-drive context); a request pairing one workspace with another's channel is refused (PermissionDenied) before anything is written, and an OA that is already another workspace's drive root is never adopted. Folders and shares created in the drive SHALL be named by their own IDs (`ngac.FolderNodeName`, `ngac.ShareOAName`), and a channel's drive by the channel's ID (`ngac.ChannelDriveName`), with what the screen shows kept in the item name and the node's `display_name` property.
 
+Creating anything at the top of a drive SHALL be authorized before anything is created: `write` on the existing root's OA, or, when the workspace drive has no root yet, `write` on the Documents OA the root will hang on (a workspace that records none admits only its own active members to make one). `GetQuota` takes `read` the same way and never creates a root. A refused caller (another tenant's, or one without the right) leaves no node, edge or row. A channel's drive is made only by `CreateDriveForChannel`; a channel context with no drive is NotFound and nothing is created for it. A workspace listing ignores `drive_context_id`, so it never returns the workspace root.
+
+A drive root SHALL NOT be renamed, moved or permanently deleted by anyone (InvalidArgument), and a workspace root SHALL NOT be trashed. A channel drive's root may be moved to the trash only by the person who created the channel (how a group is disbanded); any other caller is PermissionDenied. Deleting an item deletes an OA only when the item owned it (a folder's own OA, or a shared file's) and no remaining item or workspace points at it.
+
+#### Scenario: A member edits the drive root
+- **WHEN** a member with write on the Documents OA renames, trashes, moves or permanently deletes the workspace drive root
+- **THEN** the call fails with InvalidArgument and no row, object or policy node is touched
+
+#### Scenario: Top-level folder in another tenant's drive
+- **WHEN** a caller without write on workspace W's Documents OA creates a top-level folder or file in W, or reads W's quota
+- **THEN** the call fails with PermissionDenied and W's drive has no new root, folder, file, node or edge
+
 #### Scenario: Recorded Documents OA
 - **WHEN** the first top-level folder is created in a workspace that has a Documents OA recorded
 - **THEN** the root and the folder hang under that OA, whatever other OAs the policy class has and whatever they are called

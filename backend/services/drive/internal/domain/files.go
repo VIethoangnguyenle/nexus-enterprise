@@ -19,12 +19,14 @@ import (
 
 // CreateFile initiates a file upload — creates NGAC node, drive_item, and returns presigned URL.
 func (s *Service) CreateFile(ctx context.Context, req *pb.CreateFileRequest) (*pb.CreateFileResponse, error) {
-	driveCtx := req.DriveContext
-	if driveCtx == "" {
-		driveCtx = "workspace"
+	if req.SizeBytes < 0 {
+		return nil, invalid("size_bytes must not be negative")
 	}
+	declared := req.SizeBytes
+	driveCtx, driveCtxID := normalizeContext(req.DriveContext, req.DriveContextId)
 
-	// Determine parent NGAC node and scope OA
+	// Determine parent NGAC node and scope OA. The drive root is authorized
+	// before it is created (driveTop); the check below covers a parent folder.
 	var parentNGACID string
 	var parentScopeOAID string
 	if req.ParentId != "" {
@@ -35,7 +37,7 @@ func (s *Service) CreateFile(ctx context.Context, req *pb.CreateFileRequest) (*p
 		parentNGACID = parent.NGACNodeID
 		parentScopeOAID = parent.ScopeOAID
 	} else {
-		root, err := s.ensureRoot(ctx, req.WorkspaceId, driveCtx, req.DriveContextId, grpcauth.CallerFrom(ctx).NGACNodeID)
+		root, err := s.driveTop(ctx, req.WorkspaceId, driveCtx, driveCtxID, ngac.OpWrite, true)
 		if err != nil {
 			return nil, err
 		}
@@ -76,9 +78,11 @@ func (s *Service) CreateFile(ctx context.Context, req *pb.CreateFileRequest) (*p
 	fileID := uuid.New().String()
 
 	// Get presigned upload URL from Document Storage
+	// The URL takes exactly the declared size, so what lands in storage is what
+	// the quota was checked against.
 	uploadResp, err := s.docStorage.GetUploadURL(ctx, &docpb.GetUploadURLRequest{
 		WorkspaceId: req.WorkspaceId, Filename: req.Name,
-		MimeType: req.MimeType, DocId: fileID,
+		MimeType: req.MimeType, DocId: fileID, SizeBytes: &declared,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("get upload url: %w", err)
@@ -90,7 +94,7 @@ func (s *Service) CreateFile(ctx context.Context, req *pb.CreateFileRequest) (*p
 		ID:             fileID,
 		WorkspaceID:    req.WorkspaceId,
 		DriveContext:   driveCtx,
-		DriveContextID: req.DriveContextId,
+		DriveContextID: driveCtxID,
 		ParentID:       store.NilIfEmpty(req.ParentId),
 		ItemType:       "file",
 		Name:           req.Name,
@@ -142,11 +146,17 @@ func (s *Service) ConfirmFile(ctx context.Context, req *pb.ConfirmFileRequest) (
 	}
 
 	// Publish the file and charge its quota in one step: a file that is active
-	// but not counted would let a workspace outgrow its quota unseen.
+	// but not counted would let a workspace outgrow its quota unseen. The quota
+	// is held to the size actually stored, not the one declared at CreateFile: an
+	// upload that does not fit is removed, row and bytes.
 	actualSize := confirmResp.SizeBytes
 	if err := s.store.ActivateFile(ctx, item.ID, item.WorkspaceID, actualSize); err != nil {
 		if errors.Is(err, store.ErrNotPending) {
 			return nil, conflict("file not pending")
+		}
+		if errors.Is(err, store.ErrQuotaExceeded) {
+			s.discardUpload(ctx, item)
+			return nil, quotaExceeded("storage quota exceeded")
 		}
 		return nil, fmt.Errorf("publish file: %w", err)
 	}
@@ -158,10 +168,31 @@ func (s *Service) ConfirmFile(ctx context.Context, req *pb.ConfirmFileRequest) (
 	return itemToProto(item), nil
 }
 
-// GetDownloadURL returns a presigned download URL after NGAC read check.
+// discardUpload removes a pending upload that will not be published, its row
+// (only while still pending) and its stored object, on a context the caller
+// cannot cancel. Failures are logged; the stale-upload sweep is the backstop.
+func (s *Service) discardUpload(callCtx context.Context, item *store.DriveItem) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(callCtx), cleanupTimeout)
+	defer cancel()
+	if _, err := s.store.DeletePendingItem(ctx, item.ID); err != nil {
+		slog.Error("refused upload's row not removed", "item", item.ID, "err", err)
+	}
+	if item.ObjectKey == nil {
+		return
+	}
+	if _, err := s.docStorage.DeleteObject(ctx, &docpb.DeleteObjectRequest{
+		WorkspaceId: item.WorkspaceID, ObjectKey: *item.ObjectKey,
+	}); err != nil {
+		slog.Error("refused upload's stored object not removed", "item", item.ID, "key", *item.ObjectKey, "err", err)
+	}
+}
+
+// GetDownloadURL returns a presigned download URL after NGAC read check. Only
+// an active file has one: a trashed file is reached again only by restoring it,
+// a pending upload is not published yet, and a folder has no object.
 func (s *Service) GetDownloadURL(ctx context.Context, req *pb.GetDownloadURLRequest) (*pb.GetDownloadURLResponse, error) {
 	item, err := s.store.GetItem(ctx, req.FileId)
-	if err != nil || item == nil {
+	if err != nil || item == nil || item.Status != "active" || item.ItemType != "file" || item.ObjectKey == nil {
 		return nil, notFound("file not found")
 	}
 	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, item.NGACNodeID, ngac.OpRead); err != nil {

@@ -20,7 +20,9 @@ import (
 	"ngac-platform/services/drive/internal/store"
 )
 
-// CreateShare creates an NGAC association to share a file or folder.
+// CreateShare creates an NGAC association to share a file or folder. A folder
+// is shared through its own OA; a file through an OA of its own, made on its
+// first share beneath its folder's (see ensureFileOA).
 //
 // req.Operations carries exactly one share permission ("read" or "write", see
 // ngac.ShareOps), never operation names: the operations a share grants are
@@ -37,6 +39,11 @@ func (s *Service) CreateShare(ctx context.Context, req *pb.CreateShareRequest) (
 	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, item.NGACNodeID, ngac.OpShare); err != nil {
 		return nil, err
 	}
+	// A drive root is the whole drive (a workspace's Documents OA, a channel's
+	// drive OA): it is never shared, by anyone, with anyone.
+	if err := s.refuseRoot(ctx, item, rootShare); err != nil {
+		return nil, err
+	}
 
 	// Validate everything that can be refused before the first policy write.
 	if len(req.Operations) != 1 {
@@ -49,6 +56,14 @@ func (s *Service) CreateShare(ctx context.Context, req *pb.CreateShareRequest) (
 	targetUA, targetLabel, err := s.resolveShareTarget(ctx, req)
 	if err != nil {
 		return nil, err
+	}
+	// A file is shared through an OA of its own, never its folder's: the share
+	// OA must hold the file alone, or the grantee would reach every file in the
+	// folder (or, at the top level, the whole drive).
+	if item.ItemType == "file" {
+		if item, err = s.ensureFileOA(ctx, item); err != nil {
+			return nil, err
+		}
 	}
 
 	// The share's ID is chosen first so the OA can be named by it: a name taken

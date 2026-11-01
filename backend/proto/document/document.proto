@@ -29,6 +29,10 @@ message GetUploadURLRequest {
   string filename = 2;
   string mime_type = 3;
   string doc_id = 4;              // caller-provided ID for the object key
+  // When set, the signed URL accepts exactly this many bytes (a signed
+  // Content-Length). Unset only for the server's own renditions, whose size is
+  // not known when they ask; an upload by a person always sets it.
+  optional int64 size_bytes = 5;
 }
 
 message GetUploadURLResponse {

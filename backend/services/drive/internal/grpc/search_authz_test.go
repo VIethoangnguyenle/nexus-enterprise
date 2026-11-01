@@ -65,6 +65,9 @@ func newSearchFixture(t *testing.T) *searchFixture {
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO tenant_users (tenant_id, user_id, role, status) VALUES ($1, $2, 'member', 'active')`, tt.wsID, searcher)
 	require.NoError(t, err)
+	// wsB records no Documents OA, so only its members may make its drive root.
+	_, err = pool.Exec(ctx, `INSERT INTO tenant_users (tenant_id, user_id, role, status) VALUES ($1, $2, 'owner', 'active')`, wsB, tt.userID)
+	require.NoError(t, err)
 	t.Cleanup(func() {
 		c := context.Background()
 		for _, st := range []struct{ q, arg string }{

@@ -125,6 +125,16 @@ func main() {
 		}
 	}()
 
+	// Shares made before the current rules are brought up to them at start:
+	// file shares that still hold their folder (or the Documents OA) are
+	// narrowed to the file, and shares of a drive root are revoked. A run that
+	// fails (the policy service may be restarting in the same deploy) is retried
+	// with backoff until one is clean; each run logs "drive share repair run".
+	// Once clean, a run finds nothing and writes nothing.
+	go func() {
+		_ = svc.RepairSharesUntilClean(ctx, "", domain.DefaultShareRepairRetries) // each run logs its own outcome
+	}()
+
 	// Uploads the client never confirmed stay `pending` with a stored object
 	// behind them; once a day old they are removed, at start and then hourly.
 	go func() {

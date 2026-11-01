@@ -153,12 +153,10 @@ func itemToProto(item *store.DriveItem) *pb.DriveItem {
 
 // CreateFolder creates a new folder in the drive hierarchy.
 func (s *Service) CreateFolder(ctx context.Context, req *pb.CreateFolderRequest) (*pb.DriveItem, error) {
-	driveCtx := req.DriveContext
-	if driveCtx == "" {
-		driveCtx = "workspace"
-	}
+	driveCtx, driveCtxID := normalizeContext(req.DriveContext, req.DriveContextId)
 
-	// Determine parent NGAC OA for the new folder
+	// Determine parent NGAC OA for the new folder. Write on it is checked before
+	// anything is created, the drive root included.
 	var parentNGACID string
 	var parent *store.DriveItem
 	if req.ParentId != "" {
@@ -172,7 +170,7 @@ func (s *Service) CreateFolder(ctx context.Context, req *pb.CreateFolderRequest)
 		}
 		parentNGACID = parent.NGACNodeID
 	} else {
-		root, err := s.ensureRoot(ctx, req.WorkspaceId, driveCtx, req.DriveContextId, grpcauth.CallerFrom(ctx).NGACNodeID)
+		root, err := s.driveTop(ctx, req.WorkspaceId, driveCtx, driveCtxID, ngac.OpWrite, true)
 		if err != nil {
 			return nil, err
 		}
@@ -215,7 +213,7 @@ func (s *Service) CreateFolder(ctx context.Context, req *pb.CreateFolderRequest)
 		ID:             itemID,
 		WorkspaceID:    req.WorkspaceId,
 		DriveContext:   driveCtx,
-		DriveContextID: req.DriveContextId,
+		DriveContextID: driveCtxID,
 		ParentID:       store.NilIfEmpty(req.ParentId),
 		ItemType:       "folder",
 		Name:           req.Name,
@@ -236,10 +234,7 @@ func (s *Service) CreateFolder(ctx context.Context, req *pb.CreateFolderRequest)
 
 // ListFolder returns the contents of a folder with NGAC filtering.
 func (s *Service) ListFolder(ctx context.Context, req *pb.ListFolderRequest) (*pb.DriveItemList, error) {
-	driveCtx := req.DriveContext
-	if driveCtx == "" {
-		driveCtx = "workspace"
-	}
+	driveCtx, driveCtxID := normalizeContext(req.DriveContext, req.DriveContextId)
 
 	var parentID *string
 	if req.FolderId != "" {
@@ -254,7 +249,7 @@ func (s *Service) ListFolder(ctx context.Context, req *pb.ListFolderRequest) (*p
 		}
 	}
 
-	items, err := s.store.ListChildren(ctx, parentID, req.WorkspaceId, driveCtx, req.DriveContextId)
+	items, err := s.store.ListChildren(ctx, parentID, req.WorkspaceId, driveCtx, driveCtxID)
 	if err != nil {
 		return nil, fmt.Errorf("list folder: %w", err)
 	}
@@ -312,8 +307,84 @@ func (s *Service) GetItem(ctx context.Context, req *pb.GetItemRequest) (*pb.Driv
 	return itemToProto(item), nil
 }
 
+// normalizeContext returns the drive context a request names: "workspace" when
+// it names none, and, for the workspace drive, no context ID. Items of a
+// workspace drive store none, so an ID sent with a workspace context could only
+// make a listing match the drive root itself.
+func normalizeContext(driveCtx, driveCtxID string) (string, string) {
+	if driveCtx == "" {
+		driveCtx = "workspace"
+	}
+	if driveCtx == "workspace" {
+		driveCtxID = ""
+	}
+	return driveCtx, driveCtxID
+}
+
+// driveTop returns the root of a drive once the caller is known to hold op on
+// it. Nothing is created before that is settled: a caller of another tenant, or
+// one without the right, is refused with no node, edge or row written.
+//
+// An existing root is authorized on its OA. A workspace drive with no root yet
+// is authorized on the OA its root will hang on, the Documents OA the workspace
+// records; a workspace that records none (one created outside the workspace
+// service) admits only its own active members to create one. With create
+// false a missing root is not made, and nil is returned once authorized.
+// A channel's drive is made only by CreateDriveForChannel, never here: a
+// channel context with no drive is NotFound.
+func (s *Service) driveTop(ctx context.Context, workspaceID, driveCtx, driveCtxID, op string, create bool) (*store.DriveItem, error) {
+	caller := grpcauth.CallerFrom(ctx)
+	if workspaceID == "" {
+		return nil, invalid("workspace_id required")
+	}
+	rootCtxID := driveCtxID
+	if rootCtxID == "" {
+		rootCtxID = workspaceID
+	}
+	root, err := s.store.FindRootByContext(ctx, workspaceID, driveCtx, rootCtxID)
+	if err != nil {
+		return nil, fmt.Errorf("find root: %w", err)
+	}
+	if root != nil {
+		if err := s.checkAccess(ctx, caller.NGACNodeID, root.NGACNodeID, op); err != nil {
+			return nil, err
+		}
+		return root, nil
+	}
+	if driveCtx != "workspace" {
+		return nil, notFound("drive not found")
+	}
+
+	docsOA, err := s.store.GetWorkspaceDocumentsOAID(ctx, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("look up documents OA: %w", err)
+	}
+	if docsOA != "" {
+		if err := s.checkAccess(ctx, caller.NGACNodeID, docsOA, op); err != nil {
+			return nil, err
+		}
+	} else if err := s.requireWorkspaceMember(ctx, workspaceID, caller.UserID); err != nil {
+		return nil, err
+	}
+	if !create {
+		return nil, nil
+	}
+	root, err = s.ensureRoot(ctx, workspaceID, driveCtx, driveCtxID, caller.NGACNodeID)
+	if err != nil {
+		return nil, err
+	}
+	// A root of its own (no Documents OA recorded) is authorized like any other.
+	if root.NGACNodeID != docsOA {
+		if err := s.checkAccess(ctx, caller.NGACNodeID, root.NGACNodeID, op); err != nil {
+			return nil, err
+		}
+	}
+	return root, nil
+}
+
 // ensureRoot finds or auto-creates the root drive folder for a workspace/channel context.
-// This self-heals workspaces created before drive tables existed.
+// This self-heals workspaces created before drive tables existed. It authorizes
+// nothing: callers reach it only through driveTop, once the caller may.
 func (s *Service) ensureRoot(ctx context.Context, workspaceID, driveCtx, driveCtxID, userNodeID string) (*store.DriveItem, error) {
 	// Normalise the context once, and use the same value to look up and to
 	// store.

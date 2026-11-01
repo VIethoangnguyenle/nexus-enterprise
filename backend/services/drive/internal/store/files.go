@@ -17,12 +17,34 @@ var ErrNotPending = errors.New("file is not pending")
 // holds an active item of the same name (idx_drive_items_unique_name).
 var ErrNameTaken = errors.New("an item with that name already exists")
 
+// ErrQuotaExceeded is returned by ActivateFile when the file, at the size the
+// store reports for it, would take the workspace past its quota.
+var ErrQuotaExceeded = errors.New("storage quota exceeded")
+
 // ActivateFile publishes a pending upload and charges it to the workspace's
 // quota in one transaction: a file is never active without being counted, and a
 // second confirmation (which finds nothing pending) charges nothing. sizeBytes,
-// the size the store reports for the uploaded object, replaces the declared one.
+// the size the store reports for the uploaded object, replaces the declared one
+// and is what the quota is held to: the declared size is only what the client
+// claimed when it asked to upload. A file that does not fit is not published
+// (ErrQuotaExceeded) and stays pending. The quota row is locked for the check,
+// so two confirmations cannot both take the last of the room.
 func (s *Store) ActivateFile(ctx context.Context, id, workspaceID string, sizeBytes int64) error {
 	return pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO drive_quotas (workspace_id) VALUES ($1) ON CONFLICT (workspace_id) DO NOTHING`, workspaceID); err != nil {
+			return fmt.Errorf("create quota: %w", err)
+		}
+		var maxBytes, usedBytes int64
+		var maxFiles, usedFiles int32
+		if err := tx.QueryRow(ctx,
+			`SELECT max_bytes, used_bytes, max_files, used_files FROM drive_quotas WHERE workspace_id = $1 FOR UPDATE`,
+			workspaceID).Scan(&maxBytes, &usedBytes, &maxFiles, &usedFiles); err != nil {
+			return fmt.Errorf("read quota: %w", err)
+		}
+		if sizeBytes < 0 || (maxBytes >= 0 && usedBytes+sizeBytes > maxBytes) || (maxFiles >= 0 && usedFiles+1 > maxFiles) {
+			return ErrQuotaExceeded
+		}
 		tag, err := tx.Exec(ctx,
 			`UPDATE drive_items SET size_bytes = $2, status = 'active', trashed_at = NULL, updated_at = NOW()
 			 WHERE id = $1 AND status = 'pending'`, id, sizeBytes)
@@ -37,10 +59,8 @@ func (s *Store) ActivateFile(ctx context.Context, id, workspaceID string, sizeBy
 			return ErrNotPending
 		}
 		if _, err := tx.Exec(ctx,
-			`INSERT INTO drive_quotas (workspace_id, used_bytes, used_files) VALUES ($1, $2, 1)
-			 ON CONFLICT (workspace_id) DO UPDATE SET
-			   used_bytes = drive_quotas.used_bytes + EXCLUDED.used_bytes,
-			   used_files = drive_quotas.used_files + 1, updated_at = NOW()`, workspaceID, sizeBytes); err != nil {
+			`UPDATE drive_quotas SET used_bytes = used_bytes + $2, used_files = used_files + 1, updated_at = NOW()
+			 WHERE workspace_id = $1`, workspaceID, sizeBytes); err != nil {
 			return fmt.Errorf("charge quota: %w", err)
 		}
 		return nil

@@ -258,6 +258,7 @@ func TestPreview_UnknownFileIsNotFoundAndFolderHasNoPreview(t *testing.T) {
 	_, err := f.svc.GetPreview(reader(), uuid.New().String())
 	assert.ErrorIs(t, err, domain.ErrNotFound)
 
+	f.policy.grant("reader", anyObject, ngac.OpWrite) // to make the folder
 	folder, err := f.svc.CreateFolder(reader(), &pb.CreateFolderRequest{WorkspaceId: f.ws, Name: "Hồ sơ"})
 	require.NoError(t, err)
 	_, err = f.svc.GetPreview(reader(), folder.Id)

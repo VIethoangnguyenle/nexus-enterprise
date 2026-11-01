@@ -311,8 +311,9 @@ func TestDriveRoot_WithoutARecordedOAGetsItsOwnNodeNotAGuess(t *testing.T) {
 	pr := decoyRead{newFakePolicyRead()}
 	srv, pool := newServerWith(t, pr, pw)
 	wsID := getTestWorkspaceID(t, pool)
+	withoutDocumentsOA(t, pool, wsID)
 
-	it, err := srv.CreateFolder(asCaller("", actor), &pb.CreateFolderRequest{WorkspaceId: wsID, Name: "Top"})
+	it, err := srv.CreateFolder(asMemberOf(t, pool, wsID), &pb.CreateFolderRequest{WorkspaceId: wsID, Name: "Top"})
 	require.NoError(t, err)
 	t.Cleanup(func() { cleanDriveItems(t, pool, it.Id) })
 
@@ -332,9 +333,10 @@ func TestDriveRoot_ReusesItsNodeWhenOnlyTheRowIsMissing(t *testing.T) {
 	pr := newFakePolicyRead()
 	srv, pool := newServerWith(t, pr, pw)
 	wsID := getTestWorkspaceID(t, pool)
+	withoutDocumentsOA(t, pool, wsID)
 	pr.add("oa-existing-root", ngac.DriveRootName(ngac.WorkspaceID(wsID)), ngac.TypeOA)
 
-	it, err := srv.CreateFolder(asCaller("", actor), &pb.CreateFolderRequest{WorkspaceId: wsID, Name: "Top"})
+	it, err := srv.CreateFolder(asMemberOf(t, pool, wsID), &pb.CreateFolderRequest{WorkspaceId: wsID, Name: "Top"})
 	require.NoError(t, err)
 	t.Cleanup(func() { cleanDriveItems(t, pool, it.Id) })
 

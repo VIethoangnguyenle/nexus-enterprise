@@ -33,7 +33,7 @@ func mapError(err error) error {
 
 // GetUploadURL generates a presigned PUT URL for direct-to-MinIO upload.
 func (s *DocumentStorageServer) GetUploadURL(ctx context.Context, req *pb.GetUploadURLRequest) (*pb.GetUploadURLResponse, error) {
-	u, key, err := s.svc.UploadURL(ctx, req.WorkspaceId, req.DocId, req.Filename)
+	u, key, err := s.svc.UploadURL(ctx, req.WorkspaceId, req.DocId, req.Filename, req.SizeBytes)
 	if err != nil {
 		return nil, mapError(err)
 	}

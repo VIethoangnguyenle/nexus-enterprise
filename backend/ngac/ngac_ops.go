@@ -322,7 +322,7 @@ func IsPersonalUAOf(props map[string]string, userNodeID string) bool {
 var (
 	reservedRolePrefixes = []string{
 		"User_", "PC_", "TenantMember_", "TenantOwner_", "Dept_", "Ch_",
-		"DriveRoot_", "Folder_", "Share_", "Asset_", "Role_", "U_",
+		"DriveRoot_", "Folder_", "File_", "Share_", "Asset_", "Role_", "U_",
 		"Cal_", "CalEv_", "CalEvGuests_",
 		"Directory_", "DirectoryOpen_", "DirectoryNoDept_", "DirectoryOwners_", "DirectoryLimited_",
 		"Dir_", "DirPeer_", "DeptPeers_",
@@ -419,6 +419,14 @@ func IsAdminFolder(name string, props map[string]string, wsID WorkspaceID) bool 
 func IsFolderNodeName(name string) bool {
 	return len(name) > len(folderNodePrefix) && strings.HasPrefix(name, folderNodePrefix)
 }
+
+// FileOAName names the OA of one drive file, by the file's ID.
+//
+// Files are not nodes: an unshared file is authorized on its folder's OA. A
+// file gets an OA of its own, beneath its folder's, only when it is shared, so
+// that the share OA can hold the file alone. With the folder's OA under the
+// share OA instead, sharing one file would hand over the whole folder.
+func FileOAName(fileID FileID) string { return fmt.Sprintf("File_%s", fileID) }
 
 // ShareOAName names the OA that wraps one shared item, by the share's ID.
 func ShareOAName(shareID ShareID) string { return fmt.Sprintf("Share_%s", shareID) }

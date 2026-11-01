@@ -59,11 +59,15 @@ func (*Empty) Descriptor() ([]byte, []int) {
 }
 
 type GetUploadURLRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	WorkspaceId   string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
-	Filename      string                 `protobuf:"bytes,2,opt,name=filename,proto3" json:"filename,omitempty"`
-	MimeType      string                 `protobuf:"bytes,3,opt,name=mime_type,json=mimeType,proto3" json:"mime_type,omitempty"`
-	DocId         string                 `protobuf:"bytes,4,opt,name=doc_id,json=docId,proto3" json:"doc_id,omitempty"` // caller-provided ID for the object key
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	WorkspaceId string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	Filename    string                 `protobuf:"bytes,2,opt,name=filename,proto3" json:"filename,omitempty"`
+	MimeType    string                 `protobuf:"bytes,3,opt,name=mime_type,json=mimeType,proto3" json:"mime_type,omitempty"`
+	DocId       string                 `protobuf:"bytes,4,opt,name=doc_id,json=docId,proto3" json:"doc_id,omitempty"` // caller-provided ID for the object key
+	// When set, the signed URL accepts exactly this many bytes (a signed
+	// Content-Length). Unset only for the server's own renditions, whose size is
+	// not known when they ask; an upload by a person always sets it.
+	SizeBytes     *int64 `protobuf:"varint,5,opt,name=size_bytes,json=sizeBytes,proto3,oneof" json:"size_bytes,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -124,6 +128,13 @@ func (x *GetUploadURLRequest) GetDocId() string {
 		return x.DocId
 	}
 	return ""
+}
+
+func (x *GetUploadURLRequest) GetSizeBytes() int64 {
+	if x != nil && x.SizeBytes != nil {
+		return *x.SizeBytes
+	}
+	return 0
 }
 
 type GetUploadURLResponse struct {
@@ -675,12 +686,15 @@ var File_proto_document_document_proto protoreflect.FileDescriptor
 const file_proto_document_document_proto_rawDesc = "" +
 	"\n" +
 	"\x1dproto/document/document.proto\x12\bdocument\x1a\x1fgoogle/protobuf/timestamp.proto\"\a\n" +
-	"\x05Empty\"\x88\x01\n" +
+	"\x05Empty\"\xbb\x01\n" +
 	"\x13GetUploadURLRequest\x12!\n" +
 	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12\x1a\n" +
 	"\bfilename\x18\x02 \x01(\tR\bfilename\x12\x1b\n" +
 	"\tmime_type\x18\x03 \x01(\tR\bmimeType\x12\x15\n" +
-	"\x06doc_id\x18\x04 \x01(\tR\x05docId\"T\n" +
+	"\x06doc_id\x18\x04 \x01(\tR\x05docId\x12\"\n" +
+	"\n" +
+	"size_bytes\x18\x05 \x01(\x03H\x00R\tsizeBytes\x88\x01\x01B\r\n" +
+	"\v_size_bytes\"T\n" +
 	"\x14GetUploadURLResponse\x12\x1d\n" +
 	"\n" +
 	"upload_url\x18\x01 \x01(\tR\tuploadUrl\x12\x1d\n" +
@@ -789,6 +803,7 @@ func file_proto_document_document_proto_init() {
 	if File_proto_document_document_proto != nil {
 		return
 	}
+	file_proto_document_document_proto_msgTypes[1].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

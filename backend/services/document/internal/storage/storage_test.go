@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"errors"
+	"net/http"
 	"net/url"
 	"strings"
 	"testing"
@@ -58,6 +59,19 @@ type fakeSigner struct {
 	putExpiry time.Duration
 	getExpiry time.Duration
 	last      string
+	getParams url.Values
+	putHeader http.Header // signed headers of a size-bound PUT; nil for an unbound one
+}
+
+func (f *fakeSigner) PresignHeader(_ context.Context, method, b, k string, exp time.Duration, _ url.Values, h http.Header) (*url.URL, error) {
+	if method != http.MethodPut {
+		return nil, errors.New("only PUT is presigned with headers")
+	}
+	f.putExpiry, f.last, f.putHeader = exp, b+"/"+k, h
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &url.URL{Scheme: "http", Host: "public", Path: "/" + b + "/" + k, RawQuery: "put=1&bound=1"}, nil
 }
 
 func (f *fakeSigner) PresignedPutObject(_ context.Context, b, k string, exp time.Duration) (*url.URL, error) {
@@ -67,8 +81,8 @@ func (f *fakeSigner) PresignedPutObject(_ context.Context, b, k string, exp time
 	}
 	return &url.URL{Scheme: "http", Host: "public", Path: "/" + b + "/" + k, RawQuery: "put=1"}, nil
 }
-func (f *fakeSigner) PresignedGetObject(_ context.Context, b, k string, exp time.Duration, _ url.Values) (*url.URL, error) {
-	f.getExpiry, f.last = exp, b+"/"+k
+func (f *fakeSigner) PresignedGetObject(_ context.Context, b, k string, exp time.Duration, params url.Values) (*url.URL, error) {
+	f.getExpiry, f.last, f.getParams = exp, b+"/"+k, params
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -83,7 +97,7 @@ func TestBucketNameIsDerivedFromTheWorkspace(t *testing.T) {
 
 func TestUploadURL_CreatesTheBucketAndKeysTheObjectByDocument(t *testing.T) {
 	st, sg := newFakeStore(), &fakeSigner{}
-	u, key, err := New(st, sg).UploadURL(context.Background(), "w1", "doc-9", "report.pdf")
+	u, key, err := New(st, sg).UploadURL(context.Background(), "w1", "doc-9", "report.pdf", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,26 +120,26 @@ func TestUploadURL_CreatesTheBucketAndKeysTheObjectByDocument(t *testing.T) {
 func TestEnsureBucket_IsBestEffort(t *testing.T) {
 	st := newFakeStore()
 	st.buckets["ws-w1"] = true
-	if _, _, err := New(st, &fakeSigner{}).UploadURL(context.Background(), "w1", "d", "f"); err != nil || len(st.made) != 0 {
+	if _, _, err := New(st, &fakeSigner{}).UploadURL(context.Background(), "w1", "d", "f", nil); err != nil || len(st.made) != 0 {
 		t.Errorf("existing bucket: err=%v made=%v", err, st.made)
 	}
 
 	failing := newFakeStore()
 	failing.makeErr = errors.New("denied")
-	if _, _, err := New(failing, &fakeSigner{}).UploadURL(context.Background(), "w2", "d", "f"); err != nil {
+	if _, _, err := New(failing, &fakeSigner{}).UploadURL(context.Background(), "w2", "d", "f", nil); err != nil {
 		t.Errorf("a failed MakeBucket must not fail the upload URL: %v", err)
 	}
 
 	broken := newFakeStore()
 	broken.existsErr = errors.New("unreachable")
-	if _, _, err := New(broken, &fakeSigner{}).UploadURL(context.Background(), "w3", "d", "f"); err != nil || len(broken.made) != 0 {
+	if _, _, err := New(broken, &fakeSigner{}).UploadURL(context.Background(), "w3", "d", "f", nil); err != nil || len(broken.made) != 0 {
 		t.Errorf("unknown bucket state: err=%v made=%v", err, broken.made)
 	}
 }
 
 func TestUploadURL_SigningFailureIsAnUnclassifiedError(t *testing.T) {
 	boom := errors.New("minio 10.0.0.5 unreachable")
-	_, _, err := New(newFakeStore(), &fakeSigner{err: boom}).UploadURL(context.Background(), "w1", "d", "f")
+	_, _, err := New(newFakeStore(), &fakeSigner{err: boom}).UploadURL(context.Background(), "w1", "d", "f", nil)
 	if !errors.Is(err, boom) {
 		t.Fatalf("cause lost: %v", err)
 	}

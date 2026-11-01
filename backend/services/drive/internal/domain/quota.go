@@ -13,11 +13,8 @@ import (
 func (s *Service) GetQuota(ctx context.Context, req *pb.GetQuotaRequest) (*pb.Quota, error) {
 	// Storage consumption describes the workspace, so reading it requires
 	// reaching that workspace's drive rather than merely holding a valid token.
-	root, err := s.ensureRoot(ctx, req.WorkspaceId, "workspace", "", grpcauth.CallerFrom(ctx).NGACNodeID)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, root.NGACNodeID, ngac.OpRead); err != nil {
+	// Reading it creates no drive root.
+	if _, err := s.driveTop(ctx, req.WorkspaceId, "workspace", "", ngac.OpRead, false); err != nil {
 		return nil, err
 	}
 

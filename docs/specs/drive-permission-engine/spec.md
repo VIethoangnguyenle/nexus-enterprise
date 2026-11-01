@@ -69,6 +69,14 @@ The UI SHALL only ask the policy service about operations the backend actually e
 ### Requirement: Confirming an upload is idempotent
 `POST /api/drive/files/{id}/confirm` SHALL publish a pending file and charge its size to the workspace quota as one change. A second confirmation of the same file finds nothing pending: it answers 409 and charges nothing, so a client that retries cannot be billed twice. Removing a file that was never confirmed releases no quota, because none was taken. If the object store has no such object the answer is 409 with the fixed message `file not uploaded`; if the store or the document service fails for any other reason the answer is a generic 500, and the failure's text (hosts, buckets) goes to the log only.
 
+The upload URL SHALL take exactly the size declared when the upload was started: the size is signed into it as the request's `Content-Length`, which the object store checks (any other length is refused with 403), so the stored object can neither outgrow the quota checked at creation nor be replaced by a bigger one through the same URL. A negative size is refused (400). Browsers send a file's own length, so a client that declares `file.size` needs nothing else. Uploads the server makes itself (previews, thumbnails) name no size.
+
+The quota SHALL be held to the size the object store reports at confirmation, not the size declared when the upload was started: an upload that would take the workspace past its bytes or files limit is refused with 413 `quota_exceeded`, its row and its stored object are removed, and nothing is charged. A copy is held to the same check when it is published.
+
+#### Scenario: Declared small, uploaded large
+- **WHEN** a client declares 0 bytes, uploads more than the room left and confirms
+- **THEN** the answer is 413 `quota_exceeded`, the file and its object are gone and used bytes did not change
+
 #### Scenario: Confirmed twice
 - **WHEN** a client confirms the same upload twice
 - **THEN** the first answer is 200 and the second 409, and the workspace's used bytes and used files rose once
@@ -76,6 +84,19 @@ The UI SHALL only ask the policy service about operations the backend actually e
 #### Scenario: Object store unreachable while confirming
 - **WHEN** the document service cannot reach the object store
 - **THEN** the answer is 500 `internal error`, the file stays pending, and no host name appears in the body
+
+### Requirement: Downloads are of live files and never run in the browser
+`GET /api/drive/files/{id}/download` SHALL answer 404 for a trashed file, a pending upload and a folder. The signed
+URL SHALL keep the object inline only when its stored type, compared by its essence (the part before any `;`, trimmed
+and lower-cased, as a browser reads it), is one the file viewer shows inline and that cannot run script: PNG, JPEG, GIF,
+WebP, AVIF and BMP images, PDF, video, audio and plain text, and its name is not an HTML, SVG, XML or script name.
+Everything else, malformed, empty and unreadable types included, SHALL be signed with
+`response-content-disposition=attachment` and `response-content-type=application/octet-stream`. The viewer fetches
+other text kinds and shows them as text, which an attachment does not affect.
+
+#### Scenario: Uploaded HTML page
+- **WHEN** a member uploads `x.html` (or an SVG with script) and opens its download link
+- **THEN** the storage host answers it as an `application/octet-stream` attachment, and nothing in it runs
 
 ### Requirement: A full quota and a lost race are refusals with a reason
 Whether the caller may write comes first: a caller without write on the destination is refused (403, gRPC `PermissionDenied`) whatever room is left, and so learns nothing about the workspace's usage. When creating a file would take the workspace past its storage quota (bytes or number of files), `POST /api/workspaces/{id}/drive/files` SHALL answer `413 {"message":"storage quota exceeded","reason":"quota_exceeded"}`; over gRPC the code is `ResourceExhausted`. When another request changed the item first (a move that lost the race for the same item), the answer SHALL be `409 {"message":"item was changed by another request; retry","reason":"item_changed"}` (gRPC `Aborted`). A lock that could not be had in time stays a generic 500. Only the class of the error decides the answer: a database error whose text mentions the quota is still a 500.

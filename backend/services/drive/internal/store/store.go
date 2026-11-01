@@ -85,19 +85,22 @@ func (s *Store) GetItem(ctx context.Context, id string) (*DriveItem, error) {
 	err := s.db.QueryRow(ctx,
 		`SELECT id, workspace_id, drive_context, COALESCE(drive_context_id,''), parent_id,
 			item_type, name, mime_type, size_bytes, object_key, storage_doc_id, ngac_node_id,
-			COALESCE(scope_oa_id,''), owner_id, status, trashed_at, created_at, updated_at
+			COALESCE(scope_oa_id,''), owner_id, status, trashed_at, created_at, updated_at, is_root
 		 FROM drive_items WHERE id = $1`, id).
 		Scan(&item.ID, &item.WorkspaceID, &item.DriveContext, &item.DriveContextID,
 			&item.ParentID, &item.ItemType, &item.Name, &item.MimeType, &item.SizeBytes,
 			&item.ObjectKey, &item.StorageDocID, &item.NGACNodeID, &item.ScopeOAID,
-			&item.OwnerID, &item.Status, &item.TrashedAt, &item.CreatedAt, &item.UpdatedAt)
+			&item.OwnerID, &item.Status, &item.TrashedAt, &item.CreatedAt, &item.UpdatedAt, &item.IsRoot)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
 	return item, err
 }
 
-// ListChildren returns active drive items in a folder.
+// ListChildren returns active drive items in a folder, or at the top level of a
+// drive when parentID is nil. A channel drive's root is listed at its top level
+// (clients upload into it); a workspace drive's root stores the workspace ID as
+// its context ID, which a workspace listing never asks for (normalizeContext).
 func (s *Store) ListChildren(ctx context.Context, parentID *string, workspaceID, driveContext, driveContextID string) ([]*DriveItem, error) {
 	var rows pgx.Rows
 	var err error
@@ -277,6 +280,29 @@ func (s *Store) UpdateName(ctx context.Context, id, newName string) error {
 		`UPDATE drive_items SET name = $1, updated_at = NOW() WHERE id = $2`,
 		newName, id)
 	return err
+}
+
+// SwapNGACNodeID points an item at another OA, only if it still points at
+// from. It reports whether it did, so a caller that lost a
+// race (a move, another share) can undo the policy work it did for the old value.
+func (s *Store) SwapNGACNodeID(ctx context.Context, id, from, to string) (bool, error) {
+	tag, err := s.db.Exec(ctx,
+		`UPDATE drive_items SET ngac_node_id = $3, updated_at = NOW()
+		 WHERE id = $1 AND ngac_node_id = $2`, id, from, to)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
+// NodeInUse reports whether any drive item, or any workspace as its Documents
+// OA, still points at the node. Such a node is not one item's to delete.
+func (s *Store) NodeInUse(ctx context.Context, nodeID string) (bool, error) {
+	var used bool
+	err := s.db.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM drive_items WHERE ngac_node_id = $1)
+		     OR EXISTS (SELECT 1 FROM workspaces WHERE documents_oa_id = $1)`, nodeID).Scan(&used)
+	return used, err
 }
 
 // UpdateNGACNodeID updates the NGAC node ID for a drive item.

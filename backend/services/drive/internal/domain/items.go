@@ -27,6 +27,9 @@ func (s *Service) RenameItem(ctx context.Context, req *pb.RenameItemRequest) (*p
 	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, item.NGACNodeID, ngac.OpWrite); err != nil {
 		return nil, err
 	}
+	if err := s.refuseRoot(ctx, item, rootRename); err != nil {
+		return nil, err
+	}
 	if err := s.store.UpdateName(ctx, item.ID, req.NewName); err != nil {
 		return nil, fmt.Errorf("rename: %w", err)
 	}
@@ -48,6 +51,9 @@ func (s *Service) MoveItem(ctx context.Context, req *pb.MoveItemRequest) (*pb.Dr
 		return nil, notFound("item not found")
 	}
 	if err := s.checkAccess(ctx, callerNode, item.NGACNodeID, ngac.OpWrite); err != nil {
+		return nil, err
+	}
+	if err := s.refuseRoot(ctx, item, rootMove); err != nil {
 		return nil, err
 	}
 
@@ -75,7 +81,7 @@ func (s *Service) MoveItem(ctx context.Context, req *pb.MoveItemRequest) (*pb.Dr
 	var dest *store.DriveItem
 	var newParentID *string
 	if req.NewParentId == "" {
-		root, err := s.ensureRoot(ctx, item.WorkspaceID, item.DriveContext, item.DriveContextID, callerNode)
+		root, err := s.driveTop(ctx, item.WorkspaceID, item.DriveContext, item.DriveContextID, ngac.OpWrite, true)
 		if err != nil {
 			return nil, err
 		}
@@ -114,11 +120,18 @@ func (s *Service) MoveItem(ctx context.Context, req *pb.MoveItemRequest) (*pb.Dr
 		return nil, err
 	}
 
-	newNodeID := item.NGACNodeID // a folder keeps its own OA
+	// Folders, and files that were shared, have an OA of their own; moving one
+	// means re-pointing its parent edge, and it keeps its OA. Other files have
+	// none and take the OA of the folder they land in.
+	ownsOA := item.ItemType == "folder"
+	if !ownsOA {
+		if ownsOA, err = s.fileOwnsOA(ctx, item); err != nil {
+			return nil, err
+		}
+	}
+	newNodeID := item.NGACNodeID
 	var oldParentOA string
-	if item.ItemType == "folder" {
-		// Folders have their own OA; moving one means re-pointing its parent
-		// edge. Files have none and inherit from the folder they sit in.
+	if ownsOA {
 		oldParentOA, err = s.currentParentOA(ctx, item)
 		if err != nil {
 			return nil, err
@@ -133,7 +146,7 @@ func (s *Service) MoveItem(ctx context.Context, req *pb.MoveItemRequest) (*pb.Dr
 	moved, err := s.store.UpdateParentAndNode(ctx, item.ID, item.ParentID, newParentID, newNodeID)
 	if err != nil || !moved {
 		// The row did not move, so neither may the policy edge.
-		if item.ItemType == "folder" {
+		if ownsOA {
 			if rerr := s.reparent(ctx, item.NGACNodeID, dest.NGACNodeID, oldParentOA); rerr != nil {
 				slog.Error("move rolled back incompletely; folder edge needs repair",
 					"item", item.ID, "error", rerr)
@@ -155,8 +168,8 @@ func (s *Service) MoveItem(ctx context.Context, req *pb.MoveItemRequest) (*pb.Dr
 	return itemToProto(item), nil
 }
 
-// currentParentOA returns the OA a folder is assigned under today: its parent
-// folder's OA, or the drive root's for a top-level folder. "" means unknown
+// currentParentOA returns the OA an item with an OA of its own is assigned under
+// today: its parent folder's OA, or the drive root's for a top-level item. "" means unknown
 // (no parent row or root found), in which case there is no edge to remove.
 func (s *Service) currentParentOA(ctx context.Context, item *store.DriveItem) (string, error) {
 	if item.ParentID != nil {
@@ -321,6 +334,9 @@ func (s *Service) CopyItem(ctx context.Context, req *pb.CopyItemRequest) (*pb.Dr
 			// Another item took the name between the check and now.
 			return nil, conflict("an item with that name already exists")
 		}
+		if errors.Is(err, store.ErrQuotaExceeded) {
+			return nil, quotaExceeded("storage quota exceeded")
+		}
 		return nil, fmt.Errorf("publish copy: %w", err)
 	}
 	newItem.Status = "active"
@@ -340,7 +356,9 @@ type copyPlace struct {
 // that is gone, not a folder, or in another workspace than the source.
 func (s *Service) copyDestination(ctx context.Context, src *store.DriveItem, destID, callerNode string) (*copyPlace, error) {
 	if destID == "" {
-		root, err := s.ensureRoot(ctx, src.WorkspaceID, src.DriveContext, src.DriveContextID, callerNode)
+		// The top of the source's drive; write on it is checked before a root
+		// is made, and again by the caller on the place returned.
+		root, err := s.driveTop(ctx, src.WorkspaceID, src.DriveContext, src.DriveContextID, ngac.OpWrite, true)
 		if err != nil {
 			return nil, err
 		}
@@ -434,6 +452,9 @@ func (s *Service) TrashItem(ctx context.Context, req *pb.TrashItemRequest) (*pb.
 	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, item.NGACNodeID, ngac.OpWrite); err != nil {
 		return nil, err
 	}
+	if err := s.refuseRoot(ctx, item, rootTrash); err != nil {
+		return nil, err
+	}
 	if err := s.store.SetTrashed(ctx, item.ID, item.ItemType == "folder", true); err != nil {
 		return nil, fmt.Errorf("trash: %w", err)
 	}
@@ -469,6 +490,9 @@ func (s *Service) DeleteItem(ctx context.Context, req *pb.DeleteItemRequest) (*p
 	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, item.NGACNodeID, ngac.OpWrite); err != nil {
 		return nil, err
 	}
+	if err := s.refuseRoot(ctx, item, rootDelete); err != nil {
+		return nil, err
+	}
 
 	if item.ItemType == "folder" {
 		// Refuse before anything is touched: text documents block the delete
@@ -496,7 +520,8 @@ func (s *Service) DeleteItem(ctx context.Context, req *pb.DeleteItemRequest) (*p
 	}
 
 	for _, f := range files {
-		// Files inherit their folder's OA: no NGAC node of their own to delete.
+		// A shared file's own OA goes with it; other files have none.
+		s.releaseOwnOA(ctx, f)
 		if f.ObjectKey != nil {
 			s.removeRendition(ctx, f)
 			s.removeThumbnails(ctx, f)
@@ -510,10 +535,9 @@ func (s *Service) DeleteItem(ctx context.Context, req *pb.DeleteItemRequest) (*p
 
 	if item.ItemType == "folder" {
 		// The folder is already gone, so a failure here cannot be retried by the
-		// caller; it leaves an unreachable OA with no row, which is logged for repair.
-		if _, err := s.policyWrite.DeleteNode(ctx, &policypb.DeleteNodeRequest{NodeId: item.NGACNodeID}); err != nil {
-			slog.Error("deleted folder's OA not removed; node needs cleanup", "item", item.ID, "node", item.NGACNodeID, "err", err)
-		}
+		// caller; it leaves an unreachable OA with no row, which is logged for
+		// repair. Only an OA the folder owned alone is deleted.
+		s.releaseOwnOA(ctx, item)
 	}
 	s.announce(ctx, realtime.KindDeleted, item)
 	return &pb.Empty{}, nil

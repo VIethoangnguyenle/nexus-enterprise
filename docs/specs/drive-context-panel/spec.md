@@ -86,6 +86,24 @@ Sharing SHALL be managed in one dialog, opened from the panel's Chia sẻ button
 - **WHEN** a caller holding `write` but not `share` on the item creates a share
 - **THEN** the request is denied (PermissionDenied) and nothing is written. Workspace Owners and members hold `share` on Documents, and channel members on their channel's drive; the grantee of a share does not
 
+#### Scenario: A file share reaches that file only
+- **WHEN** a file is shared (with a person, a group or publicly)
+- **THEN** the file gets an OA of its own on its first share, `ngac.FileOAName(file id)`, assigned under the OA it was authorized on until then (its folder's, or the drive root's at the top level), and the file's row is pointed at it; only that OA is assigned under the share OA. A later share of the same file reuses it
+- **AND** the share target is denied on the folder's OA, so every other file of the folder (authorized on that OA) stays unreadable to them. Files never shared keep no node of their own. Test vectors: `backend/services/policy/internal/ngac/pdp_file_share_test.go`
+- **AND** a moved file that has its own OA keeps it and is re-assigned like a folder; a deleted one takes its OA with it
+
+#### Scenario: A drive root is never shared
+- **WHEN** anyone, with any permission and to any target (a person, a group, publicly), shares a drive root (a workspace's or a channel's)
+- **THEN** the request fails with InvalidArgument before anything is written: a root's OA is the Documents OA or the channel's drive OA, and sharing it would hand over the whole drive
+- **AND** a share of a root made before this was refused is revoked by the startup repair (its share OA deleted through the policy writer, as the person who made it, then its row), and each revocation is logged
+
+#### Scenario: Shares made before files had their own OA
+- **WHEN** a file has a share whose OA still holds the file's folder OA (or the Documents OA), as every file share made before this change does
+- **THEN** the drive narrows it, at startup (`RepairFileShares`) and whenever the file is shared again: the file gets its own OA, which is put under the share OA before the folder OA is taken out, so the grantee keeps the file and loses the rest of the folder; only then is the file's row pointed at its OA
+- **AND** a share is never widened: a share that holds a folder the file is no longer in loses that folder and does not gain the file; a folder share is never touched; a second run finds nothing and writes nothing
+- **AND** every write goes through the policy writer on behalf of the person who made the file's earliest share (else its owner); a file with neither, or a write the writer refuses, is logged and left as it is
+- **AND** a repair run that does not complete clean (the policy service may be restarting in the same deploy) is retried in the background with growing waits (10 s up to 15 min, about an hour and a half in all) until one is clean, and stops on shutdown; every run logs one line, `drive share repair run`, with `clean`, `files_repaired`, `root_shares_revoked` and `failed`
+
 #### Scenario: Trashed item
 - **WHEN** a share is created for an item in the trash
 - **THEN** the request fails with NotFound and nothing is written

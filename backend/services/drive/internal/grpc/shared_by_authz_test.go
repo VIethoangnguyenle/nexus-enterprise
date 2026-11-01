@@ -56,6 +56,8 @@ func newSharedByFixture(t *testing.T) *sharedByFixture {
 	exec(`INSERT INTO workspaces (id, name, owner_id, type) VALUES ($1, $1, $2, 'organization')`, f.wsB, tt.userID)
 	exec(`INSERT INTO tenant_users (tenant_id, user_id, role, status) VALUES ($1, $2, 'member', 'active'), ($1, $3, 'member', 'active')`,
 		f.wsA, f.viewer, f.sharer)
+	// wsB records no Documents OA, so only its members may make its drive root.
+	exec(`INSERT INTO tenant_users (tenant_id, user_id, role, status) VALUES ($1, $2, 'member', 'active')`, f.wsB, f.sharer)
 	t.Cleanup(func() {
 		c := context.Background()
 		for _, st := range []struct{ q, arg string }{
