@@ -1,5 +1,6 @@
 import { apiFetch, publicFetch, refreshAccessToken } from './client'
 import { useAuthStore } from '../stores/auth.store'
+import { rememberLastAccount } from '../lib/last-account'
 import type { WorkspaceType } from './workspaces'
 
 /** What the sign-in endpoints say about the account that signed in. */
@@ -125,7 +126,11 @@ export const authApi = {
   providers: () => publicFetch<AuthProviders>('/auth/providers'),
   /** The signed-in person; with a workspace id, also their place in that workspace. */
   me: (workspaceId?: string) =>
-    apiFetch<MeResponse>(workspaceId ? `/me?workspace=${encodeURIComponent(workspaceId)}` : '/me'),
+    apiFetch<MeResponse>(workspaceId ? `/me?workspace=${encodeURIComponent(workspaceId)}` : '/me').then((r) => {
+      // So the sign-in page can greet whoever last used this device (name and picture only).
+      if (r?.user) rememberLastAccount(r.user)
+      return r
+    }),
   updateProfile: (patch: ProfilePatch) =>
     apiFetch<{ status: string }>('/me/profile', { method: 'PATCH', body: JSON.stringify(patch) }),
 

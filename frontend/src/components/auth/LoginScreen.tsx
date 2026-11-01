@@ -25,29 +25,15 @@ type Step = { name: 'identity' } | { name: 'code'; identifier: Identifier; sessi
 
 type Direction = 1 | -1
 
-/** How this browser last chose to sign in; remembered on the device only. */
 type Method = 'form' | 'qr'
-const METHOD_KEY = 'nexus.login.method'
 
 /**
- * Below 1024 the form always comes first: a phone or tablet cannot scan its own
- * screen (design/mockups/qr-login.html §1 note 1). The switch is still there.
+ * A computer (1024 and up) opens on the QR code, ahead of Google and the code
+ * form (design/mockups/qr-login.html §1 note 6); a phone or tablet cannot scan
+ * its own screen, so it opens on the form. The corner switch is always there.
  */
-function storedMethod(): Method {
-  if (typeof window.matchMedia === 'function' && !window.matchMedia('(min-width: 1024px)').matches) return 'form'
-  try {
-    return localStorage.getItem(METHOD_KEY) === 'qr' ? 'qr' : 'form'
-  } catch {
-    return 'form'
-  }
-}
-
-function storeMethod(m: Method): void {
-  try {
-    localStorage.setItem(METHOD_KEY, m)
-  } catch {
-    // A browser that keeps nothing just asks again next time.
-  }
+function initialMethod(): Method {
+  return typeof window.matchMedia === 'function' && window.matchMedia('(min-width: 1024px)').matches ? 'qr' : 'form'
 }
 
 /**
@@ -63,12 +49,11 @@ export function LoginScreen() {
   const [moved, setMoved] = useState(false)
   // Held here so the address survives a trip to the code step and back.
   const [raw, setRaw] = useState('')
-  const [method, setMethodState] = useState<Method>(storedMethod)
+  const [method, setMethodState] = useState<Method>(initialMethod)
   const navigate = useNavigate()
   const { ws } = useSearch({ strict: false }) as { ws?: string }
 
   const setMethod = (next: Method) => {
-    storeMethod(next)
     setMoved(true)
     setMethodState(next)
   }

@@ -1056,7 +1056,8 @@ Danh bạ kiểu Lark: list panel chọn danh mục (§5), content duyệt danh 
 
 ### Đăng nhập bằng mã QR (mockup `design/mockups/qr-login.html`, duyệt 2026-11-01)
 
-- Máy tính: nút góc phải trang đăng nhập (secondary, icon + chữ) đổi giữa form và mã QR; lựa chọn nhớ trên máy. Trạng thái
+- Máy tính: trang đăng nhập luôn mở bằng mã QR (ưu tiên hơn Google); nút góc phải (secondary, icon + chữ) đổi sang form.
+  Máy nhớ người đăng nhập gần nhất (chỉ tên và ảnh) thì khung QR chào người đó, kèm "Dùng tài khoản khác". Trạng thái
   của mã (đã quét, đang đăng nhập, bị huỷ, hết hạn) phủ lên chính mã, khung không đổi kích thước.
 - Điện thoại: "Quét mã QR" trong sheet nút + và trang Tôi (mở từ avatar); máy quét toàn màn trên nền stage; màn xác nhận nói máy nào xin
   vào, tài khoản và tổ chức, luôn có cảnh báo lừa đảo, nút Đăng nhập ở vùng ngón cái.

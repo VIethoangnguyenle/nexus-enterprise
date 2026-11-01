@@ -756,10 +756,11 @@ html.reduce .cam .finder .line { animation: none; top: 50%; }
 <section class="screen" id="desk" aria-labelledby="h-desk">
   <div class="screen-head">
     <h2 id="h-desk">1 · Máy tính: chuyển sang mã QR</h2>
-    <p>Trang đăng nhập giữ nguyên Google và mã một lần. Góc trên phải có nút “Mã QR”; chạm vào thì khung bên phải đổi sang mã QR (content fade 160ms, không trượt), góc đó đổi thành “Email hoặc Google” để quay lại. Lựa chọn được nhớ trên máy này.</p>
+    <p>Trên máy tính trang đăng nhập mở bằng mã QR (ưu tiên hơn Google). Góc trên phải có nút “Email hoặc Google”; chạm vào thì khung bên phải đổi sang form (content fade 160ms, không trượt), góc đó đổi thành “Mã QR” để quay lại.</p>
   </div>
   <div class="demo"><span class="k">Demo</span>
     <button class="btn sm" type="button" data-act="d-qr">Mã QR</button>
+    <button class="btn sm" type="button" data-act="d-last">Máy này nhớ người gần nhất</button>
     <button class="btn sm" type="button" data-act="d-form">Email hoặc Google</button>
     <button class="btn sm" type="button" data-act="d-scanned">Điện thoại vừa quét</button>
     <button class="btn sm" type="button" data-act="d-ok">Điện thoại chạm Đăng nhập → xác nhận trên máy tính</button>
@@ -781,7 +782,8 @@ html.reduce .cam .finder .line { animation: none; top: 50%; }
       <div class="formside">
         <button class="corner" type="button" id="d-corner" data-act="d-toggle" data-cx="1"><svg class="i s"><use href="#i-mail"/></svg><span>Email hoặc Google</span></button>
         <div class="box" id="d-qrbox">
-          <div class="t" style="text-align:center"><h3>Quét mã để đăng nhập</h3></div>
+          <div class="t" style="text-align:center" id="d-title-plain"><h3>Quét mã để đăng nhập</h3></div>
+          <div class="t" style="text-align:center;justify-items:center" id="d-title-last" hidden data-cx="6"><span class="av" style="--p:var(--color-person-2);width:48px;height:48px;font-size:1rem">HL</span><h3 style="margin-top:8px">Chào Lê Thị Hoa</h3><p>Quét mã bằng điện thoại của bạn để vào lại.</p></div>
           <div class="qrwrap">
             <div class="qr" id="d-qr" data-cx="2">
               <svg class="code" viewBox="0 0 29 29" shape-rendering="crispEdges" aria-label="Mã QR đăng nhập" role="img"></svg>
@@ -791,7 +793,8 @@ html.reduce .cam .finder .line { animation: none; top: 50%; }
             <div class="ttl-row tnum" id="d-ttl" data-cx="3"><span class="dot" aria-hidden="true"></span><span id="d-ttl-t">Mã tự làm mới sau 1:52</span></div>
             <p class="how" data-cx="4">Mở <b>Nexus Hub</b> trên điện thoại, chạm <b>+</b> rồi <b>Quét mã QR</b>. Hoặc hướng camera điện thoại vào mã.</p>
           </div>
-          <p class="foot">Chưa đăng nhập trên điện thoại? <button class="link" type="button" data-act="d-form">Dùng email hoặc Google</button></p>
+          <p class="foot" id="d-foot-plain">Chưa đăng nhập trên điện thoại? <button class="link" type="button" data-act="d-form">Dùng email hoặc Google</button></p>
+          <p class="foot" id="d-foot-last" hidden>Không phải Lê Thị Hoa? <button class="link" type="button" data-act="d-forget">Dùng tài khoản khác</button></p>
         </div>
         <div class="box" id="d-confirmbox" hidden data-cx="5">
           <div class="t" style="text-align:center;justify-items:center"><span class="av" style="--p:var(--color-person-2);width:64px;height:64px;font-size:1.25rem">HL</span><h3 style="margin-top:12px">Tiếp tục với tên Lê Thị Hoa?</h3><p>Điện thoại của Lê Thị Hoa vừa xác nhận. Máy tính này sẽ vào <b style="color:var(--color-ink)">NovaPay</b> bằng tài khoản đó.</p></div>
@@ -815,6 +818,7 @@ html.reduce .cam .finder .line { animation: none; top: 50%; }
     <li><span class="cxn">2</span><b>Mã QR</b> 216px, nền trắng thật cả ở chế độ tối (camera cần vùng sáng xung quanh, ngoại lệ màu ghi trong comment). Logo N ở giữa trong vùng sửa lỗi mức H. Mã là đường dẫn <code>/qr/…</code> trên chính tên miền Nexus, mang một chuỗi ngẫu nhiên dùng một lần, không mang tên, email hay ID nào.</li>
     <li><span class="cxn">3</span><b>Thời hạn</b> 2 phút. Trước khi hết hạn máy tính tự lấy mã mới (không bắt người bấm) cho tới 5 lần liên tiếp không ai quét; sau đó dừng và hiện trạng thái Hết hạn với nút “Lấy mã mới”, để tab bỏ quên không gọi server mãi. Đếm ngược chỉ là chữ phụ, không thanh tiến trình.</li>
     <li><span class="cxn">4</span><b>Hướng dẫn</b> nói đúng chỗ bấm trên điện thoại. Không có chữ “mở app”: Nexus trên điện thoại là trang web.</li>
+    <li><span class="cxn">6</span><b>QR là mặc định trên máy tính</b> (thêm 2026-11-01, ưu tiên hơn Google): từ 1024 trở lên trang đăng nhập luôn mở bằng mã QR; email và Google ở nút góc. Khi máy này nhớ người đăng nhập gần nhất (chỉ tên hiển thị và ảnh, lưu trên máy, không có ID hay email), khung QR chào đúng người đó. “Dùng tài khoản khác” quên người đó và giữ mã QR. Mã QR vẫn cấp cho bất kỳ ai quét: lời chào chỉ là gợi ý, không giới hạn tài khoản. Dưới 1024 vẫn mở form như cũ.</li>
     <li><span class="cxn">5</span><b>Xác nhận lần cuối</b> (thêm 2026-11-01): sau khi điện thoại bấm Đăng nhập, máy tính chưa vào ngay mà hỏi “Tiếp tục với tên …?”, kèm tổ chức sẽ vào và cảnh báo. Phiên chỉ được tạo khi bấm Tiếp tục; “Không phải tôi” huỷ mã và lấy mã mới. Chặn kiểu kẻ xấu quét trộm mã trên màn hình của bạn để đăng nhập máy bạn vào tài khoản của họ. Còn hạn của mã (2 phút) để bấm.</li>
   </ol>
 </section>
@@ -1135,6 +1139,17 @@ html.reduce .cam .finder .line { animation: none; top: 50%; }
     c.innerHTML = qr ? '<svg class="i s"><use href="#i-mail"/></svg><span>Email hoặc Google</span>' : '<svg class="i s"><use href="#i-qr"/></svg><span>Mã QR</span>';
     M.placeCx();
   }
+  A['d-last'] = function () {
+    showBox(true);
+    ['d-title-last', 'd-foot-last'].forEach(function (id) { document.getElementById(id).hidden = false; });
+    ['d-title-plain', 'd-foot-plain'].forEach(function (id) { document.getElementById(id).hidden = true; });
+    M.placeCx();
+  };
+  A['d-forget'] = function () {
+    ['d-title-last', 'd-foot-last'].forEach(function (id) { document.getElementById(id).hidden = true; });
+    ['d-title-plain', 'd-foot-plain'].forEach(function (id) { document.getElementById(id).hidden = false; });
+    M.placeCx();
+  };
   A['d-toggle'] = function () { showBox(document.getElementById('d-qrbox').hidden); };
   A['d-qr'] = function () { showBox(true); };
   A['d-form'] = function () { showBox(false); };

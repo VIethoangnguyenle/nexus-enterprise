@@ -7,6 +7,7 @@ import { authFixtureApi } from '../../test/auth-fixtures'
 import { renderAuthScreen, startAuthTest, where } from '../../test/auth-render'
 import { expectNoIds } from '../../test/no-ids'
 import { useAuthStore } from '../../stores/auth.store'
+import { lastAccount, rememberLastAccount } from '../../lib/last-account'
 import { LoginScreen } from './LoginScreen'
 
 vi.mock('../../api/client', async (orig) => ({
@@ -72,7 +73,13 @@ function qrFetch(path: string, options: RequestInit = {}): Promise<unknown> {
 const tick = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms))
 const switchToQr = () => userEvent.click(screen.getByRole('button', { name: 'Mã QR' }))
 
+/** The page decides by width: a computer (1024 and up) opens on the QR code. */
+function screenIsWide(wide: boolean) {
+  vi.stubGlobal('matchMedia', (q: string) => ({ matches: wide, media: q, addEventListener() {}, removeEventListener() {} }))
+}
+
 beforeEach(() => {
+  screenIsWide(true)
   vi.useFakeTimers({ shouldAdvanceTime: true })
   startAuthTest({ signedIn: false })
   localStorage.clear()
@@ -83,13 +90,13 @@ beforeEach(() => {
   vi.mocked(publicFetch).mockImplementation(qrFetch as typeof publicFetch)
 })
 afterEach(() => {
+  vi.unstubAllGlobals()
   vi.useRealTimers()
   vi.restoreAllMocks()
 })
 
 describe('Login by QR code on a computer', () => {
   it('goes to the profile step first when one is owed', async () => {
-    localStorage.setItem('nexus.login.method', 'qr')
     const router = await renderAuthScreen(LoginScreen, '/login')
     await screen.findByRole('img', { name: 'Mã QR đăng nhập' })
     server.status = APPROVED
@@ -99,40 +106,46 @@ describe('Login by QR code on a computer', () => {
     await waitFor(() => expect(where(router).path).toBe('/register'))
   })
 
-  it('switches to a QR code from the corner and remembers the choice', async () => {
+  it('opens on the QR code on a computer, ahead of Google, with the form one tap away', async () => {
     await renderAuthScreen(LoginScreen, '/login')
-    await switchToQr()
     expect(await screen.findByRole('img', { name: 'Mã QR đăng nhập' })).toBeInTheDocument()
-    expect(screen.getByText(/Mã tự làm mới sau/)).toBeInTheDocument()
-    expect(localStorage.getItem('nexus.login.method')).toBe('qr')
+    expect(screen.getByRole('heading', { name: 'Quét mã để đăng nhập' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Tiếp tục với Google/ })).not.toBeInTheDocument()
     expect(server.creates).toBe(1)
 
     await userEvent.click(screen.getByRole('button', { name: 'Email hoặc Google' }))
     expect(await screen.findByLabelText('Email hoặc số điện thoại')).toBeInTheDocument()
-    expect(localStorage.getItem('nexus.login.method')).toBe('form')
-  })
-
-  it('opens on the QR code when that was the last choice', async () => {
-    localStorage.setItem('nexus.login.method', 'qr')
-    await renderAuthScreen(LoginScreen, '/login')
+    await switchToQr()
     expect(await screen.findByRole('img', { name: 'Mã QR đăng nhập' })).toBeInTheDocument()
   })
 
-  it('starts on the form on a phone or tablet, whatever was chosen before', async () => {
-    localStorage.setItem('nexus.login.method', 'qr')
-    vi.stubGlobal('matchMedia', (q: string) => ({ matches: false, media: q, addEventListener() {}, removeEventListener() {} }))
-    try {
-      await renderAuthScreen(LoginScreen, '/login')
-      expect(await screen.findByLabelText('Email hoặc số điện thoại')).toBeInTheDocument()
-      expect(server.creates).toBe(0)
-      expect(screen.getByRole('button', { name: 'Mã QR' })).toBeInTheDocument()
-    } finally {
-      vi.unstubAllGlobals()
-    }
+  it('starts on the form on a phone or tablet', async () => {
+    screenIsWide(false)
+    await renderAuthScreen(LoginScreen, '/login')
+    expect(await screen.findByLabelText('Email hoặc số điện thoại')).toBeInTheDocument()
+    expect(server.creates).toBe(0)
+    expect(screen.getByRole('button', { name: 'Mã QR' })).toBeInTheDocument()
+  })
+
+  it('greets the person who last signed in on this computer, by name only', async () => {
+    rememberLastAccount({ display_name: 'Lê Thị Hoa', avatar_url: '' })
+    await renderAuthScreen(LoginScreen, '/login')
+    expect(await screen.findByRole('heading', { name: 'Chào Lê Thị Hoa' })).toBeInTheDocument()
+    expect(screen.getByText('Quét mã bằng điện thoại của bạn để vào lại.')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Mã QR đăng nhập' })).toBeInTheDocument()
+    expectNoIds()
+  })
+
+  it('forgets that person on Dùng tài khoản khác, and keeps the code', async () => {
+    rememberLastAccount({ display_name: 'Lê Thị Hoa', avatar_url: '' })
+    await renderAuthScreen(LoginScreen, '/login')
+    await userEvent.click(await screen.findByRole('button', { name: 'Dùng tài khoản khác' }))
+    expect(await screen.findByRole('heading', { name: 'Quét mã để đăng nhập' })).toBeInTheDocument()
+    expect(lastAccount()).toBeNull()
+    expect(server.creates).toBe(1)
   })
 
   it('shows who scanned, by name only', async () => {
-    localStorage.setItem('nexus.login.method', 'qr')
     server.status = { status: 'scanned', scanner: { display_name: 'Lê Thị Hoa', avatar_url: '' } }
     await renderAuthScreen(LoginScreen, '/login')
     await tick(2100)
@@ -142,7 +155,6 @@ describe('Login by QR code on a computer', () => {
   })
 
   it('asks the person at the computer to confirm, then goes straight into the phone\'s workspace', async () => {
-    localStorage.setItem('nexus.login.method', 'qr')
     const router = await renderAuthScreen(LoginScreen, '/login')
     await screen.findByRole('img', { name: 'Mã QR đăng nhập' })
     server.status = APPROVED
@@ -167,7 +179,6 @@ describe('Login by QR code on a computer', () => {
   })
 
   it('throws the approval away on Không phải tôi and shows a new code', async () => {
-    localStorage.setItem('nexus.login.method', 'qr')
     await renderAuthScreen(LoginScreen, '/login')
     await screen.findByRole('img', { name: 'Mã QR đăng nhập' })
     server.status = APPROVED
@@ -182,7 +193,6 @@ describe('Login by QR code on a computer', () => {
   })
 
   it('says the code expired when confirming came too late', async () => {
-    localStorage.setItem('nexus.login.method', 'qr')
     await renderAuthScreen(LoginScreen, '/login')
     await screen.findByRole('img', { name: 'Mã QR đăng nhập' })
     server.status = APPROVED
@@ -194,7 +204,6 @@ describe('Login by QR code on a computer', () => {
   })
 
   it('says the phone declined, and stops polling until asked for a new code', async () => {
-    localStorage.setItem('nexus.login.method', 'qr')
     server.status = { status: 'declined' }
     await renderAuthScreen(LoginScreen, '/login')
     expect(await screen.findByText('Đã huỷ trên điện thoại')).toBeInTheDocument()
@@ -209,14 +218,12 @@ describe('Login by QR code on a computer', () => {
   })
 
   it('says the code expired when the server no longer knows it', async () => {
-    localStorage.setItem('nexus.login.method', 'qr')
     server.gone = true
     await renderAuthScreen(LoginScreen, '/login')
     expect(await screen.findByText('Mã đã hết hạn')).toBeInTheDocument()
   })
 
   it(`swaps an unscanned code before it runs out, ${QR_MAX_RENEWALS} times, then waits for a click`, async () => {
-    localStorage.setItem('nexus.login.method', 'qr')
     server.expiresIn = 10 // each code is swapped 5 s after it arrives
     await renderAuthScreen(LoginScreen, '/login')
     await screen.findByRole('img', { name: 'Mã QR đăng nhập' })
@@ -226,7 +233,6 @@ describe('Login by QR code on a computer', () => {
   })
 
   it('keeps the code and says the connection is gone after three failed polls', async () => {
-    localStorage.setItem('nexus.login.method', 'qr')
     server.failing = 3
     await renderAuthScreen(LoginScreen, '/login')
     await screen.findByRole('img', { name: 'Mã QR đăng nhập' })

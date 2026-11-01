@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Clock, RefreshCw, ShieldAlert, WifiOff, X } from 'lucide-react'
 import { useQrLogin, type QrPhase } from '../../hooks/useQrLogin'
+import { forgetLastAccount, lastAccount } from '../../lib/last-account'
 import { qrLoginUrl } from '../../lib/qr-login'
 import { Avatar, Button, Heading, Spinner, Text } from '../primitives'
 import { QrCode } from './QrCode'
@@ -122,6 +123,8 @@ export function QrLoginPanel({ onSignedIn, onUseForm }: {
   onUseForm: () => void
 }) {
   const qr = useQrLogin(onSignedIn)
+  // Who last signed in here, to greet over the code; a hint, not a restriction.
+  const [last, setLast] = useState(lastAccount)
   const countdown = useCountdown(qr.phase === 'pending' ? qr.expiresAt : null)
   const veiled = qr.phase !== 'pending'
 
@@ -131,7 +134,15 @@ export function QrLoginPanel({ onSignedIn, onUseForm }: {
 
   return (
     <>
-      <Heading as="h1" look="page" className="text-center">Quét mã để đăng nhập</Heading>
+      {last ? (
+        <div className="grid justify-items-center gap-2 text-center">
+          <Avatar name={last.name} src={last.avatarUrl || undefined} size={52} />
+          <Heading as="h1" look="page">Chào {last.name}</Heading>
+          <Text variant="body" muted className="block">Quét mã bằng điện thoại của bạn để vào lại.</Text>
+        </div>
+      ) : (
+        <Heading as="h1" look="page" className="text-center">Quét mã để đăng nhập</Heading>
+      )}
       <div className="grid justify-items-center gap-4 text-center">
         <div className="relative w-54 h-54 p-3 rounded-surface bg-white ring-1 ring-line" aria-live="polite">
           {qr.token ? (
@@ -175,10 +186,17 @@ export function QrLoginPanel({ onSignedIn, onUseForm }: {
           <b className="font-semibold text-ink">Quét mã QR</b>. Hoặc hướng camera điện thoại vào mã.
         </Text>
       </div>
-      <Text variant="small" muted className="block text-center">
-        Chưa đăng nhập trên điện thoại?{' '}
-        <Button variant="link" size="link" onClick={onUseForm}>Dùng email hoặc Google</Button>
-      </Text>
+      {last ? (
+        <Text variant="small" muted className="block text-center">
+          Không phải {last.name}?{' '}
+          <Button variant="link" size="link" onClick={() => { forgetLastAccount(); setLast(null) }}>Dùng tài khoản khác</Button>
+        </Text>
+      ) : (
+        <Text variant="small" muted className="block text-center">
+          Chưa đăng nhập trên điện thoại?{' '}
+          <Button variant="link" size="link" onClick={onUseForm}>Dùng email hoặc Google</Button>
+        </Text>
+      )}
     </>
   )
 }

@@ -165,7 +165,8 @@ export function WorkspaceSelectScreen() {
       </div>
 
       {enterProblem && <Notice>{enterProblem.message}</Notice>}
-      {verifyProblem && <Notice>{verifyErrorMessage(verifyProblem, email)}</Notice>}
+      {/* Waits for the account: the message names its address, never a blank. */}
+      {verifyProblem && account && <Notice>{verifyErrorMessage(verifyProblem, email)}</Notice>}
       {offerProblem && <Notice>{offerProblem.message}</Notice>}
 
       {account && !!email && !verified && (
