@@ -20,6 +20,10 @@ func TestUploadURL_ADeclaredSizeIsSignedIntoTheUpload(t *testing.T) {
 		if got := sg.putHeader.Get("Content-Length"); got != itoa(size) {
 			t.Errorf("size %d: signed Content-Length = %q", size, got)
 		}
+		// Write-once: a second PUT through the same URL is refused by the store.
+		if got := sg.putHeader.Get("If-None-Match"); got != "*" {
+			t.Errorf("size %d: signed If-None-Match = %q, want *", size, got)
+		}
 		if sg.putExpiry != uploadURLTTL {
 			t.Errorf("size %d: lives %v", size, sg.putExpiry)
 		}

@@ -115,8 +115,10 @@ func (s *Service) UploadURL(ctx context.Context, workspaceID, docID, filename st
 	if size == nil {
 		u, err = s.signer.PresignedPutObject(ctx, bucket, key, uploadURLTTL)
 	} else {
+		// The declared size and "only if nothing is there yet" are signed: the URL
+		// takes exactly that many bytes, once. The browser sends both headers.
 		u, err = s.signer.PresignHeader(ctx, http.MethodPut, bucket, key, uploadURLTTL, nil,
-			http.Header{"Content-Length": []string{strconv.FormatInt(*size, 10)}})
+			http.Header{"Content-Length": []string{strconv.FormatInt(*size, 10)}, "If-None-Match": []string{"*"}})
 	}
 	if err != nil {
 		return "", "", fmt.Errorf("generate upload URL: %w", err)
