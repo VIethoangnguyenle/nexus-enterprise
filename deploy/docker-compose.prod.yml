@@ -143,6 +143,12 @@ services:
       - "traefik.http.routers.nexus-storage.tls.certresolver=le"
       - "traefik.http.routers.nexus-storage.priority=150"
       - "traefik.http.routers.nexus-storage.service=nexus-storage"
+      # Uploaded files are served from here: never sniff a type, never run a script. Active types
+      # are already signed as downloads (document storage); this is the backstop. No CSP sandbox:
+      # it would stop the browser's own PDF viewer on a directly opened file.
+      - "traefik.http.routers.nexus-storage.middlewares=nexus-storage-headers"
+      - "traefik.http.middlewares.nexus-storage-headers.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.nexus-storage-headers.headers.customResponseHeaders.Content-Security-Policy=script-src 'none'"
       - "traefik.http.services.nexus-storage.loadbalancer.server.port=9000"
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
