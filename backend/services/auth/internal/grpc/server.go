@@ -65,12 +65,17 @@ func (s *AuthServer) RevokeToken(ctx context.Context, req *pb.RevokeTokenRequest
 
 // IsTokenRevoked checks if a JWT ID exists in the blacklist.
 func (s *AuthServer) IsTokenRevoked(ctx context.Context, req *pb.IsTokenRevokedRequest) (*pb.IsTokenRevokedResponse, error) {
+	// A token without an ID cannot be on the list, so no answer about it is "not revoked".
+	if req.GetJti() == "" {
+		return nil, status.Error(codes.InvalidArgument, "token id required")
+	}
 	if s.rdb == nil {
 		return &pb.IsTokenRevokedResponse{Revoked: false}, nil
 	}
 	exists, err := s.rdb.Exists(ctx, jwtBlacklistKey(req.Jti)).Result()
 	if err != nil {
-		return &pb.IsTokenRevokedResponse{Revoked: false}, nil
+		// Fail closed: an unreadable list says nothing about this token.
+		return nil, status.Error(codes.Unavailable, "revocation list unavailable")
 	}
 	return &pb.IsTokenRevokedResponse{Revoked: exists > 0}, nil
 }

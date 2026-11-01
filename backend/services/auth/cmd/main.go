@@ -208,8 +208,11 @@ func otpOptions(jwtSecret string) (domain.OTPOptions, error) {
 	key := sha256.Sum256([]byte("auth-otp-code-hmac\x00" + jwtSecret))
 	opts := domain.OTPOptions{Secret: key[:]}
 
+	// A fixed code opens every account. It is the default only in development;
+	// anywhere else it is on only when an operator sets it on purpose (the
+	// documented tester mode), never because a variable was forgotten.
 	fixed, set := os.LookupEnv("AUTH_FIXED_OTP_CODE")
-	if !set {
+	if !set && bootstrap.IsDevEnvironment() {
 		fixed = domain.DefaultFixedOTPCode
 	}
 	fixed = strings.TrimSpace(fixed)
