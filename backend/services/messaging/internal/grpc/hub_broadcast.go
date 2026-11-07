@@ -25,8 +25,10 @@ func marshalEnvelope(env *pb.ServerEnvelope) []byte {
 	return data
 }
 
-// BroadcastToChannel publishes to Redis (cross-instance) or local broadcast.
+// BroadcastToChannel publishes to Redis (cross-instance) or local broadcast,
+// and tells every member of the conversation of it (hub_activity.go).
 func (h *Hub) BroadcastToChannel(channelID string, msg *pb.Message) {
+	defer h.publishActivity(activityOfMessage(msg))
 	chatMsg := messageToChatMessage(msg)
 	env := &pb.ServerEnvelope{
 		Payload: &pb.ServerEnvelope_ChatMessage{ChatMessage: chatMsg},
@@ -105,7 +107,7 @@ func (h *Hub) broadcastTyping(channelID, username string, sender *Client) {
 // clients: channel:<id> to that channel's subscribers, user:<id> to that user's
 // sessions, presence:<tenant> to sessions in that tenant.
 func (h *Hub) subscribeRedis() {
-	pubsub := h.rdb.PSubscribe(h.ctx, "channel:*", "user:*", presenceKeyPrefix+"*", revokeKeyPrefix+"*",
+	pubsub := h.rdb.PSubscribe(h.ctx, "channel:*", "user:*", presenceKeyPrefix+"*", revokeKeyPrefix+"*", activityKeyPrefix+"*",
 		workspaceEventPrefix+"*", channelEventPrefix+"*", userEventPrefix+"*", permEventPrefix+"*", workspaceRevokePrefix+"*")
 	defer pubsub.Close()
 
@@ -125,6 +127,8 @@ func (h *Hub) subscribeRedis() {
 
 			switch {
 			case h.deliverRedisDomain(msg.Channel, payload):
+			case strings.HasPrefix(msg.Channel, activityKeyPrefix):
+				h.enqueueActivity(strings.TrimPrefix(msg.Channel, activityKeyPrefix), payload)
 			case strings.HasPrefix(msg.Channel, workspaceRevokePrefix):
 				h.revokeWorkspaceLocal(strings.TrimPrefix(msg.Channel, workspaceRevokePrefix), msg.Payload)
 			case strings.HasPrefix(msg.Channel, revokeKeyPrefix):
@@ -233,6 +237,12 @@ func (h *Hub) BroadcastThreadReply(channelID string, ev *pb.ThreadReplyEvent) {
 	if channelID == "" || ev == nil {
 		return
 	}
+	if m := ev.Message; m != nil {
+		defer h.publishActivity(&pb.ConversationActivityEvent{
+			ChannelId: channelID, Kind: "sent", RootMessageId: ev.ParentMessageId,
+			SenderId: m.SenderId, Mentions: m.Mentions,
+		})
+	}
 	data := marshalEnvelope(&pb.ServerEnvelope{Payload: &pb.ServerEnvelope_ThreadReply{ThreadReply: ev}})
 	if data == nil {
 		return
@@ -265,6 +275,9 @@ func (h *Hub) BroadcastMessageDeleted(channelID string, ev *pb.MessageDeletedEve
 		return
 	}
 	h.publishToChannel(channelID, &pb.ServerEnvelope{Payload: &pb.ServerEnvelope_MessageDeleted{MessageDeleted: ev}})
+	h.publishActivity(&pb.ConversationActivityEvent{
+		ChannelId: channelID, Kind: "deleted", Seq: ev.Seq, RootMessageId: ev.ParentMessageId,
+	})
 }
 
 // BroadcastPollChanged tells the channel's subscribers a poll changed. It

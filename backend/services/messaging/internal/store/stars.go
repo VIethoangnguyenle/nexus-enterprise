@@ -67,11 +67,7 @@ func scanFeedMessages(rows pgx.Rows, extra func(m *Message) any) ([]*Message, er
 	var msgs []*Message
 	for rows.Next() {
 		m := &Message{}
-		if err := rows.Scan(&m.ID, &m.ChannelID, &m.SenderID, &m.SenderName,
-			&m.Content, &m.CreatedAt, &m.MessageType, &m.ParentMessageID,
-			&m.LinkedEntityType, &m.LinkedEntityID, &m.ReplyCount,
-			&m.ContentFormat, &m.Mentions, &m.LastReplyAt,
-			&m.EditedAt, &m.Deleted, &m.QuotedMessageID, extra(m)); err != nil {
+		if err := rows.Scan(append(m.scanTargets(), extra(m))...); err != nil {
 			return nil, err
 		}
 		msgs = append(msgs, m)

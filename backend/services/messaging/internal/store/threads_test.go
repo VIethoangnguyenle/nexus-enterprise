@@ -106,7 +106,7 @@ func TestInsertMessage_AReplyMovesTheThreadsLastReplyTime(t *testing.T) {
 	root := w.post(t, w.users[0], "")
 	reply := w.post(t, w.users[1], root.ID)
 
-	msgs, _, err := w.st.ListMessages(context.Background(), w.chID, nil, 10)
+	msgs, _, err := w.st.ListMessages(context.Background(), w.chID, 0, nil, 10)
 	require.NoError(t, err)
 	require.Len(t, msgs, 1)
 	require.NotNil(t, msgs[0].LastReplyAt)

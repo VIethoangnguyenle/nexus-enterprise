@@ -208,12 +208,7 @@ func (s *Store) ListThreads(ctx context.Context, channelID, userID, filter strin
 	var msgs []*Message
 	for rows.Next() {
 		m := &Message{}
-		if err := rows.Scan(&m.ID, &m.ChannelID, &m.SenderID, &m.SenderName,
-			&m.Content, &m.CreatedAt, &m.MessageType, &m.ParentMessageID,
-			&m.LinkedEntityType, &m.LinkedEntityID, &m.ReplyCount,
-			&m.ContentFormat, &m.Mentions, &m.LastReplyAt,
-			&m.EditedAt, &m.Deleted, &m.QuotedMessageID,
-			&m.Following, &m.ThreadUnread, &m.ReplyParticipantIDs); err != nil {
+		if err := rows.Scan(append(m.scanTargets(), &m.Following, &m.ThreadUnread, &m.ReplyParticipantIDs)...); err != nil {
 			return nil, false, err
 		}
 		m.redactIfDeleted()
@@ -265,12 +260,7 @@ func scanThreadRows(rows pgx.Rows) ([]*Message, error) {
 	var msgs []*Message
 	for rows.Next() {
 		m := &Message{}
-		if err := rows.Scan(&m.ID, &m.ChannelID, &m.SenderID, &m.SenderName,
-			&m.Content, &m.CreatedAt, &m.MessageType, &m.ParentMessageID,
-			&m.LinkedEntityType, &m.LinkedEntityID, &m.ReplyCount,
-			&m.ContentFormat, &m.Mentions, &m.LastReplyAt,
-			&m.EditedAt, &m.Deleted, &m.QuotedMessageID,
-			&m.Following, &m.ThreadUnread, &m.ReplyParticipantIDs); err != nil {
+		if err := rows.Scan(append(m.scanTargets(), &m.Following, &m.ThreadUnread, &m.ReplyParticipantIDs)...); err != nil {
 			return nil, err
 		}
 		msgs = append(msgs, m)

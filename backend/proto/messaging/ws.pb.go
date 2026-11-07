@@ -418,6 +418,7 @@ type ServerEnvelope struct {
 	//	*ServerEnvelope_MessageEdited
 	//	*ServerEnvelope_MessageDeleted
 	//	*ServerEnvelope_CallEvent
+	//	*ServerEnvelope_ConversationActivity
 	Payload       isServerEnvelope_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -640,6 +641,15 @@ func (x *ServerEnvelope) GetCallEvent() *CallEvent {
 	return nil
 }
 
+func (x *ServerEnvelope) GetConversationActivity() *ConversationActivityEvent {
+	if x != nil {
+		if x, ok := x.Payload.(*ServerEnvelope_ConversationActivity); ok {
+			return x.ConversationActivity
+		}
+	}
+	return nil
+}
+
 type isServerEnvelope_Payload interface {
 	isServerEnvelope_Payload()
 }
@@ -724,6 +734,10 @@ type ServerEnvelope_CallEvent struct {
 	CallEvent *CallEvent `protobuf:"bytes,23,opt,name=call_event,json=callEvent,proto3,oneof"`
 }
 
+type ServerEnvelope_ConversationActivity struct {
+	ConversationActivity *ConversationActivityEvent `protobuf:"bytes,24,opt,name=conversation_activity,json=conversationActivity,proto3,oneof"`
+}
+
 func (*ServerEnvelope_AuthResponse) isServerEnvelope_Payload() {}
 
 func (*ServerEnvelope_ChatMessage) isServerEnvelope_Payload() {}
@@ -763,6 +777,8 @@ func (*ServerEnvelope_MessageEdited) isServerEnvelope_Payload() {}
 func (*ServerEnvelope_MessageDeleted) isServerEnvelope_Payload() {}
 
 func (*ServerEnvelope_CallEvent) isServerEnvelope_Payload() {}
+
+func (*ServerEnvelope_ConversationActivity) isServerEnvelope_Payload() {}
 
 type AuthResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -840,7 +856,9 @@ type ChatMessage struct {
 	LinkedEntityType string                 `protobuf:"bytes,12,opt,name=linked_entity_type,json=linkedEntityType,proto3" json:"linked_entity_type,omitempty"`
 	LinkedEntityId   string                 `protobuf:"bytes,13,opt,name=linked_entity_id,json=linkedEntityId,proto3" json:"linked_entity_id,omitempty"`
 	Attachments      []*ChatAttachment      `protobuf:"bytes,14,rep,name=attachments,proto3" json:"attachments,omitempty"`
-	Quoted           *ChatQuote             `protobuf:"bytes,15,opt,name=quoted,proto3" json:"quoted,omitempty"` // The message this one quotes, when any
+	Quoted           *ChatQuote             `protobuf:"bytes,15,opt,name=quoted,proto3" json:"quoted,omitempty"`                      // The message this one quotes, when any
+	Seq              int64                  `protobuf:"varint,16,opt,name=seq,proto3" json:"seq,omitempty"`                           // A main message's number in its conversation; 0 on a reply
+	ReplySeq         int64                  `protobuf:"varint,17,opt,name=reply_seq,json=replySeq,proto3" json:"reply_seq,omitempty"` // A reply's number in its thread; 0 on a main message
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -978,6 +996,20 @@ func (x *ChatMessage) GetQuoted() *ChatQuote {
 		return x.Quoted
 	}
 	return nil
+}
+
+func (x *ChatMessage) GetSeq() int64 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
+func (x *ChatMessage) GetReplySeq() int64 {
+	if x != nil {
+		return x.ReplySeq
+	}
+	return 0
 }
 
 // ChatQuote is what a quote shows (see messaging.QuotedMessage).
@@ -2302,6 +2334,7 @@ type MessageDeletedEvent struct {
 	ParentMessageId string                 `protobuf:"bytes,3,opt,name=parent_message_id,json=parentMessageId,proto3" json:"parent_message_id,omitempty"`
 	KeepPlaceholder bool                   `protobuf:"varint,4,opt,name=keep_placeholder,json=keepPlaceholder,proto3" json:"keep_placeholder,omitempty"`
 	ReplyCount      int32                  `protobuf:"varint,5,opt,name=reply_count,json=replyCount,proto3" json:"reply_count,omitempty"` // The thread's count after a reply was deleted
+	Seq             int64                  `protobuf:"varint,6,opt,name=seq,proto3" json:"seq,omitempty"`                                 // A deleted main message's number in its channel; 0 for a reply
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -2371,6 +2404,110 @@ func (x *MessageDeletedEvent) GetReplyCount() int32 {
 	return 0
 }
 
+func (x *MessageDeletedEvent) GetSeq() int64 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
+// ConversationActivityEvent tells the members of a conversation that a message
+// was sent to it or deleted from it, so each keeps their unread counts without
+// asking (docs/specs/chat-unread-counts). It goes to every session of every
+// member, whether or not the conversation is open, and carries no text: what
+// was said is read only through the conversation itself.
+type ConversationActivityEvent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ChannelId     string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
+	Kind          string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`                                          // "sent" or "deleted"
+	Seq           int64                  `protobuf:"varint,3,opt,name=seq,proto3" json:"seq,omitempty"`                                           // The main message's number; 0 for a reply
+	RootMessageId string                 `protobuf:"bytes,4,opt,name=root_message_id,json=rootMessageId,proto3" json:"root_message_id,omitempty"` // For a reply: its thread's root
+	SenderId      string                 `protobuf:"bytes,5,opt,name=sender_id,json=senderId,proto3" json:"sender_id,omitempty"`                  // users.id
+	Mentions      []string               `protobuf:"bytes,6,rep,name=mentions,proto3" json:"mentions,omitempty"`                                  // users.id of the people the message mentions
+	LastSeq       int64                  `protobuf:"varint,7,opt,name=last_seq,json=lastSeq,proto3" json:"last_seq,omitempty"`                    // The conversation's last main number after this change
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ConversationActivityEvent) Reset() {
+	*x = ConversationActivityEvent{}
+	mi := &file_proto_messaging_ws_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConversationActivityEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConversationActivityEvent) ProtoMessage() {}
+
+func (x *ConversationActivityEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_messaging_ws_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConversationActivityEvent.ProtoReflect.Descriptor instead.
+func (*ConversationActivityEvent) Descriptor() ([]byte, []int) {
+	return file_proto_messaging_ws_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *ConversationActivityEvent) GetChannelId() string {
+	if x != nil {
+		return x.ChannelId
+	}
+	return ""
+}
+
+func (x *ConversationActivityEvent) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *ConversationActivityEvent) GetSeq() int64 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
+func (x *ConversationActivityEvent) GetRootMessageId() string {
+	if x != nil {
+		return x.RootMessageId
+	}
+	return ""
+}
+
+func (x *ConversationActivityEvent) GetSenderId() string {
+	if x != nil {
+		return x.SenderId
+	}
+	return ""
+}
+
+func (x *ConversationActivityEvent) GetMentions() []string {
+	if x != nil {
+		return x.Mentions
+	}
+	return nil
+}
+
+func (x *ConversationActivityEvent) GetLastSeq() int64 {
+	if x != nil {
+		return x.LastSeq
+	}
+	return 0
+}
+
 // CallEvent is a change of a call. ring, cancel, answered, declined and missed
 // go to every device of the two people of a direct call (answered stops the
 // other devices ringing); invited to every device of the people invited; state
@@ -2397,7 +2534,7 @@ type CallEvent struct {
 
 func (x *CallEvent) Reset() {
 	*x = CallEvent{}
-	mi := &file_proto_messaging_ws_proto_msgTypes[28]
+	mi := &file_proto_messaging_ws_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2409,7 +2546,7 @@ func (x *CallEvent) String() string {
 func (*CallEvent) ProtoMessage() {}
 
 func (x *CallEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_messaging_ws_proto_msgTypes[28]
+	mi := &file_proto_messaging_ws_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2422,7 +2559,7 @@ func (x *CallEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CallEvent.ProtoReflect.Descriptor instead.
 func (*CallEvent) Descriptor() ([]byte, []int) {
-	return file_proto_messaging_ws_proto_rawDescGZIP(), []int{28}
+	return file_proto_messaging_ws_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *CallEvent) GetType() string {
@@ -2543,8 +2680,7 @@ const file_proto_messaging_ws_proto_rawDesc = "" +
 	"channel_id\x18\x01 \x01(\tR\tchannelId\",\n" +
 	"\vViewRequest\x12\x1d\n" +
 	"\n" +
-	"channel_id\x18\x01 \x01(\tR\tchannelId\"\xdc\n" +
-	"\n" +
+	"channel_id\x18\x01 \x01(\tR\tchannelId\"\xb9\v\n" +
 	"\x0eServerEnvelope\x12>\n" +
 	"\rauth_response\x18\x01 \x01(\v2\x17.messaging.AuthResponseH\x00R\fauthResponse\x12;\n" +
 	"\fchat_message\x18\x02 \x01(\v2\x16.messaging.ChatMessageH\x00R\vchatMessage\x12;\n" +
@@ -2568,13 +2704,14 @@ const file_proto_messaging_ws_proto_rawDesc = "" +
 	"\x0emessage_edited\x18\x15 \x01(\v2\x1d.messaging.MessageEditedEventH\x00R\rmessageEdited\x12I\n" +
 	"\x0fmessage_deleted\x18\x16 \x01(\v2\x1e.messaging.MessageDeletedEventH\x00R\x0emessageDeleted\x125\n" +
 	"\n" +
-	"call_event\x18\x17 \x01(\v2\x14.messaging.CallEventH\x00R\tcallEventB\t\n" +
+	"call_event\x18\x17 \x01(\v2\x14.messaging.CallEventH\x00R\tcallEvent\x12[\n" +
+	"\x15conversation_activity\x18\x18 \x01(\v2$.messaging.ConversationActivityEventH\x00R\x14conversationActivityB\t\n" +
 	"\apayloadJ\x04\b\a\x10\bJ\x04\b\r\x10\x0eJ\x04\b\x0e\x10\x0fR\rasset_updatedR\fdrive_objectR\n" +
 	"drive_perm\"O\n" +
 	"\fAuthResponse\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x16\n" +
-	"\x06reason\x18\x03 \x01(\tR\x06reason\"\xc5\x04\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\"\xf4\x04\n" +
 	"\vChatMessage\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -2595,7 +2732,9 @@ const file_proto_messaging_ws_proto_rawDesc = "" +
 	"\x12linked_entity_type\x18\f \x01(\tR\x10linkedEntityType\x12(\n" +
 	"\x10linked_entity_id\x18\r \x01(\tR\x0elinkedEntityId\x12;\n" +
 	"\vattachments\x18\x0e \x03(\v2\x19.messaging.ChatAttachmentR\vattachments\x12,\n" +
-	"\x06quoted\x18\x0f \x01(\v2\x14.messaging.ChatQuoteR\x06quoted\"\x87\x01\n" +
+	"\x06quoted\x18\x0f \x01(\v2\x14.messaging.ChatQuoteR\x06quoted\x12\x10\n" +
+	"\x03seq\x18\x10 \x01(\x03R\x03seq\x12\x1b\n" +
+	"\treply_seq\x18\x11 \x01(\x03R\breplySeq\"\x87\x01\n" +
 	"\tChatQuote\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
 	"\tsender_id\x18\x02 \x01(\tR\bsenderId\x12\x1f\n" +
@@ -2713,7 +2852,7 @@ const file_proto_messaging_ws_proto_rawDesc = "" +
 	"\fworkspace_id\x18\a \x01(\tR\vworkspaceId\"\x7f\n" +
 	"\x12MessageEditedEvent\x120\n" +
 	"\amessage\x18\x01 \x01(\v2\x16.messaging.ChatMessageR\amessage\x127\n" +
-	"\tedited_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\beditedAt\"\xcb\x01\n" +
+	"\tedited_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\beditedAt\"\xdd\x01\n" +
 	"\x13MessageDeletedEvent\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12\x1d\n" +
@@ -2722,7 +2861,17 @@ const file_proto_messaging_ws_proto_rawDesc = "" +
 	"\x11parent_message_id\x18\x03 \x01(\tR\x0fparentMessageId\x12)\n" +
 	"\x10keep_placeholder\x18\x04 \x01(\bR\x0fkeepPlaceholder\x12\x1f\n" +
 	"\vreply_count\x18\x05 \x01(\x05R\n" +
-	"replyCount\"\xd8\x03\n" +
+	"replyCount\x12\x10\n" +
+	"\x03seq\x18\x06 \x01(\x03R\x03seq\"\xdc\x01\n" +
+	"\x19ConversationActivityEvent\x12\x1d\n" +
+	"\n" +
+	"channel_id\x18\x01 \x01(\tR\tchannelId\x12\x12\n" +
+	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x10\n" +
+	"\x03seq\x18\x03 \x01(\x03R\x03seq\x12&\n" +
+	"\x0froot_message_id\x18\x04 \x01(\tR\rrootMessageId\x12\x1b\n" +
+	"\tsender_id\x18\x05 \x01(\tR\bsenderId\x12\x1a\n" +
+	"\bmentions\x18\x06 \x03(\tR\bmentions\x12\x19\n" +
+	"\blast_seq\x18\a \x01(\x03R\alastSeq\"\xd8\x03\n" +
 	"\tCallEvent\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x17\n" +
 	"\acall_id\x18\x02 \x01(\tR\x06callId\x12\x1d\n" +
@@ -2754,38 +2903,39 @@ func file_proto_messaging_ws_proto_rawDescGZIP() []byte {
 	return file_proto_messaging_ws_proto_rawDescData
 }
 
-var file_proto_messaging_ws_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
+var file_proto_messaging_ws_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_proto_messaging_ws_proto_goTypes = []any{
-	(*ClientEnvelope)(nil),        // 0: messaging.ClientEnvelope
-	(*AuthRequest)(nil),           // 1: messaging.AuthRequest
-	(*SubscribeRequest)(nil),      // 2: messaging.SubscribeRequest
-	(*UnsubscribeRequest)(nil),    // 3: messaging.UnsubscribeRequest
-	(*TypingRequest)(nil),         // 4: messaging.TypingRequest
-	(*ViewRequest)(nil),           // 5: messaging.ViewRequest
-	(*ServerEnvelope)(nil),        // 6: messaging.ServerEnvelope
-	(*AuthResponse)(nil),          // 7: messaging.AuthResponse
-	(*ChatMessage)(nil),           // 8: messaging.ChatMessage
-	(*ChatQuote)(nil),             // 9: messaging.ChatQuote
-	(*ChatAttachment)(nil),        // 10: messaging.ChatAttachment
-	(*TypingEvent)(nil),           // 11: messaging.TypingEvent
-	(*PresenceEvent)(nil),         // 12: messaging.PresenceEvent
-	(*NotificationEvent)(nil),     // 13: messaging.NotificationEvent
-	(*UnreadCountEvent)(nil),      // 14: messaging.UnreadCountEvent
-	(*ThreadReplyEvent)(nil),      // 15: messaging.ThreadReplyEvent
-	(*ThreadStateEvent)(nil),      // 16: messaging.ThreadStateEvent
-	(*ReactionEvent)(nil),         // 17: messaging.ReactionEvent
-	(*PinEvent)(nil),              // 18: messaging.PinEvent
-	(*ReadReceiptEvent)(nil),      // 19: messaging.ReadReceiptEvent
-	(*PollVoteEvent)(nil),         // 20: messaging.PollVoteEvent
-	(*TaskUpdateEvent)(nil),       // 21: messaging.TaskUpdateEvent
-	(*ErrorEvent)(nil),            // 22: messaging.ErrorEvent
-	(*DomainEvent)(nil),           // 23: messaging.DomainEvent
-	(*WorkspaceSubscribed)(nil),   // 24: messaging.WorkspaceSubscribed
-	(*ApprovalEvent)(nil),         // 25: messaging.ApprovalEvent
-	(*MessageEditedEvent)(nil),    // 26: messaging.MessageEditedEvent
-	(*MessageDeletedEvent)(nil),   // 27: messaging.MessageDeletedEvent
-	(*CallEvent)(nil),             // 28: messaging.CallEvent
-	(*timestamppb.Timestamp)(nil), // 29: google.protobuf.Timestamp
+	(*ClientEnvelope)(nil),            // 0: messaging.ClientEnvelope
+	(*AuthRequest)(nil),               // 1: messaging.AuthRequest
+	(*SubscribeRequest)(nil),          // 2: messaging.SubscribeRequest
+	(*UnsubscribeRequest)(nil),        // 3: messaging.UnsubscribeRequest
+	(*TypingRequest)(nil),             // 4: messaging.TypingRequest
+	(*ViewRequest)(nil),               // 5: messaging.ViewRequest
+	(*ServerEnvelope)(nil),            // 6: messaging.ServerEnvelope
+	(*AuthResponse)(nil),              // 7: messaging.AuthResponse
+	(*ChatMessage)(nil),               // 8: messaging.ChatMessage
+	(*ChatQuote)(nil),                 // 9: messaging.ChatQuote
+	(*ChatAttachment)(nil),            // 10: messaging.ChatAttachment
+	(*TypingEvent)(nil),               // 11: messaging.TypingEvent
+	(*PresenceEvent)(nil),             // 12: messaging.PresenceEvent
+	(*NotificationEvent)(nil),         // 13: messaging.NotificationEvent
+	(*UnreadCountEvent)(nil),          // 14: messaging.UnreadCountEvent
+	(*ThreadReplyEvent)(nil),          // 15: messaging.ThreadReplyEvent
+	(*ThreadStateEvent)(nil),          // 16: messaging.ThreadStateEvent
+	(*ReactionEvent)(nil),             // 17: messaging.ReactionEvent
+	(*PinEvent)(nil),                  // 18: messaging.PinEvent
+	(*ReadReceiptEvent)(nil),          // 19: messaging.ReadReceiptEvent
+	(*PollVoteEvent)(nil),             // 20: messaging.PollVoteEvent
+	(*TaskUpdateEvent)(nil),           // 21: messaging.TaskUpdateEvent
+	(*ErrorEvent)(nil),                // 22: messaging.ErrorEvent
+	(*DomainEvent)(nil),               // 23: messaging.DomainEvent
+	(*WorkspaceSubscribed)(nil),       // 24: messaging.WorkspaceSubscribed
+	(*ApprovalEvent)(nil),             // 25: messaging.ApprovalEvent
+	(*MessageEditedEvent)(nil),        // 26: messaging.MessageEditedEvent
+	(*MessageDeletedEvent)(nil),       // 27: messaging.MessageDeletedEvent
+	(*ConversationActivityEvent)(nil), // 28: messaging.ConversationActivityEvent
+	(*CallEvent)(nil),                 // 29: messaging.CallEvent
+	(*timestamppb.Timestamp)(nil),     // 30: google.protobuf.Timestamp
 }
 var file_proto_messaging_ws_proto_depIdxs = []int32{
 	1,  // 0: messaging.ClientEnvelope.auth:type_name -> messaging.AuthRequest
@@ -2812,22 +2962,23 @@ var file_proto_messaging_ws_proto_depIdxs = []int32{
 	16, // 21: messaging.ServerEnvelope.thread_state:type_name -> messaging.ThreadStateEvent
 	26, // 22: messaging.ServerEnvelope.message_edited:type_name -> messaging.MessageEditedEvent
 	27, // 23: messaging.ServerEnvelope.message_deleted:type_name -> messaging.MessageDeletedEvent
-	28, // 24: messaging.ServerEnvelope.call_event:type_name -> messaging.CallEvent
-	29, // 25: messaging.ChatMessage.created_at:type_name -> google.protobuf.Timestamp
-	10, // 26: messaging.ChatMessage.attachments:type_name -> messaging.ChatAttachment
-	9,  // 27: messaging.ChatMessage.quoted:type_name -> messaging.ChatQuote
-	8,  // 28: messaging.ThreadReplyEvent.message:type_name -> messaging.ChatMessage
-	29, // 29: messaging.ThreadReplyEvent.last_reply_at:type_name -> google.protobuf.Timestamp
-	29, // 30: messaging.ThreadStateEvent.as_of:type_name -> google.protobuf.Timestamp
-	8,  // 31: messaging.MessageEditedEvent.message:type_name -> messaging.ChatMessage
-	29, // 32: messaging.MessageEditedEvent.edited_at:type_name -> google.protobuf.Timestamp
-	29, // 33: messaging.CallEvent.started_at:type_name -> google.protobuf.Timestamp
-	29, // 34: messaging.CallEvent.ended_at:type_name -> google.protobuf.Timestamp
-	35, // [35:35] is the sub-list for method output_type
-	35, // [35:35] is the sub-list for method input_type
-	35, // [35:35] is the sub-list for extension type_name
-	35, // [35:35] is the sub-list for extension extendee
-	0,  // [0:35] is the sub-list for field type_name
+	29, // 24: messaging.ServerEnvelope.call_event:type_name -> messaging.CallEvent
+	28, // 25: messaging.ServerEnvelope.conversation_activity:type_name -> messaging.ConversationActivityEvent
+	30, // 26: messaging.ChatMessage.created_at:type_name -> google.protobuf.Timestamp
+	10, // 27: messaging.ChatMessage.attachments:type_name -> messaging.ChatAttachment
+	9,  // 28: messaging.ChatMessage.quoted:type_name -> messaging.ChatQuote
+	8,  // 29: messaging.ThreadReplyEvent.message:type_name -> messaging.ChatMessage
+	30, // 30: messaging.ThreadReplyEvent.last_reply_at:type_name -> google.protobuf.Timestamp
+	30, // 31: messaging.ThreadStateEvent.as_of:type_name -> google.protobuf.Timestamp
+	8,  // 32: messaging.MessageEditedEvent.message:type_name -> messaging.ChatMessage
+	30, // 33: messaging.MessageEditedEvent.edited_at:type_name -> google.protobuf.Timestamp
+	30, // 34: messaging.CallEvent.started_at:type_name -> google.protobuf.Timestamp
+	30, // 35: messaging.CallEvent.ended_at:type_name -> google.protobuf.Timestamp
+	36, // [36:36] is the sub-list for method output_type
+	36, // [36:36] is the sub-list for method input_type
+	36, // [36:36] is the sub-list for extension type_name
+	36, // [36:36] is the sub-list for extension extendee
+	0,  // [0:36] is the sub-list for field type_name
 }
 
 func init() { file_proto_messaging_ws_proto_init() }
@@ -2863,6 +3014,7 @@ func file_proto_messaging_ws_proto_init() {
 		(*ServerEnvelope_MessageEdited)(nil),
 		(*ServerEnvelope_MessageDeleted)(nil),
 		(*ServerEnvelope_CallEvent)(nil),
+		(*ServerEnvelope_ConversationActivity)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -2870,7 +3022,7 @@ func file_proto_messaging_ws_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_messaging_ws_proto_rawDesc), len(file_proto_messaging_ws_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   29,
+			NumMessages:   30,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

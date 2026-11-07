@@ -116,6 +116,9 @@ func main() {
 	defer hub.Close()
 	// Following a workspace's live changes is a read of the workspace.
 	hub.SetWorkspaceAccess(domainSvc)
+	if os.Getenv("MESSAGING_ACTIVITY_EVENTS") != "0" {
+		hub.SetChannelDirectory(msgStore)
+	}
 	// A token names a tenant and outlives the membership it was issued for, so a
 	// connecting session is checked against the graph, through the policy writer
 	// (the read replica may be behind a removal made a moment ago).

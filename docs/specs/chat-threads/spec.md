@@ -120,10 +120,23 @@ A conversation SHALL show its messages oldest first, grouped by sender within fi
 decided once per visit and stays until the reader leaves or sends a message. When the unread run fits in one screen
 the stream opens at its end; when it is longer the stream opens with the divider 48px below its top. Messages older
 than the loaded page SHALL load when the reader scrolls to the top, without moving the line being read.
+A page is asked for by number, `GET /api/channels/{id}/messages?before_seq=N` (the main messages numbered below N,
+newest first, 50 at most), so pages meet exactly even where messages share a send time; `before=<RFC 3339 time>`
+is still accepted from older clients. Once the reader leaves a conversation the client keeps only its newest 100
+messages, and scrolling back loads older pages again.
 
 #### Scenario: Long unread run
 - **WHEN** a reader with more unread messages than fit on a screen opens the conversation
 - **THEN** the stream opens at "Tin mới", and the conversation is not marked read until the reader reaches the end
+
+### Requirement: A thread is read a page at a time
+`GET /api/messages/{id}/thread` SHALL return the root and at most 200 replies, oldest first; `after_reply_seq=N`
+returns the replies numbered after N (`limit` lowers the page), and `has_more` says later replies remain. The thread
+view reads every page in turn, so it still shows the whole thread, while no single request grows with its length.
+
+#### Scenario: A long thread
+- **WHEN** a thread has 450 replies and is opened
+- **THEN** the client asks for three pages and shows all 450 replies in order
 
 ### Requirement: A thread is read by opening it
 Opening a thread panel SHALL mark the thread read once its unread replies are known, and again for any reply that

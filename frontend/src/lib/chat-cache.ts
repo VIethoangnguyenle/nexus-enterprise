@@ -79,6 +79,8 @@ export function convertChatMsgToMessage(chatMsg: WSChatMessage): Message {
     content_format: chatMsg.contentFormat || 'markdown',
     created_at: chatMsg.createdAt ?? new Date().toISOString(),
     reply_count: chatMsg.replyCount || 0,
+    seq: Number(chatMsg.seq) || undefined,
+    reply_seq: Number(chatMsg.replySeq) || undefined,
     parent_message_id: chatMsg.parentMessageId || '',
     mentions: chatMsg.mentions || [],
     linked_entity_type: chatMsg.linkedEntityType || '',

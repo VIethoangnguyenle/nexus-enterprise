@@ -1,0 +1,18 @@
+# Screenshots and images: expensive for the LLM pass, no architecture signal
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+# Agent tooling, archived design history, caches
+.agent/
+.agentkit/
+.serena/
+.stitch/
+.codegraph/
+.claude/
+# Generated code
+frontend/src/generated/
+frontend/src/routeTree.gen.ts
+*.pb.go
+*.pb.gw.go

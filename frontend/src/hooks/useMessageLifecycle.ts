@@ -80,6 +80,7 @@ export function useDeleteMessage(channelId: string) {
         parentMessageId: parent,
         keepPlaceholder: !parent && (message.reply_count ?? 0) > 0,
         replyCount: parent ? Math.max(0, (rootOf(channelId, parent)?.reply_count ?? 1) - 1) : 0,
+        seq: String(message.seq ?? 0),
       })
     },
   })

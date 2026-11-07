@@ -205,3 +205,19 @@ export function keepOlderPages(
   if (older.length === 0) return fresh
   return { messages: [...fresh.messages, ...older], has_more: previous.has_more }
 }
+
+/** How much of a conversation's history stays in memory once it is left: the two newest pages. */
+export const KEEP_WHEN_LEFT = 100
+
+/**
+ * A conversation's cached history once the reader left it: the newest messages
+ * only, flagged as having more, so scrolling far back in many conversations
+ * does not keep every page of each in memory. Scrolling up again loads them anew.
+ */
+export function trimLeftHistory(
+  list: { messages: Message[]; has_more: boolean } | undefined,
+  keep = KEEP_WHEN_LEFT,
+): { messages: Message[]; has_more: boolean } | undefined {
+  if (!list?.messages || list.messages.length <= keep) return list
+  return { ...list, messages: list.messages.slice(0, keep), has_more: true }
+}

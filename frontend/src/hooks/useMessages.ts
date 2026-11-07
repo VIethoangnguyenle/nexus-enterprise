@@ -22,7 +22,7 @@ export const messagesQueryOptions = (channelId: string) =>
   })
 
 export const threadQueryOptions = (messageId: string) =>
-  queryOptions({ queryKey: keys.messaging.thread(messageId), queryFn: () => messagingApi.getThread(messageId), enabled: !!messageId })
+  queryOptions({ queryKey: keys.messaging.thread(messageId), queryFn: () => messagingApi.getWholeThread(messageId), enabled: !!messageId })
 
 export function useMessages(channelId: string) { return useQuery(messagesQueryOptions(channelId)) }
 export function useThread(messageId: string) { return useQuery(threadQueryOptions(messageId)) }

@@ -292,16 +292,19 @@ func (h *Handler) GetMessages(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	before := c.QueryParam("before")
-	limitStr := c.QueryParam("limit")
-	limit := 50
-	if limitStr != "" {
-		if v, err := strconv.Atoi(limitStr); err == nil && v > 0 && v <= 100 {
-			limit = v
+	page := domain.MessagePage{Before: c.QueryParam("before"), Limit: 50}
+	if v, err := strconv.Atoi(c.QueryParam("limit")); err == nil && v > 0 && v <= 100 {
+		page.Limit = v
+	}
+	if s := c.QueryParam("before_seq"); s != "" {
+		v, err := strconv.ParseInt(s, 10, 64)
+		if err != nil || v < 0 {
+			return echo.NewHTTPError(http.StatusBadRequest, "before_seq must be a whole number")
 		}
+		page.BeforeSeq = v
 	}
 
-	msgs, err := h.svc.GetMessages(c.Request().Context(), c.Param("chId"), claims.UserID, claims.NGACNodeID, before, limit)
+	msgs, err := h.svc.GetMessagesPage(c.Request().Context(), c.Param("chId"), claims.UserID, claims.NGACNodeID, page)
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}
@@ -314,7 +317,16 @@ func (h *Handler) GetThread(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	msgs, err := h.svc.GetThread(c.Request().Context(), c.Param("msgId"), claims.UserID, claims.NGACNodeID)
+	var after int64
+	if s := c.QueryParam("after_reply_seq"); s != "" {
+		v, err := strconv.ParseInt(s, 10, 64)
+		if err != nil || v < 0 {
+			return echo.NewHTTPError(http.StatusBadRequest, "after_reply_seq must be a whole number")
+		}
+		after = v
+	}
+	limit, _ := strconv.Atoi(c.QueryParam("limit"))
+	msgs, err := h.svc.GetThreadPage(c.Request().Context(), c.Param("msgId"), claims.UserID, claims.NGACNodeID, after, limit)
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}

@@ -78,12 +78,23 @@ describe('messagingApi', () => {
     )
   })
 
-  it('listMessages builds URL with before param', async () => {
-    await messagingApi.listMessages('ch-1', '2024-01-01')
+  it('listMessages asks for the page below a message number', async () => {
+    await messagingApi.listMessages('ch-1', 41)
     expect(mockFetch).toHaveBeenCalledWith(
-      '/api/channels/ch-1/messages?before=2024-01-01',
+      '/api/channels/ch-1/messages?before_seq=41',
       expect.any(Object),
     )
+  })
+
+  it('getWholeThread reads every page of replies after the last one held', async () => {
+    const reply = (n: number) => ({ id: `r${n}`, channel_id: 'c', sender_id: 'u', content: '', reply_seq: n })
+    const root = { id: 'root', channel_id: 'c', sender_id: 'u', content: '' }
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ messages: [root, reply(1), reply(2)], has_more: true }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ messages: [root, reply(3)] }) })
+    const got = await messagingApi.getWholeThread('root')
+    expect(got.messages.map((m) => m.id)).toEqual(['root', 'r1', 'r2', 'r3'])
+    expect(mockFetch).toHaveBeenLastCalledWith('/api/messages/root/thread?after_reply_seq=2', expect.any(Object))
   })
 
   it('listMessages builds URL without before param', async () => {

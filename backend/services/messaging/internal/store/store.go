@@ -213,7 +213,18 @@ const messageCols = `m.id, m.channel_id, m.sender_id, COALESCE(u.username,''), m
 	COALESCE(m.message_type,'user'), COALESCE(m.parent_message_id,''),
 	COALESCE(m.linked_entity_type,''), COALESCE(m.linked_entity_id,''), m.reply_count,
 	COALESCE(m.content_format,'markdown'), COALESCE(m.mentions, '{}'), m.last_reply_at,
-	m.edited_at, m.deleted_at IS NOT NULL, COALESCE(m.quoted_message_id, '')`
+	m.edited_at, m.deleted_at IS NOT NULL, COALESCE(m.quoted_message_id, ''),
+	COALESCE(m.seq, 0), COALESCE(m.reply_seq, 0)`
+
+// scanTargets are where a row of messageCols is read into, in its order.
+func (m *Message) scanTargets() []any {
+	return []any{&m.ID, &m.ChannelID, &m.SenderID, &m.SenderName,
+		&m.Content, &m.CreatedAt, &m.MessageType, &m.ParentMessageID,
+		&m.LinkedEntityType, &m.LinkedEntityID, &m.ReplyCount,
+		&m.ContentFormat, &m.Mentions, &m.LastReplyAt,
+		&m.EditedAt, &m.Deleted, &m.QuotedMessageID,
+		&m.Seq, &m.ReplySeq}
+}
 
 // execer is what a statement runs on: the pool, or a transaction on it.
 type execer interface {
@@ -221,14 +232,9 @@ type execer interface {
 }
 
 // insertMessage writes one message row.
-func insertMessage(ctx context.Context, x execer, msg *Message) error {
-	_, err := insertMessageRow(ctx, x, msg, "")
-	return err
-}
-
-// insertMessageRow writes one message row and says how many rows it wrote;
-// onConflict is appended to the statement ("" for none).
-func insertMessageRow(ctx context.Context, x execer, msg *Message, onConflict string) (int64, error) {
+// insertMessage writes one message row, in the caller's transaction, and puts
+// on msg the number the insert trigger gave it (data/migrations/072).
+func insertMessage(ctx context.Context, tx pgx.Tx, msg *Message) error {
 	contentFormat := msg.ContentFormat
 	if contentFormat == "" {
 		contentFormat = "markdown"
@@ -237,26 +243,50 @@ func insertMessageRow(ctx context.Context, x execer, msg *Message, onConflict st
 	if text == "" {
 		text = msg.Content
 	}
-	tag, err := x.Exec(ctx,
+	err := tx.QueryRow(ctx,
 		`INSERT INTO messages (id, channel_id, sender_id, content, message_type,
 		 parent_message_id, linked_entity_type, linked_entity_id,
 		 content_format, mentions, created_at, content_text, quoted_message_id)
-		 VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), NULLIF($7, ''), NULLIF($8, ''), $9, $10, $11, $12, NULLIF($13, ''))`+onConflict,
+		 VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), NULLIF($7, ''), NULLIF($8, ''), $9, $10, $11, $12, NULLIF($13, ''))
+		 RETURNING COALESCE(seq, 0), COALESCE(reply_seq, 0)`,
 		msg.ID, msg.ChannelID, msg.SenderID, msg.Content, msg.MessageType,
 		msg.ParentMessageID, msg.LinkedEntityType, msg.LinkedEntityID,
-		contentFormat, msg.Mentions, msg.CreatedAt, text, msg.QuotedMessageID)
+		contentFormat, msg.Mentions, msg.CreatedAt, text, msg.QuotedMessageID).Scan(&msg.Seq, &msg.ReplySeq)
 	if err != nil {
-		return 0, fmt.Errorf("insert message: %w", err)
+		return fmt.Errorf("insert message: %w", err)
 	}
-	return tag.RowsAffected(), nil
+	return nil
 }
 
 // InsertMessageOnce stores a main-stream message whose id the caller derived from
 // what it announces, so that the same announcement delivered twice stores one
 // message. It says whether this call stored it.
+//
+// The duplicate is found before the insert rather than by ON CONFLICT: the
+// insert trigger has already taken the channel's next number by the time a
+// conflict is seen, and a skipped number would read as an unread message for
+// ever. Holding the channel row makes two deliveries of one announcement take
+// turns, so the second sees the first.
 func (s *Store) InsertMessageOnce(ctx context.Context, msg *Message) (bool, error) {
-	n, err := insertMessageRow(ctx, s.db, msg, " ON CONFLICT (id) DO NOTHING")
-	return n == 1, err
+	stored := false
+	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `SELECT 1 FROM channels WHERE id = $1 FOR UPDATE`, msg.ChannelID); err != nil {
+			return fmt.Errorf("hold channel: %w", err)
+		}
+		var exists bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM messages WHERE id = $1)`, msg.ID).Scan(&exists); err != nil {
+			return fmt.Errorf("find message: %w", err)
+		}
+		if exists {
+			return nil
+		}
+		if err := insertMessage(ctx, tx, msg); err != nil {
+			return err
+		}
+		stored = true
+		return nil
+	})
+	return stored, err
 }
 
 // InsertMessage persists a new message. A reply is counted on its parent, moves
@@ -318,21 +348,27 @@ func recordReply(ctx context.Context, tx pgx.Tx, msg *Message) error {
 	return nil
 }
 
-// ListMessages returns paginated messages for a channel, excluding thread replies.
-func (s *Store) ListMessages(ctx context.Context, channelID string, before *time.Time, limit int) ([]*Message, bool, error) {
+// ListMessages returns a page of a channel's main messages, newest first, and
+// whether older ones remain. The page ends below beforeSeq when it is set (a
+// number cursor never skips or repeats a message); otherwise below before when
+// that is set, the time cursor of clients older than the numbers. A deleted
+// message is kept while it has replies, as its thread's placeholder.
+func (s *Store) ListMessages(ctx context.Context, channelID string, beforeSeq int64, before *time.Time, limit int) ([]*Message, bool, error) {
 	query := `SELECT ` + messageCols + `
 		FROM messages m LEFT JOIN users u ON m.sender_id = u.id
 		WHERE m.channel_id = $1 AND m.parent_message_id IS NULL
 		  AND (m.deleted_at IS NULL OR m.reply_count > 0)`
-	args := []interface{}{channelID}
-
-	if before != nil {
-		query += ` AND m.created_at < $2 ORDER BY m.created_at DESC LIMIT $3`
-		args = append(args, *before, limit+1)
-	} else {
-		query += ` ORDER BY m.created_at DESC LIMIT $2`
-		args = append(args, limit+1)
+	args := []any{channelID}
+	switch {
+	case beforeSeq > 0:
+		args = append(args, beforeSeq)
+		query += ` AND m.seq < $2`
+	case before != nil:
+		args = append(args, *before)
+		query += ` AND m.created_at < $2`
 	}
+	args = append(args, limit+1)
+	query += fmt.Sprintf(` ORDER BY m.seq DESC LIMIT $%d`, len(args))
 
 	rows, err := s.db.Query(ctx, query, args...)
 	if err != nil {
@@ -344,7 +380,6 @@ func (s *Store) ListMessages(ctx context.Context, channelID string, before *time
 	if err != nil {
 		return nil, false, err
 	}
-
 	hasMore := len(msgs) > limit
 	if hasMore {
 		msgs = msgs[:limit]
@@ -352,18 +387,49 @@ func (s *Store) ListMessages(ctx context.Context, channelID string, before *time
 	return msgs, hasMore, nil
 }
 
-// GetThread returns the parent message plus all replies.
-func (s *Store) GetThread(ctx context.Context, messageID string) ([]*Message, error) {
+// GetMessage returns one message, deleted or not, with its sender's name; nil
+// when there is none.
+func (s *Store) GetMessage(ctx context.Context, id string) (*Message, error) {
 	rows, err := s.db.Query(ctx,
 		`SELECT `+messageCols+`
 		 FROM messages m LEFT JOIN users u ON m.sender_id = u.id
-		 WHERE m.id = $1 OR (m.parent_message_id = $1 AND m.deleted_at IS NULL)
-		 ORDER BY m.created_at`, messageID)
+		 WHERE m.id = $1`, id)
 	if err != nil {
-		return nil, fmt.Errorf("get thread: %w", err)
+		return nil, fmt.Errorf("get message: %w", err)
 	}
 	defer rows.Close()
-	return scanMessages(rows)
+	msgs, err := scanMessages(rows)
+	if err != nil || len(msgs) == 0 {
+		return nil, err
+	}
+	return msgs[0], nil
+}
+
+// GetThread returns a thread's root message followed by a page of its live
+// replies, oldest first: those numbered above afterReplySeq, at most limit of
+// them; and whether later replies remain.
+func (s *Store) GetThread(ctx context.Context, rootID string, afterReplySeq int64, limit int) ([]*Message, bool, error) {
+	rows, err := s.db.Query(ctx,
+		`SELECT `+messageCols+`
+		 FROM messages m LEFT JOIN users u ON m.sender_id = u.id
+		 WHERE m.id = $1
+		    OR (m.parent_message_id = $1 AND m.reply_seq > $2 AND m.deleted_at IS NULL)
+		 ORDER BY COALESCE(m.reply_seq, 0) LIMIT $3`, rootID, afterReplySeq, limit+2)
+	if err != nil {
+		return nil, false, fmt.Errorf("get thread: %w", err)
+	}
+	defer rows.Close()
+	msgs, err := scanMessages(rows)
+	if err != nil {
+		return nil, false, fmt.Errorf("get thread: %w", err)
+	}
+	// The root has no reply number, so it sorts first; one row past the page
+	// says whether more remain.
+	hasMore := len(msgs) > limit+1
+	if hasMore {
+		msgs = msgs[:limit+1]
+	}
+	return msgs, hasMore, nil
 }
 
 // FindByEntity returns messages linked to a specific entity.
@@ -384,16 +450,10 @@ func scanMessages(rows pgx.Rows) ([]*Message, error) {
 	var msgs []*Message
 	for rows.Next() {
 		m := &Message{}
-		var ca time.Time
-		if err := rows.Scan(&m.ID, &m.ChannelID, &m.SenderID, &m.SenderName,
-			&m.Content, &ca, &m.MessageType, &m.ParentMessageID,
-			&m.LinkedEntityType, &m.LinkedEntityID, &m.ReplyCount,
-			&m.ContentFormat, &m.Mentions, &m.LastReplyAt,
-			&m.EditedAt, &m.Deleted, &m.QuotedMessageID); err != nil {
+		if err := rows.Scan(m.scanTargets()...); err != nil {
 			return nil, err
 		}
 		m.redactIfDeleted()
-		m.CreatedAt = ca
 		msgs = append(msgs, m)
 	}
 	return msgs, nil

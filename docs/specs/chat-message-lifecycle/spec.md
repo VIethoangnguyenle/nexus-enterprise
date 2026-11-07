@@ -54,6 +54,8 @@ conversation's notification level.
 anyone holding `manage` on the channel; anyone else is refused (403). Deletion is soft: the row remains, and records
 who deleted it, but its body, files, mentions and quote are never returned again. A root message with replies stays
 in the stream as a "deleted" placeholder so its thread survives; any other deleted message leaves the stream. A
+deleted main message no longer counts in anyone's unread (`chat-unread-counts`), and its members hear of the
+deletion in a `conversation_activity` frame. A
 deleted reply leaves its thread, no longer counts in the thread's reply count or anyone's unread, and the thread's
 last reply time moves back to the newest reply left. The channel's viewers receive a `message_deleted` frame that
 carries ids only. Deleting (or editing) a message already deleted is 404, including when two requests race. When a
@@ -99,7 +101,8 @@ judged after the caller's `write` on the channel, so a caller without write gets
 ### Requirement: Marking a message unread
 `POST /api/messages/{id}/unread` (gRPC `MarkMessageUnread`) SHALL, for a caller with `read` on the channel, move their
 read position to just before the message: in the channel for a root message, in its thread for a reply, so that
-message and everything after it count as unread again. Following the thread does not change.
+message and everything after it count as unread again. Following the thread does not change. In the channel the read
+position is the number before the message's (`chat-unread-counts`).
 
 ### Requirement: The client offers only what the server would accept
 The conversation SHALL list an action on a message only when the reader may take it: "Sửa tin" on the reader's own text

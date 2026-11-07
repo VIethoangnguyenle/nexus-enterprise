@@ -79,11 +79,10 @@ func (s *Service) EditMessage(ctx context.Context, messageID, userID, userNodeID
 		return nil, err
 	}
 	s.bumpChannel(ctx, ch)
-	msgs, err := s.store.GetThread(ctx, messageID)
-	if err != nil || len(msgs) == 0 {
+	edited, err := s.store.GetMessage(ctx, messageID)
+	if err != nil || edited == nil {
 		return nil, fmt.Errorf("reload message: %w", err)
 	}
-	edited := msgs[0]
 	if err := s.EnrichMessagesWithMetadata(ctx, []*store.Message{edited}, ch.ID); err != nil {
 		return nil, err
 	}
@@ -141,7 +140,7 @@ func (s *Service) DeleteMessage(ctx context.Context, messageID, userID, userNode
 		s.bumpChannel(ctx, ch)
 		return &DeleteOutcome{Event: &pb.MessageDeletedEvent{
 			MessageId: messageID, ChannelId: d.ChannelID, ParentMessageId: d.ParentMessageID,
-			KeepPlaceholder: d.KeepPlaceholder, ReplyCount: d.ParentReplyCount,
+			KeepPlaceholder: d.KeepPlaceholder, ReplyCount: d.ParentReplyCount, Seq: d.Seq,
 		}}, nil
 	}
 	// Moderating another's message: workspace owner (manage) or group owner/manager (read).
@@ -165,7 +164,7 @@ func (s *Service) DeleteMessage(ctx context.Context, messageID, userID, userNode
 	s.bumpChannel(ctx, ch)
 	out := &DeleteOutcome{Event: &pb.MessageDeletedEvent{
 		MessageId: messageID, ChannelId: d.ChannelID, ParentMessageId: d.ParentMessageID,
-		KeepPlaceholder: d.KeepPlaceholder, ReplyCount: d.ParentReplyCount,
+		KeepPlaceholder: d.KeepPlaceholder, ReplyCount: d.ParentReplyCount, Seq: d.Seq,
 	}}
 	if f.SenderID != userID {
 		deleter, err := s.store.DisplayName(ctx, userID)
@@ -211,7 +210,7 @@ func (s *Service) MarkMessageUnread(ctx context.Context, messageID, userID, user
 	if f.ParentMessageID != "" {
 		return s.store.SetThreadReadBefore(ctx, userID, f.ParentMessageID, f.CreatedAt)
 	}
-	return s.store.SetChannelReadBefore(ctx, userID, f.ChannelID, f.CreatedAt)
+	return s.store.SetChannelReadBefore(ctx, userID, f.ChannelID, messageID)
 }
 
 // checkQuote refuses a quote of a message outside the channel, or deleted: a

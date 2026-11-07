@@ -185,6 +185,11 @@ A frame SHALL contain the domain, the kind of change, the tenant and workspace, 
 - **WHEN** a frame says an item moved from folder A to folder B
 - **THEN** the listings of both folders and the item's detail are refreshed, and the quota is not
 
+### Requirement: Conversation activity goes to members, without text
+A `conversation_activity` frame SHALL go to every session of every member of a conversation when a message is sent to
+it or deleted from it, and to no one else; it carries ids, numbers and the mentioned people's ids, never text. Who
+receives it, and what the client does with it, is specified in `chat-unread-counts`.
+
 ### Requirement: Thread replies carry a summary; thread state goes to its owner only
 A thread reply SHALL reach the channel's subscribers as a `thread_reply` frame carrying the reply and the thread's
 new summary: reply count, last reply time and the users of the three most recent distinct repliers — the same for

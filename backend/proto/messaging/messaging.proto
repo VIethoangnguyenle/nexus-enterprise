@@ -229,6 +229,8 @@ message Message {
   bool starred = 24;                           // Starred feed: always true
   google.protobuf.Timestamp starred_at = 25;   // Starred feed: when the caller starred it
   bool unread = 26;                            // Mentions feed: the caller has not read it yet
+  int64 seq = 27;                              // A main message's number in its channel (1, 2, 3…); 0 on a reply
+  int64 reply_seq = 28;                        // A reply's number in its thread; 0 on a main message
 }
 
 // QuotedMessage is what a quote shows of the message it quotes.
@@ -264,8 +266,9 @@ message MessageAttachment {
 message GetMessagesRequest {
   string channel_id = 1;
   string user_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
-  string before = 3;  // cursor: timestamp string
+  string before = 3;  // cursor: timestamp string; kept for clients older than before_seq
   int32 limit = 4;
+  int64 before_seq = 5; // cursor: main messages numbered below this; wins over before
 }
 
 message MessageList {
@@ -289,6 +292,8 @@ message ListThreadsRequest {
 message GetThreadRequest {
   string message_id = 1;
   string user_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
+  int64 after_reply_seq = 3; // cursor: replies numbered above this (0: from the first)
+  int32 limit = 4;           // replies per page; 0 or above 200 means 200
 }
 
 message FindThreadsByEntityRequest {
@@ -402,6 +407,8 @@ message ChannelUnread {
   int32 mention_count = 6;          // Unread messages that mention the caller (counted at every level)
   bool starred = 7;                 // The caller starred this conversation
   google.protobuf.Timestamp starred_at = 8; // When the caller starred it; unset when not starred
+  int64 last_seq = 9;               // The conversation's last main message number when counted
+  int64 last_read_seq = 10;         // The caller has read the main messages numbered up to this
 }
 
 message ChannelUnreadList {

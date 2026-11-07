@@ -23,6 +23,8 @@ import { useTasks } from '../../hooks/useChannelTasks'
 import { useAuthStore } from '../../stores/auth.store'
 import { useWebSocketStore } from '../../stores/websocket.store'
 import { messagingApi, type Message } from '../../api/messaging'
+import { queryClient } from '../../lib/query-client'
+import { trimLeftHistory } from '../../lib/stream-model'
 import { useAttachmentUploads } from '../../hooks/useAttachmentUploads'
 import { statusOf, explain } from '../../lib/errors'
 import { dmPartner, type Conversation } from '../../lib/conversations'
@@ -173,7 +175,11 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
 
   useEffect(() => {
     sendSubscribe(channelId)
-    return () => sendUnsubscribe(channelId)
+    return () => {
+      sendUnsubscribe(channelId)
+      // Left: keep only the newest history of it in memory.
+      queryClient.setQueryData(keys.messaging.messages(channelId), trimLeftHistory)
+    }
   }, [channelId, sendSubscribe, sendUnsubscribe])
 
   // This conversation is on screen: no push about it while the page is visible.

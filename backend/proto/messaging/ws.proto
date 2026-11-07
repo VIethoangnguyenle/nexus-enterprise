@@ -74,6 +74,7 @@ message ServerEnvelope {
     MessageEditedEvent  message_edited  = 21;
     MessageDeletedEvent message_deleted = 22;
     CallEvent           call_event      = 23;
+    ConversationActivityEvent conversation_activity = 24;
   }
   // asset_updated, drive_object and drive_perm were replaced by domain_event.
   reserved 7, 13, 14;
@@ -102,6 +103,8 @@ message ChatMessage {
   string linked_entity_id = 13;
   repeated ChatAttachment attachments = 14;
   ChatQuote quoted = 15;  // The message this one quotes, when any
+  int64 seq = 16;         // A main message's number in its conversation; 0 on a reply
+  int64 reply_seq = 17;   // A reply's number in its thread; 0 on a main message
 }
 
 // ChatQuote is what a quote shows (see messaging.QuotedMessage).
@@ -283,6 +286,22 @@ message MessageDeletedEvent {
   string parent_message_id = 3;
   bool   keep_placeholder  = 4;
   int32  reply_count       = 5;   // The thread's count after a reply was deleted
+  int64  seq               = 6;   // A deleted main message's number in its channel; 0 for a reply
+}
+
+// ConversationActivityEvent tells the members of a conversation that a message
+// was sent to it or deleted from it, so each keeps their unread counts without
+// asking (docs/specs/chat-unread-counts). It goes to every session of every
+// member, whether or not the conversation is open, and carries no text: what
+// was said is read only through the conversation itself.
+message ConversationActivityEvent {
+  string channel_id      = 1;
+  string kind            = 2;           // "sent" or "deleted"
+  int64  seq             = 3;           // The main message's number; 0 for a reply
+  string root_message_id = 4;           // For a reply: its thread's root
+  string sender_id       = 5;           // users.id
+  repeated string mentions = 6;         // users.id of the people the message mentions
+  int64  last_seq        = 7;           // The conversation's last main number after this change
 }
 
 // CallEvent is a change of a call. ring, cancel, answered, declined and missed

@@ -22,6 +22,7 @@ import type { LastMessage } from '../lib/conversations'
 import { applyThreadReplySummary, applyThreadState } from '../lib/thread-cache'
 import { invalidateUnreadThreadsFor } from '../lib/unread-threads-cache'
 import { mentionsMe } from '../lib/shortcut-feed'
+import { unreadAfterActivity, type UnreadAnswer } from '../lib/unread-activity'
 import { onSessionEnd } from '../lib/session-end'
 import { invalidatePollOnVote } from '../hooks/usePolls'
 import { useIncomingCallStore } from './incoming-call.store'
@@ -176,7 +177,7 @@ function askForTokenAfterRefusal(stillDown: () => boolean) {
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null
       if (useAuthStore.getState().accessToken && stillDown()) askForTokenAfterRefusal(stillDown)
-    }, reconnectDelay(refusalRetries++))
+    }, refusalRetryDelay(refusalRetries++))
   })
 }
 
@@ -284,11 +285,24 @@ function announceView(ws: WebSocket | null, authenticated: boolean) {
   sendEnvelope(ws, { payload: { oneofKind: 'view', view: { channelId } } })
 }
 
-/** Calculate exponential backoff delay with jitter. */
-function reconnectDelay(attempt: number): number {
-  const base = Math.min(1000 * Math.pow(2, attempt), MAX_RECONNECT_DELAY)
-  const jitter = Math.random() * 500
-  return base + jitter
+/** Asking again for a token this session could not renew yet: one session, so short steps. */
+function refusalRetryDelay(attempt: number): number {
+  return Math.min(1000 * Math.pow(2, attempt), MAX_RECONNECT_DELAY) + Math.random() * 500
+}
+
+/** The first reconnect is spread over this long; each later one over twice the one before. */
+const RECONNECT_SPREAD_MS = 5000
+const MIN_RECONNECT_DELAY = 250
+
+/**
+ * Exponential backoff spread at random over the whole step ("full jitter"). A
+ * deploy drops every socket at the same moment; spread like this, the sessions
+ * come back over seconds instead of together, and so do the requests each
+ * makes to catch up.
+ */
+export function reconnectDelay(attempt: number, random: () => number = Math.random): number {
+  const step = Math.min(RECONNECT_SPREAD_MS * Math.pow(2, attempt), MAX_RECONNECT_DELAY)
+  return MIN_RECONNECT_DELAY + random() * step
 }
 
 /** Re-subscribe to all previously subscribed channels after reconnect. */
@@ -591,8 +605,21 @@ function handleServerMessage(
         )
       }
       invalidateMentionsFor(msg)
-      // Unread counts still need server aggregation
-      queryClient.invalidateQueries({ queryKey: keys.messaging.unreadCounts() })
+      // Unread counts follow from the conversationActivity frame of the same message.
+      break
+    }
+
+    case 'conversationActivity': {
+      const activity = envelope.payload.conversationActivity
+      const visible = typeof document === 'undefined' || document.visibilityState !== 'hidden'
+      const reader = { me: useAuthStore.getState().user?.id, viewing: visible ? viewedChannel : null }
+      let refetch = false
+      queryClient.setQueryData<UnreadAnswer>(keys.messaging.unreadCounts(), (old) => {
+        const out = unreadAfterActivity(old, activity, reader)
+        refetch = out.refetch
+        return out.next
+      })
+      if (refetch) invalidations.add([keys.messaging.unreadCounts()])
       break
     }
 

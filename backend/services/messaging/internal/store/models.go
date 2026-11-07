@@ -46,6 +46,10 @@ type Message struct {
 	Reactions        []ReactionGroup
 	Attachments      []Attachment
 	CreatedAt        time.Time
+	// Seq numbers a main message in its channel; ReplySeq a reply in its
+	// thread (data/migrations/072). The other is 0.
+	Seq      int64
+	ReplySeq int64
 
 	EditedAt        *time.Time // nil until its sender changes the text
 	Deleted         bool       // soft-deleted: body and files are never returned

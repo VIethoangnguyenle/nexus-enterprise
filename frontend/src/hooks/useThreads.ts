@@ -71,7 +71,7 @@ export function useThreadsList(channelId: string, filter: ThreadFilter) {
 }
 
 /**
- * Older pages of a channel's stream (`before=` the oldest message held),
+ * Older pages of a channel's stream (`before_seq=` the number of the oldest message held),
  * appended to the cached list. The cache is newest first, so the oldest
  * persisted message is the last one.
  */
@@ -84,8 +84,8 @@ export function useLoadOlderMessages(channelId: string) {
     if (busy.current) return
     const cached = queryClient.getQueryData<MessageList>(keys.messaging.messages(channelId))
     if (!cached?.has_more) return
-    const oldest = [...cached.messages].reverse().find((m) => !m.id.startsWith('temp-'))
-    const before = oldest ? timestampToRfc3339(oldest.created_at) : ''
+    const oldest = [...cached.messages].reverse().find((m) => !m.id.startsWith('temp-') && m.seq)
+    const before = oldest?.seq
     if (!before) return
     busy.current = true
     setLoading(true)

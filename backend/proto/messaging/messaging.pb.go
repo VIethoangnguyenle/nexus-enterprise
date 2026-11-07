@@ -1016,6 +1016,8 @@ type Message struct {
 	Starred       bool                   `protobuf:"varint,24,opt,name=starred,proto3" json:"starred,omitempty"`                     // Starred feed: always true
 	StarredAt     *timestamppb.Timestamp `protobuf:"bytes,25,opt,name=starred_at,json=starredAt,proto3" json:"starred_at,omitempty"` // Starred feed: when the caller starred it
 	Unread        bool                   `protobuf:"varint,26,opt,name=unread,proto3" json:"unread,omitempty"`                       // Mentions feed: the caller has not read it yet
+	Seq           int64                  `protobuf:"varint,27,opt,name=seq,proto3" json:"seq,omitempty"`                             // A main message's number in its channel (1, 2, 3…); 0 on a reply
+	ReplySeq      int64                  `protobuf:"varint,28,opt,name=reply_seq,json=replySeq,proto3" json:"reply_seq,omitempty"`   // A reply's number in its thread; 0 on a main message
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1230,6 +1232,20 @@ func (x *Message) GetUnread() bool {
 		return x.Unread
 	}
 	return false
+}
+
+func (x *Message) GetSeq() int64 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
+func (x *Message) GetReplySeq() int64 {
+	if x != nil {
+		return x.ReplySeq
+	}
+	return 0
 }
 
 // QuotedMessage is what a quote shows of the message it quotes.
@@ -1504,8 +1520,9 @@ type GetMessagesRequest struct {
 	ChannelId string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
 	// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
 	UserNgacNodeId string `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
-	Before         string `protobuf:"bytes,3,opt,name=before,proto3" json:"before,omitempty"`                                           // cursor: timestamp string
+	Before         string `protobuf:"bytes,3,opt,name=before,proto3" json:"before,omitempty"`                                           // cursor: timestamp string; kept for clients older than before_seq
 	Limit          int32  `protobuf:"varint,4,opt,name=limit,proto3" json:"limit,omitempty"`
+	BeforeSeq      int64  `protobuf:"varint,5,opt,name=before_seq,json=beforeSeq,proto3" json:"before_seq,omitempty"` // cursor: main messages numbered below this; wins over before
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1565,6 +1582,13 @@ func (x *GetMessagesRequest) GetBefore() string {
 func (x *GetMessagesRequest) GetLimit() int32 {
 	if x != nil {
 		return x.Limit
+	}
+	return 0
+}
+
+func (x *GetMessagesRequest) GetBeforeSeq() int64 {
+	if x != nil {
+		return x.BeforeSeq
 	}
 	return 0
 }
@@ -1747,6 +1771,8 @@ type GetThreadRequest struct {
 	MessageId string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
 	// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
 	UserNgacNodeId string `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	AfterReplySeq  int64  `protobuf:"varint,3,opt,name=after_reply_seq,json=afterReplySeq,proto3" json:"after_reply_seq,omitempty"`     // cursor: replies numbered above this (0: from the first)
+	Limit          int32  `protobuf:"varint,4,opt,name=limit,proto3" json:"limit,omitempty"`                                            // replies per page; 0 or above 200 means 200
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1794,6 +1820,20 @@ func (x *GetThreadRequest) GetUserNgacNodeId() string {
 		return x.UserNgacNodeId
 	}
 	return ""
+}
+
+func (x *GetThreadRequest) GetAfterReplySeq() int64 {
+	if x != nil {
+		return x.AfterReplySeq
+	}
+	return 0
+}
+
+func (x *GetThreadRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
 }
 
 type FindThreadsByEntityRequest struct {
@@ -2694,6 +2734,8 @@ type ChannelUnread struct {
 	MentionCount      int32                  `protobuf:"varint,6,opt,name=mention_count,json=mentionCount,proto3" json:"mention_count,omitempty"`                  // Unread messages that mention the caller (counted at every level)
 	Starred           bool                   `protobuf:"varint,7,opt,name=starred,proto3" json:"starred,omitempty"`                                                // The caller starred this conversation
 	StarredAt         *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=starred_at,json=starredAt,proto3" json:"starred_at,omitempty"`                            // When the caller starred it; unset when not starred
+	LastSeq           int64                  `protobuf:"varint,9,opt,name=last_seq,json=lastSeq,proto3" json:"last_seq,omitempty"`                                 // The conversation's last main message number when counted
+	LastReadSeq       int64                  `protobuf:"varint,10,opt,name=last_read_seq,json=lastReadSeq,proto3" json:"last_read_seq,omitempty"`                  // The caller has read the main messages numbered up to this
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -2782,6 +2824,20 @@ func (x *ChannelUnread) GetStarredAt() *timestamppb.Timestamp {
 		return x.StarredAt
 	}
 	return nil
+}
+
+func (x *ChannelUnread) GetLastSeq() int64 {
+	if x != nil {
+		return x.LastSeq
+	}
+	return 0
+}
+
+func (x *ChannelUnread) GetLastReadSeq() int64 {
+	if x != nil {
+		return x.LastReadSeq
+	}
+	return 0
 }
 
 type ChannelUnreadList struct {
@@ -4842,7 +4898,7 @@ const file_proto_messaging_messaging_proto_rawDesc = "" +
 	"\bmentions\x18\n" +
 	" \x03(\tR\bmentions\x12>\n" +
 	"\vattachments\x18\v \x03(\v2\x1c.messaging.MessageAttachmentR\vattachments\x12*\n" +
-	"\x11quoted_message_id\x18\f \x01(\tR\x0fquotedMessageId\"\x9f\b\n" +
+	"\x11quoted_message_id\x18\f \x01(\tR\x0fquotedMessageId\"\xce\b\n" +
 	"\aMessage\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -4875,7 +4931,9 @@ const file_proto_messaging_messaging_proto_rawDesc = "" +
 	"\astarred\x18\x18 \x01(\bR\astarred\x129\n" +
 	"\n" +
 	"starred_at\x18\x19 \x01(\v2\x1a.google.protobuf.TimestampR\tstarredAt\x12\x16\n" +
-	"\x06unread\x18\x1a \x01(\bR\x06unread\"\x8b\x01\n" +
+	"\x06unread\x18\x1a \x01(\bR\x06unread\x12\x10\n" +
+	"\x03seq\x18\x1b \x01(\x03R\x03seq\x12\x1b\n" +
+	"\treply_seq\x18\x1c \x01(\x03R\breplySeq\"\x8b\x01\n" +
 	"\rQuotedMessage\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
 	"\tsender_id\x18\x02 \x01(\tR\bsenderId\x12\x1f\n" +
@@ -4899,13 +4957,15 @@ const file_proto_messaging_messaging_proto_rawDesc = "" +
 	"\n" +
 	"size_bytes\x18\x04 \x01(\x03R\tsizeBytes\x12\x14\n" +
 	"\x05width\x18\x05 \x01(\x05R\x05width\x12\x16\n" +
-	"\x06height\x18\x06 \x01(\x05R\x06height\"\x90\x01\n" +
+	"\x06height\x18\x06 \x01(\x05R\x06height\"\xaf\x01\n" +
 	"\x12GetMessagesRequest\x12\x1d\n" +
 	"\n" +
 	"channel_id\x18\x01 \x01(\tR\tchannelId\x12-\n" +
 	"\x11user_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\x12\x16\n" +
 	"\x06before\x18\x03 \x01(\tR\x06before\x12\x14\n" +
-	"\x05limit\x18\x04 \x01(\x05R\x05limit\"X\n" +
+	"\x05limit\x18\x04 \x01(\x05R\x05limit\x12\x1d\n" +
+	"\n" +
+	"before_seq\x18\x05 \x01(\x03R\tbeforeSeq\"X\n" +
 	"\vMessageList\x12.\n" +
 	"\bmessages\x18\x01 \x03(\v2\x12.messaging.MessageR\bmessages\x12\x19\n" +
 	"\bhas_more\x18\x02 \x01(\bR\ahasMore\".\n" +
@@ -4918,11 +4978,13 @@ const file_proto_messaging_messaging_proto_rawDesc = "" +
 	"\x06filter\x18\x02 \x01(\tR\x06filter\x12\x16\n" +
 	"\x06before\x18\x03 \x01(\tR\x06before\x12\x14\n" +
 	"\x05limit\x18\x04 \x01(\x05R\x05limit\x12\x1b\n" +
-	"\tbefore_id\x18\x05 \x01(\tR\bbeforeId\"`\n" +
+	"\tbefore_id\x18\x05 \x01(\tR\bbeforeId\"\x9e\x01\n" +
 	"\x10GetThreadRequest\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12-\n" +
-	"\x11user_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"\x89\x01\n" +
+	"\x11user_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\x12&\n" +
+	"\x0fafter_reply_seq\x18\x03 \x01(\x03R\rafterReplySeq\x12\x14\n" +
+	"\x05limit\x18\x04 \x01(\x05R\x05limit\"\x89\x01\n" +
 	"\x1aFindThreadsByEntityRequest\x12\x1f\n" +
 	"\ventity_type\x18\x01 \x01(\tR\n" +
 	"entityType\x12\x1b\n" +
@@ -4988,7 +5050,7 @@ const file_proto_messaging_messaging_proto_rawDesc = "" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12&\n" +
 	"\x0flast_message_id\x18\x03 \x01(\tR\rlastMessageId\"1\n" +
 	"\x16GetUnreadCountsRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\"\xdb\x02\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\"\x9a\x03\n" +
 	"\rChannelUnread\x12\x1d\n" +
 	"\n" +
 	"channel_id\x18\x01 \x01(\tR\tchannelId\x12!\n" +
@@ -4999,7 +5061,10 @@ const file_proto_messaging_messaging_proto_rawDesc = "" +
 	"\rmention_count\x18\x06 \x01(\x05R\fmentionCount\x12\x18\n" +
 	"\astarred\x18\a \x01(\bR\astarred\x129\n" +
 	"\n" +
-	"starred_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tstarredAt\"I\n" +
+	"starred_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tstarredAt\x12\x19\n" +
+	"\blast_seq\x18\t \x01(\x03R\alastSeq\x12\"\n" +
+	"\rlast_read_seq\x18\n" +
+	" \x01(\x03R\vlastReadSeq\"I\n" +
 	"\x11ChannelUnreadList\x124\n" +
 	"\bchannels\x18\x01 \x03(\v2\x18.messaging.ChannelUnreadR\bchannels\"\xb9\x02\n" +
 	"\x0fActivityMessage\x12\x0e\n" +

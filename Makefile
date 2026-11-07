@@ -29,7 +29,7 @@
 .PHONY: deploy redeploy down restart ps health logs \
         build-check test proto proto-install dev-frontend clean db-migrate help \
         dev dev-infra dev-stop dev-logs dev-all dev-restart dev-connect run stop \
-        agentkit-setup check-docs check-ngac check-layering test-realpolicy policy-invalidate
+        agentkit-setup check-docs check-ngac check-layering test-realpolicy policy-invalidate bench-messages
 
 # ---------------------------------------------------------------------------
 # Auto-detect docker compose command (v2 plugin vs v1 standalone)
@@ -553,6 +553,11 @@ deadcode:
 ## Fail if CLAUDE.md has drifted from the code it describes
 check-docs:
 	@./scripts/check-docs-drift.sh
+
+## Benchmark the message queries on a large seeded copy (database ngac_bench only, never ngac or ngac_ci)
+## Use ARGS="--seed --messages 5000000" to rebuild it smaller; see scripts/bench/messages/run.sh
+bench-messages:
+	@./scripts/bench/messages/run.sh $(ARGS)
 
 ## Fail if Go code outside backend/ngac hand-builds an operation string or node name
 check-ngac:

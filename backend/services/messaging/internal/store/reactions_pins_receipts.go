@@ -60,6 +60,11 @@ type ChannelUnread struct {
 	Level string
 	// MentionCount counts unread main messages that mention the user, at every level.
 	MentionCount int32
+	// LastSeq is the channel's last main number when counted, LastReadSeq the
+	// user's read number: a client that hears of later messages counts on from
+	// them, and sees a gap when one went missing.
+	LastSeq     int64
+	LastReadSeq int64
 }
 
 // --- Reactions Store ---
@@ -234,10 +239,10 @@ func (s *Store) PinnedMessageIDsIn(ctx context.Context, channelIDs []string) (ma
 // UpsertReadReceipt marks a channel as read up to a specific message.
 func (s *Store) UpsertReadReceipt(ctx context.Context, userID, channelID, lastMessageID string) error {
 	_, err := s.db.Exec(ctx,
-		`INSERT INTO read_receipts (user_id, channel_id, last_read_at, last_message_id)
-		 VALUES ($1, $2, NOW(), NULLIF($3, ''))
+		`INSERT INTO read_receipts (user_id, channel_id, last_read_at, last_message_id, last_read_seq)
+		 SELECT $1, $2, NOW(), NULLIF($3, ''), c.last_seq FROM channels c WHERE c.id = $2
 		 ON CONFLICT (user_id, channel_id) DO UPDATE SET
-		   last_read_at = NOW(), last_message_id = NULLIF($3, '')`,
+		   last_read_at = NOW(), last_message_id = NULLIF($3, ''), last_read_seq = EXCLUDED.last_read_seq`,
 		userID, channelID, lastMessageID)
 	if err != nil {
 		return fmt.Errorf("upsert read receipt: %w", err)
@@ -275,17 +280,25 @@ func (s *Store) GetUnreadCounts(ctx context.Context, userID string, channelIDs [
 		   JOIN messages r ON r.parent_message_id = f.id AND r.sender_id <> $1 AND r.deleted_at IS NULL
 		     AND r.created_at > f.last_read_at
 		   GROUP BY root.channel_id
+		 ), mentioning AS MATERIALIZED (
+		   -- The live main messages that mention the user, found through the
+		   -- mentions index alone: a person is mentioned far less often than
+		   -- their channels hold messages, and letting the planner combine this
+		   -- with the channel index read every message of every channel.
+		   SELECT m.id, m.channel_id, m.seq FROM messages m
+		   WHERE m.mentions @> ARRAY[$1]::text[] AND m.parent_message_id IS NULL
+		     AND m.deleted_at IS NULL AND m.sender_id <> $1
 		 ), mention_unread AS (
-		   -- Main messages that mention the user and are unread for them: after
-		   -- the channel read position from when the message was sent, or from
-		   -- the edit that added the user to it.
+		   -- Of those, the ones unread for them: numbered after the channel read
+		   -- number (as the unread count is), or mentioning them by an edit made
+		   -- after the read time.
 		   SELECT m.channel_id, COUNT(*)::int AS n
-		   FROM messages m
+		   FROM mentioning m
 		   LEFT JOIN read_receipts rr3 ON rr3.user_id = $1 AND rr3.channel_id = m.channel_id
 		   LEFT JOIN message_mention_times mt ON mt.message_id = m.id AND mt.user_id = $1
-		   WHERE m.channel_id = ANY($2::text[]) AND m.parent_message_id IS NULL AND m.deleted_at IS NULL
-		     AND m.mentions @> ARRAY[$1]::text[] AND m.sender_id <> $1
-		     AND GREATEST(m.created_at, mt.mentioned_at) > COALESCE(rr3.last_read_at, '-infinity'::timestamptz)
+		   WHERE m.channel_id = ANY($2::text[])
+		     AND (m.seq > COALESCE(rr3.last_read_seq, 0)
+		          OR mt.mentioned_at > COALESCE(rr3.last_read_at, '-infinity'::timestamptz))
 		   GROUP BY m.channel_id
 		 ), levels AS (
 		   SELECT channel_id, level FROM channel_notification_levels
@@ -303,23 +316,30 @@ func (s *Store) GetUnreadCounts(ctx context.Context, userID string, channelIDs [
 		   GROUP BY r.channel_id
 		 )
 		 SELECT cm.channel_id,
-		        CASE WHEN l.level = 'off' THEN 0 ELSE COUNT(m.id) END AS unread_count,
+		        -- Main messages after the read number, less the deleted ones among them:
+		        -- a subtraction, not a count of the unread rows (deleting is rare, and
+		        -- the deleted rows have an index of their own).
+		        CASE WHEN l.level = 'off' THEN 0 ELSE GREATEST(
+		          COALESCE(c.last_seq, 0) - COALESCE(rr.last_read_seq, 0)
+		          - (SELECT COUNT(*) FROM messages d
+		             WHERE d.channel_id = cm.channel_id AND d.parent_message_id IS NULL
+		               AND d.deleted_at IS NOT NULL AND d.seq > COALESCE(rr.last_read_seq, 0)),
+		          0) END::int AS unread_count,
 		        COALESCE(rr.last_message_id, '') AS last_read_msg,
 		        CASE WHEN l.level = 'off' THEN 0
-		             WHEN l.level = 'all' THEN COALESCE(MAX(atu.n), 0)
-		             ELSE COALESCE(MAX(tu.n), 0) END AS thread_unread,
+		             WHEN l.level = 'all' THEN COALESCE(atu.n, 0)
+		             ELSE COALESCE(tu.n, 0) END AS thread_unread,
 		        COALESCE(l.level, 'main') AS level,
-		        COALESCE(MAX(mu.n), 0) AS mention_count
+		        COALESCE(mu.n, 0) AS mention_count,
+		        COALESCE(c.last_seq, 0) AS last_seq,
+		        COALESCE(rr.last_read_seq, 0) AS last_read_seq
 		 FROM (SELECT DISTINCT unnest($2::text[]) AS channel_id) cm
+		 LEFT JOIN channels c ON c.id = cm.channel_id
 		 LEFT JOIN read_receipts rr ON rr.user_id = $1 AND rr.channel_id = cm.channel_id
-		 LEFT JOIN messages m ON m.channel_id = cm.channel_id
-		   AND m.parent_message_id IS NULL AND m.deleted_at IS NULL
-		   AND (rr.last_read_at IS NULL OR m.created_at > rr.last_read_at)
 		 LEFT JOIN thread_unread tu ON tu.channel_id = cm.channel_id
 		 LEFT JOIN all_thread_unread atu ON atu.channel_id = cm.channel_id
 		 LEFT JOIN mention_unread mu ON mu.channel_id = cm.channel_id
-		 LEFT JOIN levels l ON l.channel_id = cm.channel_id
-		 GROUP BY cm.channel_id, rr.last_message_id, l.level`,
+		 LEFT JOIN levels l ON l.channel_id = cm.channel_id`,
 		userID, channelIDs)
 	if err != nil {
 		return nil, fmt.Errorf("unread counts: %w", err)
@@ -329,7 +349,8 @@ func (s *Store) GetUnreadCounts(ctx context.Context, userID string, channelIDs [
 	var results []ChannelUnread
 	for rows.Next() {
 		var u ChannelUnread
-		if err := rows.Scan(&u.ChannelID, &u.UnreadCount, &u.LastReadMsgID, &u.ThreadUnread, &u.Level, &u.MentionCount); err != nil {
+		if err := rows.Scan(&u.ChannelID, &u.UnreadCount, &u.LastReadMsgID, &u.ThreadUnread, &u.Level, &u.MentionCount,
+			&u.LastSeq, &u.LastReadSeq); err != nil {
 			return nil, err
 		}
 		results = append(results, u)

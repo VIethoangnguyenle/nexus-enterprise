@@ -702,14 +702,14 @@ func (s *Service) rewriteCard(ctx context.Context, call *store.Call) *pb.Message
 		return nil
 	}
 	s.bumpChannelID(ctx, call.ChannelID)
-	msgs, err := s.store.GetThread(ctx, call.MessageID)
-	if err != nil || len(msgs) == 0 {
+	card, err := s.store.GetMessage(ctx, call.MessageID)
+	if err != nil || card == nil {
 		return nil
 	}
-	if err := s.EnrichMessagesWithMetadata(ctx, msgs[:1], call.ChannelID); err != nil {
+	if err := s.EnrichMessagesWithMetadata(ctx, []*store.Message{card}, call.ChannelID); err != nil {
 		return nil
 	}
-	return messageToProto(msgs[0])
+	return messageToProto(card)
 }
 
 // closeRoom closes a room, after the request that asked for it is gone.

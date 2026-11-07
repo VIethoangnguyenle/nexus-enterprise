@@ -113,17 +113,16 @@ func (s *Service) ListPins(ctx context.Context, channelID, userNodeID string) ([
 
 	var result []*pb.PinnedMessage
 	for _, p := range pins {
-		// Load the full message for each pin
-		msgs, err := s.store.GetThread(ctx, p.MessageID)
+		msg, err := s.store.GetMessage(ctx, p.MessageID)
 		if err != nil {
 			return nil, fmt.Errorf("load pinned message: %w", err)
 		}
 		// A pin that names another channel's message is never shown.
-		if len(msgs) == 0 || msgs[0].ChannelID != channelID {
+		if msg == nil || msg.ChannelID != channelID {
 			continue
 		}
 		result = append(result, &pb.PinnedMessage{
-			Message:  messageToProto(msgs[0]),
+			Message:  messageToProto(msg),
 			PinnedBy: p.PinnedBy,
 			PinnedAt: timestamppb.New(p.CreatedAt),
 		})
@@ -193,6 +192,8 @@ func (s *Service) GetUnreadCounts(ctx context.Context, userID, userNodeID, works
 			ThreadUnreadCount: u.ThreadUnread,
 			NotificationLevel: u.Level,
 			MentionCount:      u.MentionCount,
+			LastSeq:           u.LastSeq,
+			LastReadSeq:       u.LastReadSeq,
 			Starred:           isStarred,
 		}
 		if isStarred {

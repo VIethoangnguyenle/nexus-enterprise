@@ -138,7 +138,7 @@ describe('thread events', () => {
         message: {
           id: 'r', channelId: 'c1', senderId: 'u2', senderName: 'B', content: 'hi', messageType: 'user',
           parentMessageId: 'root', replyCount: 0, contentFormat: '', mentions: [], linkedEntityType: '', linkedEntityId: '',
-          attachments: [],
+          attachments: [], seq: '0', replySeq: '0',
         },
       },
     })
@@ -154,7 +154,7 @@ describe('the newest message of a conversation', () => {
   const chat = (over: Record<string, unknown>) => ({
     id: 'm1', channelId: 'c1', senderId: 'u2', senderName: 'B', content: '<p>chào</p>', messageType: 'user',
     parentMessageId: '', replyCount: 0, contentFormat: 'html', mentions: [] as string[], linkedEntityType: '',
-    linkedEntityId: '', attachments: [] as { driveFileId: string; fileName: string; mimeType: string; sizeBytes: string; width: number; height: number }[],
+    linkedEntityId: '', attachments: [] as { driveFileId: string; fileName: string; mimeType: string; sizeBytes: string; width: number; height: number }[], seq: '0', replySeq: '0',
     ...over,
   })
   const last = () => useWebSocketStore.getState().lastMessages['c1']
@@ -218,7 +218,7 @@ describe('the newest message of a conversation', () => {
 const liveChat = (over: Record<string, unknown>) => ({
   id: 'm1', channelId: 'c1', senderId: 'u2', senderName: 'B', content: '<p>chào</p>', messageType: 'user',
   parentMessageId: '', replyCount: 0, contentFormat: 'html', mentions: [] as string[], linkedEntityType: '',
-  linkedEntityId: '', attachments: [] as { driveFileId: string; fileName: string; mimeType: string; sizeBytes: string; width: number; height: number }[],
+  linkedEntityId: '', attachments: [] as { driveFileId: string; fileName: string; mimeType: string; sizeBytes: string; width: number; height: number }[], seq: '0', replySeq: '0',
   ...over,
 })
 
@@ -253,13 +253,13 @@ describe('message lifecycle events', () => {
       editedAt: { seconds: '1760000000', nanos: 0 },
       message: {
         id, channelId: 'c1', senderId: 'u1', senderName: 'A', content, messageType: 'user', parentMessageId,
-        replyCount: 0, contentFormat: 'html', mentions: [], linkedEntityType: '', linkedEntityId: '', attachments: [],
+        replyCount: 0, contentFormat: 'html', mentions: [], linkedEntityType: '', linkedEntityId: '', attachments: [], seq: '0', replySeq: '0',
       },
     },
   })
   const deleteFrame = (id: string, parentMessageId = '') => ({
     oneofKind: 'messageDeleted' as const,
-    messageDeleted: { messageId: id, channelId: 'c1', parentMessageId, keepPlaceholder: false, replyCount: 0 },
+    messageDeleted: { messageId: id, channelId: 'c1', parentMessageId, keepPlaceholder: false, replyCount: 0, seq: '0' },
   })
 
   it('an edit of the message a preview shows rewrites that preview in place, without asking again', () => {
@@ -325,7 +325,7 @@ describe('message lifecycle events', () => {
         message: {
           id: 'a', channelId: 'c1', senderId: 'u1', senderName: 'A', content: '<p>mới</p>', messageType: 'user',
           parentMessageId: '', replyCount: 0, contentFormat: 'html', mentions: [], linkedEntityType: '', linkedEntityId: '',
-          attachments: [],
+          attachments: [], seq: '0', replySeq: '0',
         },
       },
     })
@@ -338,11 +338,11 @@ describe('message lifecycle events', () => {
     seedList()
     deliver({
       oneofKind: 'messageDeleted',
-      messageDeleted: { messageId: 'a', channelId: 'c1', parentMessageId: '', keepPlaceholder: false, replyCount: 0 },
+      messageDeleted: { messageId: 'a', channelId: 'c1', parentMessageId: '', keepPlaceholder: false, replyCount: 0, seq: '0' },
     })
     deliver({
       oneofKind: 'messageDeleted',
-      messageDeleted: { messageId: 'b', channelId: 'c1', parentMessageId: '', keepPlaceholder: true, replyCount: 0 },
+      messageDeleted: { messageId: 'b', channelId: 'c1', parentMessageId: '', keepPlaceholder: true, replyCount: 0, seq: '0' },
     })
     expect(listOf('c1')).toEqual([expect.objectContaining({ id: 'b', deleted: true, content: '' })])
   })
@@ -351,7 +351,7 @@ describe('message lifecycle events', () => {
     seedList()
     deliver({
       oneofKind: 'messageDeleted',
-      messageDeleted: { messageId: 'r', channelId: 'c1', parentMessageId: 'b', keepPlaceholder: false, replyCount: 1 },
+      messageDeleted: { messageId: 'r', channelId: 'c1', parentMessageId: 'b', keepPlaceholder: false, replyCount: 1, seq: '0' },
     })
     expect((listOf('c1')[1] as { reply_count?: number }).reply_count).toBe(1)
   })
@@ -905,7 +905,7 @@ describe('shortcut, poll and unread-thread frames', () => {
   const chat = (over: Partial<{ id: string; senderId: string; mentions: string[]; parentMessageId: string }> = {}) => ({
     id: 'm1', channelId: 'c1', senderId: 'u-other', senderName: 'B', content: 'hi', messageType: 'user',
     parentMessageId: '', replyCount: 0, contentFormat: '', mentions: [] as string[], linkedEntityType: '',
-    linkedEntityId: '', attachments: [], ...over,
+    linkedEntityId: '', attachments: [], seq: '0', replySeq: '0', ...over,
   })
   const mentionKeys = () => [keys.shortcuts.mentions('ws-1'), keys.shortcuts.mentionsUnread('ws-1')]
 

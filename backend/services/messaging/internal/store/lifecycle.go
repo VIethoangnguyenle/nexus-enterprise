@@ -164,6 +164,8 @@ type DeletedMessage struct {
 	KeepPlaceholder bool
 	// ParentReplyCount is the thread's count after a reply was deleted.
 	ParentReplyCount int32
+	// Seq is a deleted main message's number in its channel; 0 for a reply.
+	Seq int64
 }
 
 // SoftDeleteMessage marks a message deleted by a user. A deleted reply no longer
@@ -176,8 +178,8 @@ func (s *Store) SoftDeleteMessage(ctx context.Context, id, byUserID string) (*De
 		err := tx.QueryRow(ctx,
 			`UPDATE messages SET deleted_at = NOW(), deleted_by = $2
 			 WHERE id = $1 AND deleted_at IS NULL
-			 RETURNING channel_id, COALESCE(parent_message_id, ''), reply_count`, id, byUserID).
-			Scan(&out.ChannelID, &out.ParentMessageID, &replyCount)
+			 RETURNING channel_id, COALESCE(parent_message_id, ''), reply_count, COALESCE(seq, 0)`, id, byUserID).
+			Scan(&out.ChannelID, &out.ParentMessageID, &replyCount, &out.Seq)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrMessageGone
 		}
@@ -256,14 +258,22 @@ func (s *Store) DisplayName(ctx context.Context, userID string) (string, error) 
 }
 
 // SetChannelReadBefore moves the user's read position in a channel to just
-// before a moment, so what came from then on is unread again.
-func (s *Store) SetChannelReadBefore(ctx context.Context, userID, channelID string, at time.Time) error {
-	if _, err := s.db.Exec(ctx,
-		`INSERT INTO read_receipts (user_id, channel_id, last_read_at, last_message_id)
-		 VALUES ($1, $2, $3, NULL)
-		 ON CONFLICT (user_id, channel_id) DO UPDATE SET last_read_at = $3, last_message_id = NULL`,
-		userID, channelID, at.Add(-time.Microsecond)); err != nil {
+// before one of its main messages, so that message and what came after it are
+// unread again: the read number to the one before it, the read time to just
+// before it was sent.
+func (s *Store) SetChannelReadBefore(ctx context.Context, userID, channelID, messageID string) error {
+	tag, err := s.db.Exec(ctx,
+		`INSERT INTO read_receipts (user_id, channel_id, last_read_at, last_message_id, last_read_seq)
+		 SELECT $1, $2, m.created_at - INTERVAL '1 microsecond', NULL, m.seq - 1
+		 FROM messages m WHERE m.id = $3 AND m.channel_id = $2 AND m.seq IS NOT NULL
+		 ON CONFLICT (user_id, channel_id) DO UPDATE SET
+		   last_read_at = EXCLUDED.last_read_at, last_message_id = NULL, last_read_seq = EXCLUDED.last_read_seq`,
+		userID, channelID, messageID)
+	if err != nil {
 		return fmt.Errorf("mark channel unread: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("mark channel unread: message %s is not a main message of %s", messageID, channelID)
 	}
 	return nil
 }

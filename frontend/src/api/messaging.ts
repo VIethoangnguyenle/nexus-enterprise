@@ -54,6 +54,10 @@ export interface Message {
   content: string
   content_format?: string
   mentions?: string[]
+  /** A main message's number in its conversation (1, 2, 3…); absent on a reply. */
+  seq?: number
+  /** A reply's number in its thread; absent on a main message. */
+  reply_seq?: number
   reply_count?: number
   /** Thread summary of a root message: unset until the first reply. Same shape as created_at. */
   last_reply_at?: unknown
@@ -150,6 +154,10 @@ export interface ChannelUnread {
   starred?: boolean
   /** When the caller starred it (a protobuf timestamp, or an RFC 3339 string on a fresh optimistic star); omitted when not starred. */
   starred_at?: unknown
+  /** The conversation's last main message number when counted; omitted when 0. */
+  last_seq?: number
+  /** The caller has read the main messages numbered up to this; omitted when 0. */
+  last_read_seq?: number
 }
 
 /** The caller's own state of one thread, as follow / unfollow / read answer. */
@@ -270,8 +278,9 @@ export const messagingApi = {
     apiFetch<{ avatar_url: string }>(`/channels/${channelId}/avatar`, { method: 'DELETE' }),
 
   // Messages
-  listMessages: (channelId: string, before?: string) => {
-    const qs = before ? `?before=${encodeURIComponent(before)}` : ''
+  /** The newest page of a conversation, or the page of main messages numbered below `beforeSeq`. */
+  listMessages: (channelId: string, beforeSeq?: number) => {
+    const qs = beforeSeq ? `?before_seq=${beforeSeq}` : ''
     return apiFetch<{ messages: Message[]; has_more: boolean }>(`/channels/${channelId}/messages${qs}`)
   },
   sendMessage: (channelId: string, data: string | SendMessageInput) => {
@@ -292,7 +301,25 @@ export const messagingApi = {
   /** Moves the caller's read position to just before this message. */
   markMessageUnread: (messageId: string) =>
     apiFetch<{ status: string }>(`/messages/${messageId}/unread`, { method: 'POST' }),
-  getThread: (messageId: string) => apiFetch<{ messages: Message[] }>(`/messages/${messageId}/thread`),
+  /** A thread's root and a page of its replies, oldest first: those numbered above `afterReplySeq`. */
+  getThread: (messageId: string, afterReplySeq?: number) =>
+    apiFetch<{ messages: Message[]; has_more?: boolean }>(
+      `/messages/${messageId}/thread${afterReplySeq ? `?after_reply_seq=${afterReplySeq}` : ''}`,
+    ),
+  /** A whole thread: its root and every reply, read a page at a time. */
+  getWholeThread: async (messageId: string) => {
+    const first = await messagingApi.getThread(messageId)
+    const messages = [...(first.messages ?? [])]
+    let more = !!first.has_more
+    while (more) {
+      const after = messages[messages.length - 1]?.reply_seq
+      if (!after) break
+      const page = await messagingApi.getThread(messageId, after)
+      messages.push(...(page.messages ?? []).slice(1))
+      more = !!page.has_more
+    }
+    return { messages }
+  },
 
   // Thread follow, read position and the channel's thread list
   followThread: (messageId: string) =>

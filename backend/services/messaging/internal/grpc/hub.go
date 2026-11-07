@@ -47,6 +47,10 @@ type Hub struct {
 	origins       OriginPolicy
 	slots         *ipSlots
 	frameLimiters map[string]*rate.Limiter // userID → frame budget of their sessions
+
+	// act carries conversation activity to members (hub_activity.go); it has
+	// its own lock.
+	act activityState
 }
 
 // subscribeCheckTimeout bounds the policy round-trip a Subscribe waits on.
@@ -79,7 +83,9 @@ func NewHub(rdb *redis.Client, access ChannelAccessChecker) *Hub {
 		origins:          OriginPolicy{allowed: map[string]bool{}},
 		slots:            newIPSlots(),
 		frameLimiters:    make(map[string]*rate.Limiter),
+		act:              newActivityState(),
 	}
+	go h.runActivity()
 	if rdb != nil {
 		go h.subscribeRedis()
 		go h.reportStreams()
@@ -164,6 +170,7 @@ func (h *Hub) RevokeChannelSubscriptions(channelID, userNodeID string) {
 
 // revokeLocal removes this instance's subscriptions of userNodeID to channelID.
 func (h *Hub) revokeLocal(channelID, userNodeID string) {
+	h.forgetMember("", channelID, userNodeID)
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for client := range h.channels[channelID] {

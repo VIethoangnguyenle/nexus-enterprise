@@ -249,6 +249,12 @@ export interface ServerEnvelope {
          */
         callEvent: CallEvent;
     } | {
+        oneofKind: "conversationActivity";
+        /**
+         * @generated from protobuf field: messaging.ConversationActivityEvent conversation_activity = 24
+         */
+        conversationActivity: ConversationActivityEvent;
+    } | {
         oneofKind: undefined;
     };
 }
@@ -333,6 +339,14 @@ export interface ChatMessage {
      * @generated from protobuf field: messaging.ChatQuote quoted = 15
      */
     quoted?: ChatQuote; // The message this one quotes, when any
+    /**
+     * @generated from protobuf field: int64 seq = 16
+     */
+    seq: string; // A main message's number in its conversation; 0 on a reply
+    /**
+     * @generated from protobuf field: int64 reply_seq = 17
+     */
+    replySeq: string; // A reply's number in its thread; 0 on a main message
 }
 /**
  * ChatQuote is what a quote shows (see messaging.QuotedMessage).
@@ -819,6 +833,49 @@ export interface MessageDeletedEvent {
      * @generated from protobuf field: int32 reply_count = 5
      */
     replyCount: number; // The thread's count after a reply was deleted
+    /**
+     * @generated from protobuf field: int64 seq = 6
+     */
+    seq: string; // A deleted main message's number in its channel; 0 for a reply
+}
+/**
+ * ConversationActivityEvent tells the members of a conversation that a message
+ * was sent to it or deleted from it, so each keeps their unread counts without
+ * asking (docs/specs/chat-unread-counts). It goes to every session of every
+ * member, whether or not the conversation is open, and carries no text: what
+ * was said is read only through the conversation itself.
+ *
+ * @generated from protobuf message messaging.ConversationActivityEvent
+ */
+export interface ConversationActivityEvent {
+    /**
+     * @generated from protobuf field: string channel_id = 1
+     */
+    channelId: string;
+    /**
+     * @generated from protobuf field: string kind = 2
+     */
+    kind: string; // "sent" or "deleted"
+    /**
+     * @generated from protobuf field: int64 seq = 3
+     */
+    seq: string; // The main message's number; 0 for a reply
+    /**
+     * @generated from protobuf field: string root_message_id = 4
+     */
+    rootMessageId: string; // For a reply: its thread's root
+    /**
+     * @generated from protobuf field: string sender_id = 5
+     */
+    senderId: string; // users.id
+    /**
+     * @generated from protobuf field: repeated string mentions = 6
+     */
+    mentions: string[]; // users.id of the people the message mentions
+    /**
+     * @generated from protobuf field: int64 last_seq = 7
+     */
+    lastSeq: string; // The conversation's last main number after this change
 }
 /**
  * CallEvent is a change of a call. ring, cancel, answered, declined and missed
@@ -1247,7 +1304,8 @@ class ServerEnvelope$Type extends MessageType<ServerEnvelope> {
             { no: 20, name: "thread_state", kind: "message", oneof: "payload", T: () => ThreadStateEvent },
             { no: 21, name: "message_edited", kind: "message", oneof: "payload", T: () => MessageEditedEvent },
             { no: 22, name: "message_deleted", kind: "message", oneof: "payload", T: () => MessageDeletedEvent },
-            { no: 23, name: "call_event", kind: "message", oneof: "payload", T: () => CallEvent }
+            { no: 23, name: "call_event", kind: "message", oneof: "payload", T: () => CallEvent },
+            { no: 24, name: "conversation_activity", kind: "message", oneof: "payload", T: () => ConversationActivityEvent }
         ]);
     }
     create(value?: PartialMessage<ServerEnvelope>): ServerEnvelope {
@@ -1382,6 +1440,12 @@ class ServerEnvelope$Type extends MessageType<ServerEnvelope> {
                         callEvent: CallEvent.internalBinaryRead(reader, reader.uint32(), options, (message.payload as any).callEvent)
                     };
                     break;
+                case /* messaging.ConversationActivityEvent conversation_activity */ 24:
+                    message.payload = {
+                        oneofKind: "conversationActivity",
+                        conversationActivity: ConversationActivityEvent.internalBinaryRead(reader, reader.uint32(), options, (message.payload as any).conversationActivity)
+                    };
+                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -1454,6 +1518,9 @@ class ServerEnvelope$Type extends MessageType<ServerEnvelope> {
         /* messaging.CallEvent call_event = 23; */
         if (message.payload.oneofKind === "callEvent")
             CallEvent.internalBinaryWrite(message.payload.callEvent, writer.tag(23, WireType.LengthDelimited).fork(), options).join();
+        /* messaging.ConversationActivityEvent conversation_activity = 24; */
+        if (message.payload.oneofKind === "conversationActivity")
+            ConversationActivityEvent.internalBinaryWrite(message.payload.conversationActivity, writer.tag(24, WireType.LengthDelimited).fork(), options).join();
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -1545,7 +1612,9 @@ class ChatMessage$Type extends MessageType<ChatMessage> {
             { no: 12, name: "linked_entity_type", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 13, name: "linked_entity_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 14, name: "attachments", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => ChatAttachment },
-            { no: 15, name: "quoted", kind: "message", T: () => ChatQuote }
+            { no: 15, name: "quoted", kind: "message", T: () => ChatQuote },
+            { no: 16, name: "seq", kind: "scalar", T: 3 /*ScalarType.INT64*/ },
+            { no: 17, name: "reply_seq", kind: "scalar", T: 3 /*ScalarType.INT64*/ }
         ]);
     }
     create(value?: PartialMessage<ChatMessage>): ChatMessage {
@@ -1563,6 +1632,8 @@ class ChatMessage$Type extends MessageType<ChatMessage> {
         message.linkedEntityType = "";
         message.linkedEntityId = "";
         message.attachments = [];
+        message.seq = "0";
+        message.replySeq = "0";
         if (value !== undefined)
             reflectionMergePartial<ChatMessage>(this, message, value);
         return message;
@@ -1616,6 +1687,12 @@ class ChatMessage$Type extends MessageType<ChatMessage> {
                     break;
                 case /* messaging.ChatQuote quoted */ 15:
                     message.quoted = ChatQuote.internalBinaryRead(reader, reader.uint32(), options, message.quoted);
+                    break;
+                case /* int64 seq */ 16:
+                    message.seq = reader.int64().toString();
+                    break;
+                case /* int64 reply_seq */ 17:
+                    message.replySeq = reader.int64().toString();
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -1674,6 +1751,12 @@ class ChatMessage$Type extends MessageType<ChatMessage> {
         /* messaging.ChatQuote quoted = 15; */
         if (message.quoted)
             ChatQuote.internalBinaryWrite(message.quoted, writer.tag(15, WireType.LengthDelimited).fork(), options).join();
+        /* int64 seq = 16; */
+        if (message.seq !== "0")
+            writer.tag(16, WireType.Varint).int64(message.seq);
+        /* int64 reply_seq = 17; */
+        if (message.replySeq !== "0")
+            writer.tag(17, WireType.Varint).int64(message.replySeq);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -3029,7 +3112,8 @@ class MessageDeletedEvent$Type extends MessageType<MessageDeletedEvent> {
             { no: 2, name: "channel_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 3, name: "parent_message_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 4, name: "keep_placeholder", kind: "scalar", T: 8 /*ScalarType.BOOL*/ },
-            { no: 5, name: "reply_count", kind: "scalar", T: 5 /*ScalarType.INT32*/ }
+            { no: 5, name: "reply_count", kind: "scalar", T: 5 /*ScalarType.INT32*/ },
+            { no: 6, name: "seq", kind: "scalar", T: 3 /*ScalarType.INT64*/ }
         ]);
     }
     create(value?: PartialMessage<MessageDeletedEvent>): MessageDeletedEvent {
@@ -3039,6 +3123,7 @@ class MessageDeletedEvent$Type extends MessageType<MessageDeletedEvent> {
         message.parentMessageId = "";
         message.keepPlaceholder = false;
         message.replyCount = 0;
+        message.seq = "0";
         if (value !== undefined)
             reflectionMergePartial<MessageDeletedEvent>(this, message, value);
         return message;
@@ -3062,6 +3147,9 @@ class MessageDeletedEvent$Type extends MessageType<MessageDeletedEvent> {
                     break;
                 case /* int32 reply_count */ 5:
                     message.replyCount = reader.int32();
+                    break;
+                case /* int64 seq */ 6:
+                    message.seq = reader.int64().toString();
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -3090,6 +3178,9 @@ class MessageDeletedEvent$Type extends MessageType<MessageDeletedEvent> {
         /* int32 reply_count = 5; */
         if (message.replyCount !== 0)
             writer.tag(5, WireType.Varint).int32(message.replyCount);
+        /* int64 seq = 6; */
+        if (message.seq !== "0")
+            writer.tag(6, WireType.Varint).int64(message.seq);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -3100,6 +3191,101 @@ class MessageDeletedEvent$Type extends MessageType<MessageDeletedEvent> {
  * @generated MessageType for protobuf message messaging.MessageDeletedEvent
  */
 export const MessageDeletedEvent = new MessageDeletedEvent$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class ConversationActivityEvent$Type extends MessageType<ConversationActivityEvent> {
+    constructor() {
+        super("messaging.ConversationActivityEvent", [
+            { no: 1, name: "channel_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 2, name: "kind", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 3, name: "seq", kind: "scalar", T: 3 /*ScalarType.INT64*/ },
+            { no: 4, name: "root_message_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 5, name: "sender_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 6, name: "mentions", kind: "scalar", repeat: 2 /*RepeatType.UNPACKED*/, T: 9 /*ScalarType.STRING*/ },
+            { no: 7, name: "last_seq", kind: "scalar", T: 3 /*ScalarType.INT64*/ }
+        ]);
+    }
+    create(value?: PartialMessage<ConversationActivityEvent>): ConversationActivityEvent {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.channelId = "";
+        message.kind = "";
+        message.seq = "0";
+        message.rootMessageId = "";
+        message.senderId = "";
+        message.mentions = [];
+        message.lastSeq = "0";
+        if (value !== undefined)
+            reflectionMergePartial<ConversationActivityEvent>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: ConversationActivityEvent): ConversationActivityEvent {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* string channel_id */ 1:
+                    message.channelId = reader.string();
+                    break;
+                case /* string kind */ 2:
+                    message.kind = reader.string();
+                    break;
+                case /* int64 seq */ 3:
+                    message.seq = reader.int64().toString();
+                    break;
+                case /* string root_message_id */ 4:
+                    message.rootMessageId = reader.string();
+                    break;
+                case /* string sender_id */ 5:
+                    message.senderId = reader.string();
+                    break;
+                case /* repeated string mentions */ 6:
+                    message.mentions.push(reader.string());
+                    break;
+                case /* int64 last_seq */ 7:
+                    message.lastSeq = reader.int64().toString();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: ConversationActivityEvent, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* string channel_id = 1; */
+        if (message.channelId !== "")
+            writer.tag(1, WireType.LengthDelimited).string(message.channelId);
+        /* string kind = 2; */
+        if (message.kind !== "")
+            writer.tag(2, WireType.LengthDelimited).string(message.kind);
+        /* int64 seq = 3; */
+        if (message.seq !== "0")
+            writer.tag(3, WireType.Varint).int64(message.seq);
+        /* string root_message_id = 4; */
+        if (message.rootMessageId !== "")
+            writer.tag(4, WireType.LengthDelimited).string(message.rootMessageId);
+        /* string sender_id = 5; */
+        if (message.senderId !== "")
+            writer.tag(5, WireType.LengthDelimited).string(message.senderId);
+        /* repeated string mentions = 6; */
+        for (let i = 0; i < message.mentions.length; i++)
+            writer.tag(6, WireType.LengthDelimited).string(message.mentions[i]);
+        /* int64 last_seq = 7; */
+        if (message.lastSeq !== "0")
+            writer.tag(7, WireType.Varint).int64(message.lastSeq);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message messaging.ConversationActivityEvent
+ */
+export const ConversationActivityEvent = new ConversationActivityEvent$Type();
 // @generated message type with reflection information, may provide speed optimized methods
 class CallEvent$Type extends MessageType<CallEvent> {
     constructor() {

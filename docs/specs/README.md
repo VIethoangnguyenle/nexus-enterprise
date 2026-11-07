@@ -83,6 +83,7 @@ Verified against the codebase on 2026-07-31.
 | `chat-calls` | Matches code (added 2026-10-13; device, TURN and VPS load checks pending under its Status) |
 | `chat-group-management` | Specified ahead of code (added 2026-10-19; plan `261018-1742-mobile-ux-overhaul` phase 07) |
 | `chat-mention-all` | Specified ahead of code (added 2026-10-19; phase 07) |
+| `chat-unread-counts` | Matches code (added 2026-11-06; plan `261106-2127-message-unread-seq-at-scale`) |
 | `conversation-settings` | Specified ahead of code (added 2026-10-19; phase 06) |
 | `calendar` | Specified ahead of code (added 2026-10-17; NGAC model and test vectors exist) |
 | `web-push` | Matches code for sending (added 2026-10-11; device sign-up follows) |

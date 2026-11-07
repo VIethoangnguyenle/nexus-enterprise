@@ -162,7 +162,8 @@ func (s *MessagingServer) SendMessage(ctx context.Context, req *pb.SendMessageRe
 // GetMessages delegates to domain.Service.GetMessages.
 func (s *MessagingServer) GetMessages(ctx context.Context, req *pb.GetMessagesRequest) (*pb.MessageList, error) {
 	caller := grpcauth.CallerFrom(ctx)
-	list, err := s.svc.GetMessages(ctx, req.ChannelId, caller.UserID, caller.NGACNodeID, req.Before, int(req.Limit))
+	list, err := s.svc.GetMessagesPage(ctx, req.ChannelId, caller.UserID, caller.NGACNodeID,
+		domain.MessagePage{BeforeSeq: req.BeforeSeq, Before: req.Before, Limit: int(req.Limit)})
 	if err != nil {
 		return nil, domainError("get messages", err)
 	}
@@ -172,7 +173,7 @@ func (s *MessagingServer) GetMessages(ctx context.Context, req *pb.GetMessagesRe
 // GetThread delegates to domain.Service.GetThread.
 func (s *MessagingServer) GetThread(ctx context.Context, req *pb.GetThreadRequest) (*pb.MessageList, error) {
 	caller := grpcauth.CallerFrom(ctx)
-	list, err := s.svc.GetThread(ctx, req.MessageId, caller.UserID, caller.NGACNodeID)
+	list, err := s.svc.GetThreadPage(ctx, req.MessageId, caller.UserID, caller.NGACNodeID, req.AfterReplySeq, int(req.Limit))
 	if err != nil {
 		return nil, domainError("get thread", err)
 	}

@@ -243,6 +243,7 @@ func (h *Hub) RevokeWorkspaceSubscriptions(workspaceID, userNodeID string) {
 // reconnects with the same token is turned away at authentication. Connections
 // of the same person for another tenant stay.
 func (h *Hub) revokeWorkspaceLocal(workspaceID, userNodeID string) {
+	h.forgetMember(workspaceID, "", userNodeID)
 	h.mu.Lock()
 	for c := range h.dom.workspaces[workspaceID] {
 		if c.ngacNodeID == userNodeID {

@@ -165,27 +165,45 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) (*pb.Mes
 	return messageToProto(msg), nil
 }
 
-// GetMessages returns paginated messages for a channel, each root message with
-// the caller's thread summary.
+// GetMessages returns the newest page of a channel, or the page before a time
+// cursor (the cursor of clients older than numbers).
 func (s *Service) GetMessages(ctx context.Context, channelID, userID, userNodeID, before string, limit int) (*pb.MessageList, error) {
+	return s.GetMessagesPage(ctx, channelID, userID, userNodeID, MessagePage{Before: before, Limit: limit})
+}
+
+// MessagePage is where a page of a channel's history ends: below BeforeSeq when
+// set, else below the RFC 3339 time Before when set, else at the newest.
+type MessagePage struct {
+	BeforeSeq int64
+	Before    string
+	Limit     int
+}
+
+// GetMessagesPage returns a page of a channel's messages, newest first, each
+// root message with the caller's thread summary.
+func (s *Service) GetMessagesPage(ctx context.Context, channelID, userID, userNodeID string, p MessagePage) (*pb.MessageList, error) {
 	if _, err := s.authorizeChannel(ctx, channelID, userNodeID, ngac.OpRead); err != nil {
 		return nil, err
 	}
 
+	limit := p.Limit
 	if limit <= 0 || limit > 50 {
 		limit = 50
 	}
+	if p.BeforeSeq < 0 {
+		return nil, fmt.Errorf("%w: before_seq must not be negative", ErrInvalidInput)
+	}
 
 	var beforeTime *time.Time
-	if before != "" {
-		t, err := time.Parse(time.RFC3339Nano, before)
+	if p.BeforeSeq == 0 && p.Before != "" {
+		t, err := time.Parse(time.RFC3339Nano, p.Before)
 		if err != nil {
 			return nil, fmt.Errorf("%w: before must be an RFC 3339 time", ErrInvalidInput)
 		}
 		beforeTime = &t
 	}
 
-	msgs, hasMore, err := s.store.ListMessages(ctx, channelID, beforeTime, limit)
+	msgs, hasMore, err := s.store.ListMessages(ctx, channelID, p.BeforeSeq, beforeTime, limit)
 	if err != nil {
 		return nil, fmt.Errorf("get messages: %w", err)
 	}
@@ -203,13 +221,30 @@ func (s *Service) GetMessages(ctx context.Context, channelID, userID, userNodeID
 	}, nil
 }
 
-// GetThread returns the parent message, with the caller's thread summary, plus all replies.
+// threadRepliesLimit is the most replies one page of a thread holds.
+const threadRepliesLimit = 200
+
+// GetThread returns the root message, with the caller's thread summary, and the
+// first page of its replies.
 func (s *Service) GetThread(ctx context.Context, messageID, userID, userNodeID string) (*pb.MessageList, error) {
+	return s.GetThreadPage(ctx, messageID, userID, userNodeID, 0, 0)
+}
+
+// GetThreadPage returns the root message, with the caller's thread summary, and
+// the replies numbered above afterReplySeq, oldest first, at most limit of them
+// (threadRepliesLimit when 0 or more); HasMore says later replies remain.
+func (s *Service) GetThreadPage(ctx context.Context, messageID, userID, userNodeID string, afterReplySeq int64, limit int) (*pb.MessageList, error) {
 	if err := s.authorizeMessage(ctx, messageID, userNodeID, ngac.OpRead); err != nil {
 		return nil, err
 	}
+	if afterReplySeq < 0 {
+		return nil, fmt.Errorf("%w: after_reply_seq must not be negative", ErrInvalidInput)
+	}
+	if limit <= 0 || limit > threadRepliesLimit {
+		limit = threadRepliesLimit
+	}
 
-	msgs, err := s.store.GetThread(ctx, messageID)
+	msgs, hasMore, err := s.store.GetThread(ctx, messageID, afterReplySeq, limit)
 	if err != nil {
 		return nil, fmt.Errorf("get thread: %w", err)
 	}
@@ -224,7 +259,7 @@ func (s *Service) GetThread(ctx context.Context, messageID, userID, userNodeID s
 		}
 	}
 
-	return &pb.MessageList{Messages: messagesToProto(msgs)}, nil
+	return &pb.MessageList{Messages: messagesToProto(msgs), HasMore: hasMore}, nil
 }
 
 // FindThreadsByEntity returns messages linked to a specific entity.
@@ -292,6 +327,8 @@ func messageToProto(m *store.Message) *pb.Message {
 		Attachments:         attachmentsToProto(m.Attachments),
 		EditedAt:            editedAtProto(m),
 		Deleted:             m.Deleted,
+		Seq:                 m.Seq,
+		ReplySeq:            m.ReplySeq,
 		Quoted:              quoteToProto(m.Quoted),
 
 		Starred:   m.StarredAt != nil,

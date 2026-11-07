@@ -225,6 +225,8 @@ func ChatMessageOf(m *pb.Message) *pb.ChatMessage {
 		ContentFormat: m.ContentFormat, Mentions: m.Mentions,
 		LinkedEntityType: m.LinkedEntityType, LinkedEntityId: m.LinkedEntityId,
 		Attachments: chatAttachments(m.Attachments),
+		Seq:         m.Seq,
+		ReplySeq:    m.ReplySeq,
 	}
 	if q := m.Quoted; q != nil {
 		cm.Quoted = &pb.ChatQuote{Id: q.Id, SenderId: q.SenderId, SenderName: q.SenderName, Text: q.Text, Deleted: q.Deleted}
